@@ -1,5 +1,16 @@
 # Desplegar en Railway
 
+Ya está desplegado. Las URLs:
+
+| | |
+|---|---|
+| Web | https://apphabitos.up.railway.app |
+| API | https://apphabitos-production-66a4.up.railway.app |
+| Bot | [@apphabitos_bot](https://t.me/apphabitos_bot) |
+
+El repo se llama `appHabitos` y el bot igual: se quedaron del nombre con el
+que empezó el proyecto, antes de ser el parte del día.
+
 Dos servicios, los dos desde este mismo repo:
 
 | Servicio | Root Directory | Qué corre |
@@ -75,6 +86,16 @@ curl https://<backend>/salud        # {"estado":"ok"}
 Y en Telegram: `/start`, luego `/web` para sacar un token, y entrar con él
 en la web. Si la web da un error de CORS en la consola del navegador, es que
 `CORS_ORIGENES` no coincide exactamente con su URL.
+
+## Si la web da 404 nada más generar el dominio
+
+Mira la respuesta: si trae la cabecera `x-railway-fallback: true` y el
+cuerpo dice `"Application not found"`, ese 404 **no es de la aplicación**.
+Es el edge de Railway diciendo que el dominio no apunta a ningún despliegue
+vivo — porque aún está construyendo, o porque el build falló.
+
+Railway te da la URL en cuanto pulsas *Generate Domain*, sin esperar a que
+haya nada detrás. Que exista la URL no significa que el servicio esté vivo.
 
 ## Si el build del backend falla por la versión de Python
 

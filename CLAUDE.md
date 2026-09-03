@@ -193,10 +193,14 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   event loop— y el apagado es limpio. También que `sqlite:////data/...`
   resuelve a la ruta absoluta del volumen.
 
-**Qué falta por probar de verdad:** el bot contra Telegram (necesita un
-`TELEGRAM_BOT_TOKEN` de @BotFather), el front en un navegador, y el
-despliegue en sí. El resto está comprobado ejecutándolo: build y lint
-limpios, y el contrato completo de la API con curl.
+- **Desplegado y funcionando en Railway** (URLs en `DESPLIEGUE.md`). El bot
+  se probó contra Telegram de verdad: los apuntes entran con `origen=bot`,
+  los importes se guardan en céntimos y `/cobrado` recalcula el resumen. El
+  front se probó en el navegador, anotando con `origen=web`.
+- El id de Telegram de Yoa es `6529038645`, más del triple del límite del
+  `Integer` de 32 bits de Postgres (`2147483647`). Es la confirmación en
+  real de por qué `user_id` tiene que ser `BigInteger`: no era una
+  precaución teórica.
 
 Pendiente menor: el `.gitignore` de la raíz tiene pegado dentro el
 heredoc con el que se creó (`cat > .gitignore <<'EOF'` … `EOF`). Las
