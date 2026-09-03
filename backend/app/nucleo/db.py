@@ -6,7 +6,7 @@ modo WAL cuando toque.
 """
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import MetaData, create_engine, event
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from app.nucleo.config import DATABASE_URL
@@ -28,7 +28,20 @@ if _es_sqlite:
         cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+
+# SQLite no sabe hacer ALTER TABLE de casi nada, así que Alembic recrea la
+# tabla entera para cambiarla — y para eso necesita poder nombrar cada
+# restricción. Sin esta convención, añadir una clave ajena revienta con
+# "Constraint must have a name".
+_CONVENCION = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+Base = declarative_base(metadata=MetaData(naming_convention=_CONVENCION))
 
 
 def crear_tablas() -> None:
