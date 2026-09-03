@@ -1,19 +1,34 @@
-"""Casos de uso de los avisos diarios: quién los quiere y a quién toca avisar.
+"""Casos de uso del aviso diario: quién lo quiere y qué se le cuenta.
 
-Dos decisiones de negocio viven aquí, no en el bot:
+Tres decisiones de negocio viven aquí, no en el bot:
 
-1. Se avisa a quien haya anotado algo hoy. Si no has apuntado nada, no hay
-   nada que contarte y el bot se calla — un recordatorio vacío cada noche
-   es la mejor forma de que alguien silencie el bot.
-2. Los avisos están activos salvo que los apagues. Así funcionan desde el
-   primer día sin tener que configurar nada, y `Ajuste` solo guarda fila
-   para quien ha cambiado algo.
+1. Se avisa a quien tenga algo que contar: apuntes de hoy, o citas para
+   mañana. Un recordatorio vacío cada noche es la mejor forma de que
+   alguien silencie el bot.
+2. El aviso lleva las citas de mañana además del dinero de hoy, porque el
+   momento en que sirve saber a qué hora hay que estar en un sitio es la
+   noche anterior, no la mañana siguiente con el coche arrancado.
+3. Los avisos están activos salvo que los apagues. Así funcionan desde el
+   primer día sin configurar nada, y `Ajuste` solo guarda fila para quien
+   ha cambiado algo.
 """
+from dataclasses import dataclass
+from datetime import timedelta
+
 from sqlalchemy.orm import Session
 
-from app.dominio.models import Ajuste, Apunte
+from app.dominio.models import Ajuste, Apunte, Cita
 from app.nucleo.tiempo import hoy_local
+from app.servicios.agenda import citas_del_dia
 from app.servicios.resumen import ResumenPeriodo, resumen_dia
+
+
+@dataclass
+class AvisoDelDia:
+    user_id: int
+    resumen: ResumenPeriodo
+    citas_manana: list[Cita]
+    hubo_apuntes: bool
 
 
 def avisos_activos(db: Session, user_id: int) -> bool:
@@ -31,19 +46,33 @@ def activar_avisos(db: Session, user_id: int, activos: bool) -> bool:
     return activos
 
 
-def destinatarios_del_aviso(db: Session) -> list[tuple[int, ResumenPeriodo]]:
-    """Quién debe recibir el aviso de hoy, con su resumen ya calculado."""
+def destinatarios_del_aviso(db: Session) -> list[AvisoDelDia]:
+    """Quién debe recibir el aviso de esta noche, ya con su contenido."""
     hoy = hoy_local()
-    con_apuntes = [
+    manana = hoy + timedelta(days=1)
+
+    con_apuntes = {
         fila[0]
         for fila in db.query(Apunte.user_id).filter(Apunte.fecha == hoy).distinct().all()
-    ]
+    }
+    con_citas = {
+        fila[0]
+        for fila in db.query(Cita.user_id)
+        .filter(Cita.fecha == manana, Cita.hecha.is_(False))
+        .distinct()
+        .all()
+    }
     apagados = {
         fila[0]
         for fila in db.query(Ajuste.user_id).filter(Ajuste.avisos_activos.is_(False)).all()
     }
+
     return [
-        (user_id, resumen_dia(db, user_id, hoy))
-        for user_id in con_apuntes
-        if user_id not in apagados
+        AvisoDelDia(
+            user_id=user_id,
+            resumen=resumen_dia(db, user_id, hoy),
+            citas_manana=citas_del_dia(db, user_id, manana),
+            hubo_apuntes=user_id in con_apuntes,
+        )
+        for user_id in sorted((con_apuntes | con_citas) - apagados)
     ]

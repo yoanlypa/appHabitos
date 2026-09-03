@@ -17,7 +17,9 @@ class ApunteNoEncontrado(LookupError):
     """No existe un apunte con ese id para ese usuario."""
 
 
-def crear_apunte(db: Session, user_id: int, texto: str, origen: str) -> Apunte:
+def crear_apunte(
+    db: Session, user_id: int, texto: str, origen: str, cliente_id: int | None = None
+) -> Apunte:
     interpretado = interpretar_texto(texto)
     apunte = Apunte(
         user_id=user_id,
@@ -27,6 +29,7 @@ def crear_apunte(db: Session, user_id: int, texto: str, origen: str) -> Apunte:
         importe=interpretado.importe,
         pendiente=interpretado.pendiente,
         origen=origen,
+        cliente_id=cliente_id,
     )
     db.add(apunte)
     db.commit()
