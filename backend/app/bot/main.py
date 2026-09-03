@@ -14,7 +14,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from app.bot import avisos, handlers
 from app.nucleo.config import TELEGRAM_BOT_TOKEN
-from app.nucleo.db import crear_tablas
+from app.nucleo.migraciones import migrar
 
 
 def construir_app() -> Application:
@@ -28,6 +28,10 @@ def construir_app() -> Application:
     app.add_handler(CommandHandler("cobrado", handlers.cobrado))
     app.add_handler(CommandHandler("web", handlers.web))
     app.add_handler(CommandHandler("avisos", handlers.avisos))
+    app.add_handler(CommandHandler("agenda", handlers.agenda))
+    app.add_handler(CommandHandler("manana", handlers.manana))
+    app.add_handler(CommandHandler("cita", handlers.cita))
+    app.add_handler(CommandHandler("deben", handlers.deben))
     # Lo último: cualquier texto que no sea un comando se anota como apunte.
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.anotar))
 
@@ -63,7 +67,7 @@ def main() -> None:
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    crear_tablas()
+    migrar()
     construir_app().run_polling()
 
 

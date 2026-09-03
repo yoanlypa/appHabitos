@@ -49,6 +49,42 @@ def ayuda() -> str:
         "  /hoy — resumen del día\n"
         "  /mes — resumen del mes\n"
         "  /cobrado <número> — marca un trabajo como cobrado\n"
+        "  /agenda — lo que toca hoy\n"
+        "  /manana — lo que toca mañana\n"
+        "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
+        "  /deben — quién te debe dinero\n"
         "  /avisos on|off — resumen automático cada noche\n"
         "  /web — token para entrar en la web"
     )
+
+
+def cita_creada(cita) -> str:
+    cuando = cita.fecha.strftime("%d/%m")
+    hora = cita.hora.strftime(" a las %H:%M") if cita.hora else ""
+    quien = f" — {cita.cliente.nombre}" if cita.cliente else ""
+    return f"Apuntado para el {cuando}{hora}: {cita.titulo}{quien}"
+
+
+def lista_citas(titulo: str, citas: list) -> str:
+    if not citas:
+        return f"{titulo}\nNada apuntado."
+    lineas = [titulo]
+    for c in citas:
+        hora = c.hora.strftime("%H:%M") if c.hora else "  ·  "
+        marca = "✓ " if c.hecha else ""
+        donde = f" ({c.direccion})" if c.direccion else ""
+        quien = f" — {c.cliente.nombre}" if c.cliente else ""
+        lineas.append(f"{hora}  {marca}{c.titulo}{quien}{donde}")
+    return "\n".join(lineas)
+
+
+def lista_deudas(pendientes: list) -> str:
+    """Lo que te deben, con el nombre del cliente si el apunte lo tiene."""
+    if not pendientes:
+        return "No te debe nadie."
+    total = sum(a.importe for a in pendientes)
+    lineas = [f"Te deben {euros(total)}:"]
+    for a in pendientes:
+        quien = f" — {a.cliente.nombre}" if a.cliente else ""
+        lineas.append(f"  #{a.id} {a.concepto}{quien}: {euros(a.importe)} ({a.fecha.strftime('%d/%m')})")
+    return "\n".join(lineas)
