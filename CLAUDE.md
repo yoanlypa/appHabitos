@@ -57,7 +57,7 @@ parte-del-dia/
 │   ├── requirements.txt
 │   ├── Procfile           ✅ dos procesos: web (uvicorn) y bot (polling)
 │   └── .env.example
-└── web/                   ⬜ Vite + React + TypeScript, más adelante
+└── web/                   ✅ hecho — api.ts + componentes/{Entrada,Panel}.tsx
 ```
 
 ## Decisiones ya tomadas
@@ -163,10 +163,39 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   (uno los apaga, otro no anota nada, otro sí) y comprobando que si uno
   bloqueó el bot los demás reciben su aviso igual.
 
-**Siguiente paso: el front en `web/`.** Hace falta añadir CORS a la API
-antes de que el front pueda llamarla. La pantalla de entrada usa el token
-que da `/web` en el bot.
+- `web/` es el front en React: `api.ts` es el único sitio que sabe de HTTP,
+  `componentes/Entrada.tsx` pide el token que da `/web` en el bot (se
+  guarda en localStorage; si la API lo rechaza, se borra y se vuelve a
+  pedir) y `componentes/Panel.tsx` tiene el resumen día/mes, el alta y la
+  lista del día con botón de cobrar. El alta usa la misma sintaxis que el
+  bot a propósito: quien apunta desde el móvil no aprende dos formas de
+  escribir. El CSV se descarga con fetch y no con un `<a href>`, porque la
+  ruta exige el header `Authorization`.
+- Para que el front pueda llamar a la API hizo falta `GET /apuntes`
+  (`listar_apuntes()`) y CORS, con los orígenes en `CORS_ORIGENES`
+  (por defecto el Vite de local). Verificado que **todas** las respuestas
+  llevan cabecera CORS, incluidos los errores 422 — sin eso el navegador
+  bloquea la respuesta y el front no puede enseñar el motivo.
+
+**Qué falta por probar de verdad:** el bot contra Telegram (necesita un
+`TELEGRAM_BOT_TOKEN` de @BotFather) y el front en un navegador. El resto
+está comprobado ejecutándolo: build y lint limpios, y el contrato completo
+de la API con curl.
 
 Pendiente menor: el `.gitignore` de la raíz tiene pegado dentro el
 heredoc con el que se creó (`cat > .gitignore <<'EOF'` … `EOF`). Las
 líneas de patrón funcionan, las dos sobrantes son inertes.
+
+## Cómo levantarlo en local
+
+```
+# backend (desde backend/)
+.venv/Scripts/python -m uvicorn app.main:app --reload   # API en :8000
+.venv/Scripts/python -m app.bot.main                    # bot, necesita token
+
+# front (desde web/)
+npm run dev                                             # Vite en :5173
+```
+
+En Windows, Vite escucha en `localhost` por IPv6: `127.0.0.1:5173` no
+conecta, `localhost:5173` sí.
