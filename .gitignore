@@ -1,9 +1,13 @@
-cat > .gitignore <<'EOF'
 # Python
 __pycache__/
 *.py[cod]
 .venv/
+
+# Bases de datos locales. El -wal y el -shm los crea SQLite en modo WAL,
+# que es como abrimos la base para que API y bot no se bloqueen.
 *.db
+*.db-wal
+*.db-shm
 
 # Node
 node_modules/
@@ -14,4 +18,3 @@ dist-ssr/
 .env
 .env.local
 .DS_Store
-EOF
