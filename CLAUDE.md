@@ -49,11 +49,12 @@ parte-del-dia/
 ├── CLAUDE.md              este archivo
 ├── backend/
 │   ├── app/
-│   │   ├── nucleo/        ✅ hecho — config.py, db.py, tiempo.py
-│   │   ├── dominio/       ✅ hecho — models.py (Apunte, Ajuste, TokenAcceso, Centimos), parsing.py
-│   │   ├── servicios/     ✅ hecho — apuntes.py, resumen.py, export.py, auth.py
-│   │   ├── api/           ✅ hecho — main.py, dependencias.py, schemas.py, apuntes.py, resumen.py, export.py
-│   │   └── bot/           ✅ hecho — main.py, handlers.py, formato.py, avisos.py
+│   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py
+│   │   ├── dominio/       ✅ models.py (Apunte, Cliente, Cita, Ajuste, TokenAcceso, Centimos),
+│   │   │                     parsing.py, parsing_citas.py
+│   │   ├── servicios/     ✅ apuntes, resumen, export, auth, avisos, clientes, agenda
+│   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export, clientes, agenda
+│   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py
 │   ├── requirements.txt
 │   ├── Procfile           ✅ dos procesos: web (uvicorn) y bot (polling)
 │   └── .env.example
@@ -84,6 +85,19 @@ parte-del-dia/
   es que un redespliegue reinicia los dos. La salida, si molesta algún día,
   es pasar a Postgres y separarlos: solo cambia `DATABASE_URL`.
   En local se siguen arrancando por separado.
+- **El esquema se cambia con Alembic, nunca con `create_all()`.**
+  `create_all` crea las tablas que faltan pero no toca las que ya existen:
+  añadir una columna no llegaba nunca a producción. `nucleo/migraciones.py`
+  aplica las migraciones al arrancar y sabe marcar las bases anteriores a
+  Alembic (stamp del esquema inicial y luego upgrade). Dos detalles que
+  costaron sangre: la `naming_convention` de `nucleo/db.py` es obligatoria
+  porque SQLite recrea la tabla entera para alterarla y necesita nombrar
+  las restricciones, y `render_item` en `alembic/env.py` escribe `Centimos`
+  como `sa.Integer` para que las migraciones no importen la aplicación.
+- **`func.sum()` sobre un importe ya devuelve euros.** El tipo `Centimos`
+  se aplica también a los agregados, así que dividir otra vez entre 100 es
+  un error de escala de cien veces. Pasó y lo cazó una prueba que comparaba
+  el total de la lista con el de la ficha.
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
   usuario/contraseña. Falta que el bot lo genere con `/web`
