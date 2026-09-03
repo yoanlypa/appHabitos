@@ -280,3 +280,263 @@ footer {
   margin-top: 2rem;
   text-align: center;
 }
+
+/* ---------- Marco y navegación ---------- */
+
+.app {
+  min-height: 100svh;
+  padding-bottom: 4.5rem; /* hueco para la barra de abajo */
+}
+
+.barra {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  background: var(--tarjeta);
+  border-top: 1px solid var(--borde);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.barra button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  background: none;
+  color: var(--apagado);
+  border-radius: 0;
+  padding: 0.6rem 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.barra button.activa {
+  color: var(--acento);
+}
+
+.barra .icono {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.titulo-fila {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.titulo-fila h2 {
+  margin-bottom: 0.5rem;
+}
+
+/* ---------- Calendario ---------- */
+
+.calendario {
+  background: var(--tarjeta);
+  border: 1px solid var(--borde);
+  border-radius: 0.9rem;
+  padding: 0.75rem;
+}
+
+.cal-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.cal-cabecera h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--texto);
+  text-transform: capitalize;
+  letter-spacing: 0;
+}
+
+.cal-flecha {
+  background: none;
+  color: var(--texto);
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0.2rem 0.7rem;
+}
+
+.cal-rejilla {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.15rem;
+  margin-top: 0.6rem;
+}
+
+.cal-dia-nombre {
+  text-align: center;
+  font-size: 0.68rem;
+  color: var(--apagado);
+  padding-bottom: 0.25rem;
+}
+
+.cal-dia {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  color: var(--texto);
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 0;
+}
+
+.cal-dia.hoy {
+  outline: 1px solid var(--acento);
+}
+
+.cal-dia.elegido {
+  background: var(--acento);
+  color: #fff;
+}
+
+.cal-dia .punto {
+  position: absolute;
+  bottom: 0.28rem;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--pendiente);
+}
+
+.cal-dia.elegido .punto {
+  background: #fff;
+}
+
+/* ---------- Citas ---------- */
+
+.apuntes li.cita .hora {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--acento);
+  min-width: 3rem;
+}
+
+.apuntes li.cita {
+  border-left-color: var(--acento);
+}
+
+.apuntes li.cita.hecha {
+  opacity: 0.55;
+}
+
+.apuntes li.cita.hecha .concepto {
+  text-decoration: line-through;
+}
+
+.concepto small {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--apagado);
+  margin-top: 0.1rem;
+}
+
+button.mini {
+  background: none;
+  border: 1px solid var(--borde);
+  color: var(--apagado);
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+button.mini.borrar:hover {
+  color: var(--gasto);
+  border-color: var(--gasto);
+}
+
+/* ---------- Formularios de alta ---------- */
+
+.ficha-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--tarjeta);
+  border: 1px solid var(--borde);
+  border-radius: 0.7rem;
+  padding: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.ficha-form .fila {
+  display: flex;
+  gap: 0.5rem;
+}
+
+select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.7rem 0.6rem;
+  border: 1px solid var(--borde);
+  border-radius: 0.6rem;
+  background: var(--tarjeta);
+  color: var(--texto);
+  font-size: 0.95rem;
+}
+
+.mini-select {
+  flex: 0 1 7.5rem;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.75rem;
+}
+
+.buscador {
+  width: 100%;
+  margin-bottom: 0.7rem;
+}
+
+/* ---------- Clientes ---------- */
+
+.apuntes li.cliente {
+  padding: 0;
+  border-left-color: var(--acento);
+}
+
+.fila-cliente {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  background: none;
+  color: var(--texto);
+  text-align: left;
+  padding: 0.65rem 0.8rem;
+  font-weight: 500;
+}
+
+.ficha .ficha-nombre {
+  font-size: 1.3rem;
+  margin: 0.6rem 0 0.2rem;
+  color: var(--texto);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.ficha .totales {
+  margin: 1rem 0;
+}
+
+.tel {
+  color: var(--acento);
+}
+
+.enlace.peligro {
+  color: var(--gasto);
+}
+
+.pendiente-fila {
+  flex-wrap: wrap;
+}

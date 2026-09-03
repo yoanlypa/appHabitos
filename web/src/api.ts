@@ -15,6 +15,7 @@ export type Apunte = {
   pendiente: boolean
   origen: string
   creado: string
+  cliente_id: number | null
 }
 
 export type Resumen = {
@@ -45,6 +46,16 @@ async function pedir<T>(token: string, ruta: string, opciones: RequestInit = {})
     throw new ErrorDeApi(cuerpo?.detail ?? `Error ${respuesta.status}`)
   }
   return respuesta.json() as Promise<T>
+}
+
+/** Para respuestas 204, que no traen cuerpo: hacer .json() de vacío revienta. */
+async function pedirSinCuerpo(token: string, ruta: string, opciones: RequestInit = {}) {
+  const respuesta = await fetch(`${BASE}${ruta}`, {
+    ...opciones,
+    headers: { ...opciones.headers, Authorization: `Bearer ${token}` },
+  })
+  if (respuesta.status === 401) throw new TokenInvalido('El token no vale')
+  if (!respuesta.ok) throw new ErrorDeApi(`Error ${respuesta.status}`)
 }
 
 export function listarApuntes(token: string, fecha?: string) {
@@ -91,4 +102,119 @@ export async function descargarCsv(token: string, desde: string, hasta: string) 
   enlace.download = `parte-del-dia-${desde}_${hasta}.csv`
   enlace.click()
   URL.revokeObjectURL(url)
+}
+
+// ---------- Clientes y agenda ----------
+
+export type Cliente = {
+  id: number
+  nombre: string
+  telefono: string | null
+  direccion: string | null
+  notas: string | null
+}
+
+export type ClienteListado = {
+  cliente: Cliente
+  debe: string
+  total_trabajos: number
+}
+
+export type FichaCliente = {
+  cliente: Cliente
+  debe: string
+  cobrado: string
+  apuntes: Apunte[]
+  citas: Cita[]
+}
+
+export type Cita = {
+  id: number
+  fecha: string
+  hora: string | null
+  titulo: string
+  direccion: string | null
+  notas: string | null
+  hecha: boolean
+  cliente_id: number | null
+  cliente: Cliente | null
+}
+
+export function listarClientes(token: string, buscar?: string) {
+  const q = buscar ? `?buscar=${encodeURIComponent(buscar)}` : ''
+  return pedir<ClienteListado[]>(token, `/clientes${q}`)
+}
+
+export function crearCliente(token: string, datos: Partial<Cliente> & { nombre: string }) {
+  return pedir<Cliente>(token, '/clientes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos),
+  })
+}
+
+export function fichaCliente(token: string, id: number) {
+  return pedir<FichaCliente>(token, `/clientes/${id}`)
+}
+
+export function editarCliente(token: string, id: number, cambios: Partial<Cliente>) {
+  return pedir<Cliente>(token, `/clientes/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cambios),
+  })
+}
+
+export async function borrarCliente(token: string, id: number) {
+  await pedirSinCuerpo(token, `/clientes/${id}`, { method: 'DELETE' })
+}
+
+export function asignarCliente(token: string, apunteId: number, clienteId: number | null) {
+  return pedir<Apunte>(token, `/apuntes/${apunteId}/cliente`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cliente_id: clienteId }),
+  })
+}
+
+export function pendientesDeCobro(token: string) {
+  return pedir<Apunte[]>(token, '/apuntes/pendientes')
+}
+
+export function citasDelDia(token: string, fecha?: string) {
+  return pedir<Cita[]>(token, `/citas${fecha ? `?fecha=${fecha}` : ''}`)
+}
+
+export function citasDelMes(token: string, anio: number, mes: number) {
+  return pedir<Cita[]>(token, `/citas?anio=${anio}&mes=${mes}`)
+}
+
+export function proximasCitas(token: string, limite = 10) {
+  return pedir<Cita[]>(token, `/citas/proximas?limite=${limite}`)
+}
+
+export function crearCita(
+  token: string,
+  datos: {
+    fecha: string
+    titulo: string
+    hora?: string | null
+    direccion?: string | null
+    cliente_id?: number | null
+    notas?: string | null
+  },
+) {
+  return pedir<Cita>(token, '/citas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos),
+  })
+}
+
+export function marcarCitaHecha(token: string, id: number, hecha = true) {
+  return pedir<Cita>(token, `/citas/${id}/hecha?hecha=${hecha}`, { method: 'POST' })
+}
+
+export async function borrarCita(token: string, id: number) {
+  await pedirSinCuerpo(token, `/citas/${id}`, { method: 'DELETE' })
 }

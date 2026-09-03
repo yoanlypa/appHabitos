@@ -19,25 +19,16 @@ import {
   type Apunte,
   type Resumen,
 } from '../api'
-
-const euros = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' })
-
-function importe(valor: string) {
-  return euros.format(Number(valor))
-}
-
-/** "sv-SE" da el formato YYYY-MM-DD, que es el que espera la API. */
-function iso(fecha: Date) {
-  return fecha.toLocaleDateString('sv-SE')
-}
+import { euros as importe, iso } from '../utiles'
 
 type Props = {
   token: string
-  onSalir: () => void
   onTokenInvalido: () => void
+  /** La cabecera y el botón de salir los pone App; aquí sobran. */
+  conCabecera?: boolean
 }
 
-export function Panel({ token, onSalir, onTokenInvalido }: Props) {
+export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
   const [apuntes, setApuntes] = useState<Apunte[]>([])
   const [resumen, setResumen] = useState<Resumen | null>(null)
   const [periodo, setPeriodo] = useState<'dia' | 'mes'>('dia')
@@ -106,13 +97,12 @@ export function Panel({ token, onSalir, onTokenInvalido }: Props) {
   }
 
   return (
-    <main className="panel">
-      <header>
-        <h1>Parte del día</h1>
-        <button className="enlace" onClick={onSalir}>
-          Salir
-        </button>
-      </header>
+    <>
+      {conCabecera && (
+        <header>
+          <h1>Parte del día</h1>
+        </header>
+      )}
 
       <section className="totales">
         <div className="pestanas">
@@ -206,6 +196,6 @@ export function Panel({ token, onSalir, onTokenInvalido }: Props) {
           Descargar el mes en CSV
         </button>
       </footer>
-    </main>
+    </>
   )
 }
