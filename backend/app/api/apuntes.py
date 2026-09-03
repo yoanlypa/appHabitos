@@ -1,4 +1,6 @@
 """Router de apuntes: adaptador fino sobre servicios/apuntes.py, sin lógica propia."""
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -6,9 +8,23 @@ from app.api.dependencias import get_current_user_id
 from app.api.schemas import ApunteEntrada, ApunteSalida
 from app.dominio.parsing import TextoNoInterpretable
 from app.nucleo.db import get_db
-from app.servicios.apuntes import ApunteNoEncontrado, crear_apunte, marcar_cobrado
+from app.servicios.apuntes import (
+    ApunteNoEncontrado,
+    crear_apunte,
+    listar_apuntes,
+    marcar_cobrado,
+)
 
 router = APIRouter(prefix="/apuntes", tags=["apuntes"])
+
+
+@router.get("", response_model=list[ApunteSalida])
+def listar(
+    fecha: date | None = None,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    return listar_apuntes(db, user_id, fecha)
 
 
 @router.post("", response_model=ApunteSalida, status_code=status.HTTP_201_CREATED)

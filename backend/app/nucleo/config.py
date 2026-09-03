@@ -24,3 +24,11 @@ DATABASE_URL = _normalizar_database_url(
 TZ_LOCAL = os.getenv("TZ_LOCAL", "Europe/Madrid")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 HORA_AVISO = os.getenv("HORA_AVISO", "21:00")  # "HH:MM", hora local
+
+# Desde qué webs se puede llamar a la API. En local, el servidor de Vite;
+# en Railway, la URL del front. Separados por comas.
+CORS_ORIGENES = [
+    origen.strip()
+    for origen in os.getenv("CORS_ORIGENES", "http://localhost:5173").split(",")
+    if origen.strip()
+]

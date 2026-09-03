@@ -1,9 +1,11 @@
-"""Casos de uso sobre apuntes: crear uno a partir de texto libre, marcar cobrado.
+"""Casos de uso sobre apuntes: crear, listar y marcar cobrado.
 
 Única capa que toca la base de datos, y solo a través de `dominio/`. `api/`
 y `bot/` llaman aquí; si un handler hiciera esto directamente, la lógica
 estaría mal colocada.
 """
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app.dominio.models import Apunte
@@ -30,6 +32,16 @@ def crear_apunte(db: Session, user_id: int, texto: str, origen: str) -> Apunte:
     db.commit()
     db.refresh(apunte)
     return apunte
+
+
+def listar_apuntes(db: Session, user_id: int, fecha: date | None = None) -> list[Apunte]:
+    """Los apuntes de un día, el más reciente primero (que es como se miran)."""
+    return (
+        db.query(Apunte)
+        .filter(Apunte.user_id == user_id, Apunte.fecha == (fecha or hoy_local()))
+        .order_by(Apunte.id.desc())
+        .all()
+    )
 
 
 def marcar_cobrado(db: Session, user_id: int, apunte_id: int) -> Apunte:
