@@ -74,9 +74,16 @@ parte-del-dia/
   base de datos a la vez; sin WAL se bloquean entre ellos.
 - **Zona horaria**: `Europe/Madrid`, configurable por variable de entorno
   (`TZ_LOCAL`), nunca hardcodeada fuera de `nucleo/config.py`.
-- **Despliegue**: Railway, dos servicios desde el mismo repo
-  (`backend/` con root directory propio; `web/` más adelante). Variables
-  de entorno documentadas en `backend/.env.example`.
+- **Despliegue**: Railway, dos servicios desde el mismo repo (`backend/` y
+  `web/`, cada uno con su root directory). Pasos en `DESPLIEGUE.md`,
+  variables en `backend/.env.example`.
+- **La API y el bot corren en el mismo proceso en producción**
+  (`app/api_y_bot.py`). No es una preferencia: Railway no deja compartir un
+  volumen entre servicios, y separarlos le daría a cada uno su propia base
+  SQLite — lo anotado por Telegram no saldría en la web. El precio, asumido,
+  es que un redespliegue reinicia los dos. La salida, si molesta algún día,
+  es pasar a Postgres y separarlos: solo cambia `DATABASE_URL`.
+  En local se siguen arrancando por separado.
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
   usuario/contraseña. Falta que el bot lo genere con `/web`
@@ -177,10 +184,19 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   llevan cabecera CORS, incluidos los errores 422 — sin eso el navegador
   bloquea la respuesta y el front no puede enseñar el motivo.
 
+- Todo listo para Railway: `backend/railway.json` (arranca
+  `app.api_y_bot:app`), `.python-version` con 3.14, y `DESPLIEGUE.md` con
+  los pasos. Se quitó el `Procfile`: Railpack no lo usa para Python y
+  describía la topología antigua de dos servicios separados. Comprobado
+  levantando la app conjunta con uvicorn contra un Telegram de mentira: la
+  API responde mientras el bot hace polling —o sea, el bot no bloquea el
+  event loop— y el apagado es limpio. También que `sqlite:////data/...`
+  resuelve a la ruta absoluta del volumen.
+
 **Qué falta por probar de verdad:** el bot contra Telegram (necesita un
-`TELEGRAM_BOT_TOKEN` de @BotFather) y el front en un navegador. El resto
-está comprobado ejecutándolo: build y lint limpios, y el contrato completo
-de la API con curl.
+`TELEGRAM_BOT_TOKEN` de @BotFather), el front en un navegador, y el
+despliegue en sí. El resto está comprobado ejecutándolo: build y lint
+limpios, y el contrato completo de la API con curl.
 
 Pendiente menor: el `.gitignore` de la raíz tiene pegado dentro el
 heredoc con el que se creó (`cat > .gitignore <<'EOF'` … `EOF`). Las
