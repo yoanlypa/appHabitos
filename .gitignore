@@ -1,0 +1,17 @@
+cat > .gitignore <<'EOF'
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.db
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+
+# Entorno y editor
+.env
+.env.local
+.DS_Store
+EOF
