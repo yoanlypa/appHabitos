@@ -1,9 +1,14 @@
 """Punto de entrada del bot: registra los handlers y escucha por polling.
 
 Polling y no webhook a propósito: no necesita URL pública ni compartir
-puerto con la API, así que en Railway es un proceso más del mismo repo
-(ver `Procfile`). Si algún día hace falta webhook, solo cambia este archivo.
+puerto con la API. Si algún día hace falta webhook, solo cambia este archivo.
+
+Se puede arrancar de dos formas: `main()` para tenerlo solo a él (en local),
+o `en_marcha()` para levantarlo dentro del event loop de otro proceso, que
+es como corre en Railway junto a la API (ver `app/api_y_bot.py`).
 """
+from contextlib import asynccontextmanager
+
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
 from app.bot import avisos, handlers
@@ -27,6 +32,25 @@ def construir_app() -> Application:
 
     avisos.programar(app)
     return app
+
+
+@asynccontextmanager
+async def en_marcha():
+    """Escucha Telegram mientras dure el bloque, sin adueñarse del event loop.
+
+    `run_polling()` monta su propio bucle y bloquea, que es justo lo que no
+    se puede hacer dentro de uvicorn: aquí se arranca y se para a mano.
+    """
+    app = construir_app()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    try:
+        yield app
+    finally:
+        await app.updater.stop()
+        await app.stop()
+        await app.shutdown()
 
 
 def main() -> None:
