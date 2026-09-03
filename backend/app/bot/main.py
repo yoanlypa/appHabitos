@@ -7,6 +7,7 @@ Se puede arrancar de dos formas: `main()` para tenerlo solo a él (en local),
 o `en_marcha()` para levantarlo dentro del event loop de otro proceso, que
 es como corre en Railway junto a la API (ver `app/api_y_bot.py`).
 """
+import logging
 from contextlib import asynccontextmanager
 
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
@@ -54,6 +55,14 @@ async def en_marcha():
 
 
 def main() -> None:
+    # Sin esto el bot arranca mudo y no hay forma de saber si está vivo ni por
+    # qué dejó de estarlo. Bajo httpx a WARNING: si no, escribe una línea por
+    # cada consulta del polling, cada pocos segundos.
+    logging.basicConfig(
+        format="%(asctime)s %(name)s %(levelname)s: %(message)s", level=logging.INFO
+    )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
     crear_tablas()
     construir_app().run_polling()
 
