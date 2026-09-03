@@ -9,15 +9,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import apuntes, export, resumen
+from app.api import agenda, apuntes, clientes, export, resumen
 from app.nucleo.config import CORS_ORIGENES
-from app.nucleo.db import crear_tablas
+from app.nucleo.migraciones import migrar
 
 
 def crear_api(con_bot: bool = False) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        crear_tablas()
+        migrar()
         if not con_bot:
             yield
             return
@@ -32,11 +32,14 @@ def crear_api(con_bot: bool = False) -> FastAPI:
     api.add_middleware(
         CORSMiddleware,
         allow_origins=CORS_ORIGENES,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
     )
 
     api.include_router(apuntes.router)
+    api.include_router(clientes.router)
+    api.include_router(clientes.otros)
+    api.include_router(agenda.router)
     api.include_router(resumen.router)
     api.include_router(export.router)
 
