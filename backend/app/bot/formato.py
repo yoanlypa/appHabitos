@@ -53,6 +53,7 @@ def ayuda() -> str:
         "  /manana — lo que toca mañana\n"
         "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
         "  /deben — quién te debe dinero\n"
+        "  /cliente Ana Ruiz 600111222 — da de alta un cliente\n"
         "  /avisos on|off — resumen automático cada noche\n"
         "  /web — token para entrar en la web"
     )
@@ -88,3 +89,22 @@ def lista_deudas(pendientes: list) -> str:
         quien = f" — {a.cliente.nombre}" if a.cliente else ""
         lineas.append(f"  #{a.id} {a.concepto}{quien}: {euros(a.importe)} ({a.fecha.strftime('%d/%m')})")
     return "\n".join(lineas)
+
+
+def apunte_creado_con_cliente(apunte, cliente) -> str:
+    """Igual que apunte_creado pero diciendo de quién ha quedado colgado.
+
+    Se dice siempre: si el bot asigna cliente en silencio y se equivoca, hay
+    que poder verlo en el momento y no tres semanas después al cobrar.
+    """
+    return f"{apunte_creado(apunte)}\n   → {cliente.nombre}"
+
+
+def preguntar_cliente(nombre_repetido: str) -> str:
+    return f"¿Qué {nombre_repetido}?"
+
+
+def descripcion_corta(cliente) -> str:
+    """Lo justo para distinguir a dos personas con el mismo nombre."""
+    detalle = cliente.telefono or cliente.direccion
+    return f"{cliente.nombre} · {detalle}" if detalle else cliente.nombre

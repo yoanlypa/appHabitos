@@ -9,6 +9,7 @@ from decimal import Decimal
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.dominio.deteccion_clientes import Candidato, buscar_clientes
 from app.dominio.models import Apunte, Cita, Cliente
 
 
@@ -181,3 +182,16 @@ def pendientes_de_cobro(db: Session, user_id: int) -> list[Apunte]:
         .order_by(Apunte.fecha.asc(), Apunte.id.asc())
         .all()
     )
+
+
+def clientes_mencionados(db: Session, user_id: int, texto: str) -> list[Cliente]:
+    """Los clientes que aparecen nombrados en un texto de apunte.
+
+    Ninguno, uno (se asigna sin preguntar) o varios (hay que preguntar).
+    """
+    suyos = db.query(Cliente).filter(Cliente.user_id == user_id).all()
+    if not suyos:
+        return []
+    encontrados = buscar_clientes(texto, [Candidato(c.id, c.nombre) for c in suyos])
+    por_id = {c.id: c for c in suyos}
+    return [por_id[c.id] for c in encontrados]

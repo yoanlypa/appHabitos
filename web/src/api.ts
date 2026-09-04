@@ -63,8 +63,15 @@ export function listarApuntes(token: string, fecha?: string) {
   return pedir<Apunte[]>(token, `/apuntes${query}`)
 }
 
+/** Lo que devuelve crear un apunte: el apunte y, si hay dos clientes con
+ *  ese nombre, entre quiénes hay que elegir. */
+export type ApunteCreado = {
+  apunte: Apunte
+  candidatos: Cliente[]
+}
+
 export function crearApunte(token: string, texto: string) {
-  return pedir<Apunte>(token, '/apuntes', {
+  return pedir<ApunteCreado>(token, '/apuntes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ texto, origen: 'web' }),

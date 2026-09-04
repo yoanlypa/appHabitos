@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from 'react'
 import {
+  asignarCliente,
   crearApunte,
   descargarCsv,
   listarApuntes,
@@ -17,6 +18,7 @@ import {
   resumenMes,
   TokenInvalido,
   type Apunte,
+  type ApunteCreado,
   type Resumen,
 } from '../api'
 import { euros as importe, iso } from '../utiles'
@@ -36,6 +38,7 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
   const [texto, setTexto] = useState('')
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(true)
+  const [duda, setDuda] = useState<ApunteCreado | null>(null)
 
   useEffect(() => {
     let cancelado = false
@@ -85,9 +88,19 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
     const limpio = texto.trim()
     if (!limpio) return
     await accion(async () => {
-      await crearApunte(token, limpio)
+      const creado = await crearApunte(token, limpio)
       setTexto('')
+      // Dos clientes con ese nombre: preguntamos en vez de adivinar, igual
+      // que hace el bot. Colgarlo de la Ana equivocada sería peor.
+      setDuda(creado.candidatos.length > 1 ? creado : null)
     })
+  }
+
+  async function resolverDuda(clienteId: number | null) {
+    if (!duda) return
+    const apunteId = duda.apunte.id
+    setDuda(null)
+    await accion(() => asignarCliente(token, apunteId, clienteId))
   }
 
   function descargarElMes() {
@@ -157,6 +170,26 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
         <code>Cambio de grifo Ana 120</code> cobrado ·{' '}
         <code>pendiente Reforma baño 980</code> sin cobrar · <code>-45 gasolina</code> gasto
       </p>
+
+      {duda && (
+        <div className="duda">
+          <p>
+            ¿Qué <strong>{duda.candidatos[0].nombre.split(' ')[0]}</strong> es
+            «{duda.apunte.concepto}»?
+          </p>
+          <div className="opciones">
+            {duda.candidatos.map((c) => (
+              <button key={c.id} onClick={() => void resolverDuda(c.id)}>
+                {c.nombre}
+                {c.telefono || c.direccion ? ` · ${c.telefono ?? c.direccion}` : ''}
+              </button>
+            ))}
+            <button className="enlace" onClick={() => void resolverDuda(null)}>
+              Ninguna
+            </button>
+          </div>
+        </div>
+      )}
 
       {error && <p className="error">{error}</p>}
 

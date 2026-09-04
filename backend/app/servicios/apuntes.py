@@ -4,6 +4,7 @@
 y `bot/` llaman aquí; si un handler hiciera esto directamente, la lógica
 estaría mal colocada.
 """
+from dataclasses import dataclass, field
 from datetime import date
 
 from sqlalchemy.orm import Session
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.dominio.models import Apunte
 from app.dominio.parsing import interpretar_texto
 from app.nucleo.tiempo import hoy_local
+from app.servicios.clientes import clientes_mencionados
 
 
 class ApunteNoEncontrado(LookupError):
@@ -59,3 +61,26 @@ def marcar_cobrado(db: Session, user_id: int, apunte_id: int) -> Apunte:
     db.commit()
     db.refresh(apunte)
     return apunte
+
+
+@dataclass
+class ApunteAnotado:
+    """El apunte creado y, si el nombre no bastó para decidir, a quién preguntar."""
+
+    apunte: Apunte
+    candidatos: list = field(default_factory=list)
+
+
+def anotar(db: Session, user_id: int, texto: str, origen: str) -> ApunteAnotado:
+    """Crea el apunte y lo cuelga del cliente nombrado, si no hay duda.
+
+    La regla vive aquí y no en el bot para que la web haga exactamente lo
+    mismo: es el motivo por el que existe esta capa.
+    """
+    mencionados = clientes_mencionados(db, user_id, texto)
+    unico = mencionados[0].id if len(mencionados) == 1 else None
+    apunte = crear_apunte(db, user_id, texto, origen, cliente_id=unico)
+    return ApunteAnotado(
+        apunte=apunte,
+        candidatos=mencionados if len(mencionados) > 1 else [],
+    )

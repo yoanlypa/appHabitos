@@ -31,6 +31,13 @@ class ResumenSalida(BaseModel):
     neto: Decimal
 
 
+class ApunteCreado(BaseModel):
+    """El apunte y, si el nombre no bastó para decidir, entre quiénes elegir."""
+
+    apunte: ApunteSalida
+    candidatos: list["ClienteSalida"] = []
+
+
 class ClienteEntrada(BaseModel):
     nombre: str
     telefono: str | None = None

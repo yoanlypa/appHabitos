@@ -10,7 +10,13 @@ es como corre en Railway junto a la API (ver `app/api_y_bot.py`).
 import logging
 from contextlib import asynccontextmanager
 
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    filters,
+)
 
 from app.bot import avisos, handlers
 from app.nucleo.config import TELEGRAM_BOT_TOKEN
@@ -32,6 +38,8 @@ def construir_app() -> Application:
     app.add_handler(CommandHandler("manana", handlers.manana))
     app.add_handler(CommandHandler("cita", handlers.cita))
     app.add_handler(CommandHandler("deben", handlers.deben))
+    app.add_handler(CommandHandler("cliente", handlers.cliente))
+    app.add_handler(CallbackQueryHandler(handlers.elegir_cliente, pattern=r"^cli:"))
     # Lo último: cualquier texto que no sea un comando se anota como apunte.
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.anotar))
 

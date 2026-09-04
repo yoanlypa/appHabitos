@@ -10,7 +10,7 @@ sacarla a un hilo.
 """
 from datetime import timedelta
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from app.bot import formato
@@ -19,10 +19,11 @@ from app.dominio.parsing_citas import CitaNoInterpretable, interpretar_cita
 from app.nucleo.db import sesion
 from app.nucleo.tiempo import hoy_local
 from app.servicios.agenda import citas_del_dia, crear_cita
-from app.servicios.apuntes import ApunteNoEncontrado, crear_apunte, marcar_cobrado
+from app.servicios.apuntes import ApunteNoEncontrado, marcar_cobrado
+from app.servicios.apuntes import anotar as anotar_apunte
 from app.servicios.auth import generar_token
 from app.servicios.avisos import activar_avisos, avisos_activos
-from app.servicios.clientes import pendientes_de_cobro
+from app.servicios.clientes import asignar_cliente, crear_cliente, pendientes_de_cobro
 from app.servicios.resumen import resumen_dia, resumen_mes
 
 
@@ -31,16 +32,94 @@ async def start(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def anotar(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
-    """Cualquier mensaje de texto que no sea un comando es un apunte."""
+    """Cualquier mensaje de texto que no sea un comando es un apunte.
+
+    Si el texto nombra a un cliente y no hay duda de cuál es, queda colgado
+    de él sin preguntar. Si hay dos con ese nombre, se pregunta con botones:
+    colgarlo de la Ana equivocada sería peor que dejarlo suelto.
+    """
     with sesion() as db:
         try:
-            apunte = crear_apunte(
+            anotado = anotar_apunte(
                 db, update.effective_user.id, update.message.text, origen="bot"
             )
         except TextoNoInterpretable as exc:
             await update.message.reply_text(f"No te he entendido: {exc}\n\n{formato.ayuda()}")
             return
-        await update.message.reply_text(formato.apunte_creado(apunte))
+
+        apunte = anotado.apunte
+        if apunte.cliente is not None:
+            await update.message.reply_text(
+                formato.apunte_creado_con_cliente(apunte, apunte.cliente)
+            )
+            return
+
+        if not anotado.candidatos:
+            await update.message.reply_text(formato.apunte_creado(apunte))
+            return
+
+        botones = [
+            [
+                InlineKeyboardButton(
+                    formato.descripcion_corta(c), callback_data=f"cli:{apunte.id}:{c.id}"
+                )
+            ]
+            for c in anotado.candidatos
+        ]
+        botones.append(
+            [InlineKeyboardButton("Ninguno", callback_data=f"cli:{apunte.id}:0")]
+        )
+        await update.message.reply_text(
+            f"{formato.apunte_creado(apunte)}\n\n"
+            f"{formato.preguntar_cliente(anotado.candidatos[0].nombre.split()[0])}",
+            reply_markup=InlineKeyboardMarkup(botones),
+        )
+
+
+async def elegir_cliente(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """Respuesta a los botones de "¿qué Ana?"."""
+    consulta = update.callback_query
+    await consulta.answer()
+
+    _, apunte_id, cliente_id = consulta.data.split(":")
+    with sesion() as db:
+        try:
+            apunte = asignar_cliente(
+                db,
+                consulta.from_user.id,
+                int(apunte_id),
+                int(cliente_id) or None,
+            )
+        except LookupError:
+            await consulta.edit_message_text("Ese apunte ya no está.")
+            return
+
+        if apunte.cliente is None:
+            await consulta.edit_message_text(formato.apunte_creado(apunte))
+        else:
+            await consulta.edit_message_text(
+                formato.apunte_creado_con_cliente(apunte, apunte.cliente)
+            )
+
+
+async def cliente(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """Alta rápida: /cliente Ana Ruiz 600111222 (el teléfono es opcional)."""
+    partes = list(contexto.args or [])
+    if not partes:
+        await update.message.reply_text("Dime el nombre: /cliente Ana Ruiz 600111222")
+        return
+
+    telefono = None
+    if partes[-1].replace("+", "").isdigit() and len(partes[-1]) >= 7:
+        telefono = partes.pop()
+    nombre = " ".join(partes).strip()
+    if not nombre:
+        await update.message.reply_text("Falta el nombre: /cliente Ana Ruiz 600111222")
+        return
+
+    with sesion() as db:
+        nuevo = crear_cliente(db, update.effective_user.id, nombre, telefono=telefono)
+        await update.message.reply_text(f"Cliente dado de alta: {formato.descripcion_corta(nuevo)}")
 
 
 async def hoy(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:

@@ -98,6 +98,16 @@ parte-del-dia/
   se aplica también a los agregados, así que dividir otra vez entre 100 es
   un error de escala de cien veces. Pasó y lo cazó una prueba que comparaba
   el total de la lista con el de la ficha.
+- **El cliente se reconoce solo, pero nunca se adivina.** Al anotar, se
+  busca en el texto el nombre de un cliente ya dado de alta: si hay uno
+  solo, el apunte queda colgado de él sin preguntar; si hay dos Anas, se
+  pregunta (botones en el bot, botones en la web). Un trabajo colgado de la
+  Ana equivocada es peor que un trabajo sin cliente, y sale caro porque se
+  descubre semanas después al ir a cobrar. Nombre y apellido gana al nombre
+  de pila, así que decir "Ana Ruiz" evita la pregunta.
+  No se inventan clientes: si el nombre no está de alta no se crea nada,
+  porque no hay forma de saber si "cocina" es una persona. Alta con
+  `/cliente` en el bot o desde la web.
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
   usuario/contraseña. Falta que el bot lo genere con `/web`

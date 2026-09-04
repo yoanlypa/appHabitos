@@ -540,3 +540,29 @@ select {
 .pendiente-fila {
   flex-wrap: wrap;
 }
+
+/* Cuando hay dos clientes con el mismo nombre y hay que elegir */
+.duda {
+  background: color-mix(in srgb, var(--pendiente) 12%, transparent);
+  border: 1px solid var(--pendiente);
+  border-radius: 0.7rem;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.8rem;
+}
+
+.duda p {
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+}
+
+.duda .opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.duda .opciones button {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.85rem;
+}
