@@ -77,6 +77,26 @@ Cada servicio necesita la URL del otro, así que hay que volver atrás una vez:
 día cambias la URL del backend, hay que redesplegar el front, no solo
 reiniciarlo.
 
+## Si al entrar la app aparece vacía cada pocos días
+
+Es que la base **no está en el volumen** y se borra con cada despliegue.
+Pregúntaselo al propio servicio:
+
+```
+curl https://<backend>/salud
+```
+
+En `datos.persistente` tiene que poner `true`. Si pone `false`, el campo
+`datos.aviso` dice exactamente qué falta. Las tres causas, por frecuencia:
+
+1. **`DATABASE_URL` no está puesta.** El valor por defecto del código es una
+   ruta relativa, que cae dentro del contenedor.
+2. **Está puesta con tres barras**: `sqlite:///data/...` es *relativa*.
+   Tienen que ser cuatro: `sqlite:////data/parte_del_dia.db`.
+3. **El volumen no está montado**, o su punto de montaje no es `/data`.
+
+Lo que se hubiera perdido no se recupera; a partir del arreglo, ya no.
+
 ## 4. Comprobar que está vivo
 
 ```
