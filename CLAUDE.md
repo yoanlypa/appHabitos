@@ -108,11 +108,42 @@ parte-del-dia/
   No se inventan clientes: si el nombre no está de alta no se crea nada,
   porque no hay forma de saber si "cocina" es una persona. Alta con
   `/cliente` en el bot o desde la web.
+- **Los importes salen siempre con dos decimales.** Pydantic serializa
+  `Decimal("120")` como `"120"` y `Decimal("45.5")` como `"45.5"`; en el CSV
+  que va al gestor, una columna con esa mezcla parece mal apuntada. El tipo
+  `Importe` de `api/schemas.py` lo normaliza.
+- **Copia de seguridad por Telegram** (`bot/copias.py`): el histórico
+  entero en CSV, cada domingo y con `/copia` cuando se quiera. El sitio más
+  seguro para estos datos no es el servidor — ya se perdieron una vez por
+  tenerlos sólo ahí. El CSV va en utf-8 **con BOM** para que Excel no
+  convierta "Reforma baño" en "Reforma baÃ±o".
+- **El trimestre cuenta lo cobrado, no lo facturado**, y la estimación del
+  modelo 130 (20% del neto) se presenta siempre como orientativa: aquí no
+  se sabe qué gastos son deducibles ni qué retenciones han practicado los
+  clientes. Nunca sustituye a una gestoría.
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
   usuario/contraseña. Falta que el bot lo genere con `/web`
   (`servicios.auth.generar_token()` ya está listo para que ese handler lo
   llame); hasta entonces se genera a mano.
+
+## Cómo se prueba
+
+```
+cd backend
+.venv/Scripts/python -m pip install -r requirements-dev.txt
+.venv/Scripts/python -m pytest
+```
+
+74 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
+temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
+motor al importarse.
+
+Los tests no son de adorno: cada uno de los tres fallos que ya han ocurrido
+tiene el suyo (el error de escala de cien veces en `test_dinero.py`, la
+cabecera CORS en los errores en `test_api.py`, y las tildes del CSV en
+`test_copias.py`). Al añadir algo, el test que hace falta es el del caso
+que se te ocurra que podría romperse en silencio.
 
 ## Convenciones de código
 
