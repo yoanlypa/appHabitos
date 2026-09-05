@@ -5,12 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencias import get_current_user_id
-from app.api.schemas import ApunteCreado, ApunteEntrada, ApunteSalida
+from app.api.schemas import ApunteCambios, ApunteCreado, ApunteEntrada, ApunteSalida
 from app.dominio.parsing import TextoNoInterpretable
 from app.nucleo.db import get_db
 from app.servicios.apuntes import (
     ApunteNoEncontrado,
+    actualizar_apunte,
     anotar,
+    borrar_apunte,
     listar_apuntes,
     marcar_cobrado,
 )
@@ -54,5 +56,33 @@ def cobrar(
 ):
     try:
         return marcar_cobrado(db, user_id, apunte_id)
+    except ApunteNoEncontrado as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+
+
+@router.patch("/{apunte_id}", response_model=ApunteSalida)
+def editar(
+    apunte_id: int,
+    cambios: ApunteCambios,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Corrige un apunte: el importe mal escrito, el concepto, la fecha."""
+    try:
+        return actualizar_apunte(
+            db, user_id, apunte_id, **cambios.model_dump(exclude_unset=True)
+        )
+    except ApunteNoEncontrado as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+
+
+@router.delete("/{apunte_id}", status_code=status.HTTP_204_NO_CONTENT)
+def borrar(
+    apunte_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    try:
+        borrar_apunte(db, user_id, apunte_id)
     except ApunteNoEncontrado as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc

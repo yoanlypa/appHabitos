@@ -225,3 +225,35 @@ export function marcarCitaHecha(token: string, id: number, hecha = true) {
 export async function borrarCita(token: string, id: number) {
   await pedirSinCuerpo(token, `/citas/${id}`, { method: 'DELETE' })
 }
+
+export async function borrarApunte(token: string, id: number) {
+  await pedirSinCuerpo(token, `/apuntes/${id}`, { method: 'DELETE' })
+}
+
+export function editarApunte(
+  token: string,
+  id: number,
+  cambios: { concepto?: string; importe?: string; pendiente?: boolean; fecha?: string },
+) {
+  return pedir<Apunte>(token, `/apuntes/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cambios),
+  })
+}
+
+export type ResumenTrimestre = {
+  anio: number
+  trimestre: number
+  desde: string
+  hasta: string
+  cobrado: string
+  pendiente: string
+  gastos: string
+  neto: string
+  estimacion_130: string
+}
+
+export function resumenTrimestre(token: string) {
+  return pedir<ResumenTrimestre>(token, '/resumen/trimestre')
+}

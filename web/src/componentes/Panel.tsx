@@ -10,16 +10,19 @@
 import { useEffect, useState } from 'react'
 import {
   asignarCliente,
+  borrarApunte,
   crearApunte,
   descargarCsv,
   listarApuntes,
   marcarCobrado,
   resumenDia,
   resumenMes,
+  resumenTrimestre,
   TokenInvalido,
   type Apunte,
   type ApunteCreado,
   type Resumen,
+  type ResumenTrimestre,
 } from '../api'
 import { euros as importe, iso } from '../utiles'
 
@@ -33,7 +36,8 @@ type Props = {
 export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
   const [apuntes, setApuntes] = useState<Apunte[]>([])
   const [resumen, setResumen] = useState<Resumen | null>(null)
-  const [periodo, setPeriodo] = useState<'dia' | 'mes'>('dia')
+  const [periodo, setPeriodo] = useState<'dia' | 'mes' | 'trimestre'>('dia')
+  const [trimestre, setTrimestre] = useState<ResumenTrimestre | null>(null)
   const [recargas, setRecargas] = useState(0)
   const [texto, setTexto] = useState('')
   const [error, setError] = useState('')
@@ -46,15 +50,17 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
     async function cargar() {
       const hoy = new Date()
       try {
-        const [lista, totales] = await Promise.all([
+        const [lista, totales, tri] = await Promise.all([
           listarApuntes(token),
-          periodo === 'dia'
-            ? resumenDia(token)
-            : resumenMes(token, hoy.getFullYear(), hoy.getMonth() + 1),
+          periodo === 'mes'
+            ? resumenMes(token, hoy.getFullYear(), hoy.getMonth() + 1)
+            : resumenDia(token),
+          periodo === 'trimestre' ? resumenTrimestre(token) : Promise.resolve(null),
         ])
         if (cancelado) return
         setApuntes(lista)
         setResumen(totales)
+        setTrimestre(tri)
         setError('')
       } catch (e) {
         if (cancelado) return
@@ -131,9 +137,40 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
           >
             Este mes
           </button>
+          <button
+            className={periodo === 'trimestre' ? 'activa' : ''}
+            onClick={() => setPeriodo('trimestre')}
+          >
+            Trimestre
+          </button>
         </div>
 
-        {resumen && (
+        {periodo === 'trimestre' && trimestre && (
+          <>
+            <dl>
+              <div>
+                <dt>Cobrado</dt>
+                <dd className="cobrado">{importe(trimestre.cobrado)}</dd>
+              </div>
+              <div>
+                <dt>Gastos</dt>
+                <dd className="gasto">{importe(trimestre.gastos)}</dd>
+              </div>
+              <div className="neto">
+                <dt>
+                  Neto del {trimestre.trimestre}º trimestre
+                </dt>
+                <dd>{importe(trimestre.neto)}</dd>
+              </div>
+            </dl>
+            <p className="ayuda nota-130">
+              Modelo 130 aproximado: <strong>{importe(trimestre.estimacion_130)}</strong>.
+              Es el 20% del neto, para hacerte una idea; confírmalo con tu gestor.
+            </p>
+          </>
+        )}
+
+        {periodo !== 'trimestre' && resumen && (
           <dl>
             <div>
               <dt>Cobrado</dt>
@@ -218,6 +255,17 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
                 ) : (
                   <span className="etiqueta">{a.tipo === 'gasto' ? 'gasto' : 'cobrado'}</span>
                 )}
+                <button
+                  className="mini borrar"
+                  title="Borrar este apunte"
+                  onClick={() => {
+                    if (confirm(`¿Borrar «${a.concepto}»?`)) {
+                      void accion(() => borrarApunte(token, a.id))
+                    }
+                  }}
+                >
+                  ×
+                </button>
               </li>
             ))}
           </ul>

@@ -6,6 +6,7 @@ estaría mal colocada.
 """
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -49,7 +50,7 @@ def listar_apuntes(db: Session, user_id: int, fecha: date | None = None) -> list
     )
 
 
-def marcar_cobrado(db: Session, user_id: int, apunte_id: int) -> Apunte:
+def _suyo(db: Session, user_id: int, apunte_id: int) -> Apunte:
     apunte = (
         db.query(Apunte)
         .filter(Apunte.id == apunte_id, Apunte.user_id == user_id)
@@ -57,6 +58,48 @@ def marcar_cobrado(db: Session, user_id: int, apunte_id: int) -> Apunte:
     )
     if apunte is None:
         raise ApunteNoEncontrado(f"apunte {apunte_id} no existe para el usuario {user_id}")
+    return apunte
+
+
+def borrar_apunte(db: Session, user_id: int, apunte_id: int) -> Apunte:
+    """Borra un apunte. Se devuelve el borrado para poder decir qué se fue.
+
+    Hace falta de verdad: se apunta con una mano en mitad de un trabajo y se
+    escribe 1200 donde iba 120. Sin esto, el error se queda en las cuentas
+    para siempre.
+    """
+    apunte = _suyo(db, user_id, apunte_id)
+    db.delete(apunte)
+    db.commit()
+    return apunte
+
+
+def actualizar_apunte(
+    db: Session,
+    user_id: int,
+    apunte_id: int,
+    concepto: str | None = None,
+    importe: Decimal | None = None,
+    pendiente: bool | None = None,
+    fecha: date | None = None,
+) -> Apunte:
+    """Corrige un apunte ya escrito. Sólo cambia lo que se le pase."""
+    apunte = _suyo(db, user_id, apunte_id)
+    if concepto is not None:
+        apunte.concepto = concepto.strip()
+    if importe is not None:
+        apunte.importe = importe
+    if pendiente is not None:
+        apunte.pendiente = pendiente
+    if fecha is not None:
+        apunte.fecha = fecha
+    db.commit()
+    db.refresh(apunte)
+    return apunte
+
+
+def marcar_cobrado(db: Session, user_id: int, apunte_id: int) -> Apunte:
+    apunte = _suyo(db, user_id, apunte_id)
     apunte.pendiente = False
     db.commit()
     db.refresh(apunte)
