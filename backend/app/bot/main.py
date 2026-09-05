@@ -18,7 +18,7 @@ from telegram.ext import (
     filters,
 )
 
-from app.bot import avisos, handlers
+from app.bot import avisos, copias, handlers
 from app.nucleo.config import TELEGRAM_BOT_TOKEN
 from app.nucleo.migraciones import migrar
 
@@ -39,11 +39,15 @@ def construir_app() -> Application:
     app.add_handler(CommandHandler("cita", handlers.cita))
     app.add_handler(CommandHandler("deben", handlers.deben))
     app.add_handler(CommandHandler("cliente", handlers.cliente))
+    app.add_handler(CommandHandler("borrar", handlers.borrar))
+    app.add_handler(CommandHandler("copia", handlers.copia))
+    app.add_handler(CommandHandler("trimestre", handlers.trimestre))
     app.add_handler(CallbackQueryHandler(handlers.elegir_cliente, pattern=r"^cli:"))
     # Lo último: cualquier texto que no sea un comando se anota como apunte.
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.anotar))
 
     avisos.programar(app)
+    copias.programar(app)
     return app
 
 

@@ -48,14 +48,17 @@ def ayuda() -> str:
         "Comandos:\n"
         "  /hoy — resumen del día\n"
         "  /mes — resumen del mes\n"
+        "  /trimestre — lo que llevas este trimestre\n"
         "  /cobrado <número> — marca un trabajo como cobrado\n"
+        "  /borrar <número> — borra un apunte mal escrito\n"
         "  /agenda — lo que toca hoy\n"
         "  /manana — lo que toca mañana\n"
         "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
         "  /deben — quién te debe dinero\n"
         "  /cliente Ana Ruiz 600111222 — da de alta un cliente\n"
         "  /avisos on|off — resumen automático cada noche\n"
-        "  /web — token para entrar en la web"
+        "  /web — token para entrar en la web\n"
+        "  /copia — te mando todo en un CSV, por si acaso"
     )
 
 
@@ -108,3 +111,26 @@ def descripcion_corta(cliente) -> str:
     """Lo justo para distinguir a dos personas con el mismo nombre."""
     detalle = cliente.telefono or cliente.direccion
     return f"{cliente.nombre} · {detalle}" if detalle else cliente.nombre
+
+
+def apunte_borrado(apunte) -> str:
+    return f"Borrado: {apunte.concepto} — {euros(apunte.importe)}"
+
+
+def resumen_trimestre(r) -> str:
+    """El trimestre, con la estimación del 130 marcada como lo que es."""
+    return "\n".join(
+        [
+            f"Trimestre {r.trimestre} de {r.anio}"
+            f" ({r.desde.strftime('%d/%m')} a {r.hasta.strftime('%d/%m')}):",
+            f"Cobrado:   {euros(r.cobrado)}",
+            f"Gastos:    {euros(r.gastos)}",
+            f"Neto:      {euros(r.neto)}",
+            "",
+            f"Pendiente de cobro: {euros(r.pendiente)}",
+            "",
+            f"Modelo 130 aproximado: {euros(r.estimacion_130)}",
+            "Es una estimación al 20% del neto, para hacerte una idea.",
+            "Confírmalo con tu gestor antes de pagar nada.",
+        ]
+    )

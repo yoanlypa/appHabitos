@@ -13,18 +13,19 @@ from datetime import timedelta
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from app.bot import formato
+from app.bot import copias, formato
 from app.dominio.parsing import TextoNoInterpretable
 from app.dominio.parsing_citas import CitaNoInterpretable, interpretar_cita
 from app.nucleo.db import sesion
 from app.nucleo.tiempo import hoy_local
 from app.servicios.agenda import citas_del_dia, crear_cita
-from app.servicios.apuntes import ApunteNoEncontrado, marcar_cobrado
+from app.servicios.apuntes import ApunteNoEncontrado, borrar_apunte, marcar_cobrado
 from app.servicios.apuntes import anotar as anotar_apunte
 from app.servicios.auth import generar_token
 from app.servicios.avisos import activar_avisos, avisos_activos
 from app.servicios.clientes import asignar_cliente, crear_cliente, pendientes_de_cobro
 from app.servicios.resumen import resumen_dia, resumen_mes
+from app.servicios.trimestres import resumen_trimestre, trimestre_de
 
 
 async def start(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
@@ -213,3 +214,32 @@ async def deben(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
             formato.lista_deudas(pendientes_de_cobro(db, update.effective_user.id))
         )
+
+
+async def borrar(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """Para el 1200 que iba a ser 120: /borrar 34."""
+    if not contexto.args or not contexto.args[0].lstrip("#").isdigit():
+        await update.message.reply_text("Dime cuál: /borrar 12")
+        return
+    apunte_id = int(contexto.args[0].lstrip("#"))
+    with sesion() as db:
+        try:
+            apunte = borrar_apunte(db, update.effective_user.id, apunte_id)
+        except ApunteNoEncontrado:
+            await update.message.reply_text(f"No tengo ningún apunte con el número {apunte_id}.")
+            return
+        await update.message.reply_text(formato.apunte_borrado(apunte))
+
+
+async def copia(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manda ahora mismo el histórico entero en CSV."""
+    enviada = await copias.enviar_copia(contexto, update.effective_user.id)
+    if not enviada:
+        await update.message.reply_text("Todavía no hay nada que guardar.")
+
+
+async def trimestre(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    with sesion() as db:
+        hoy = hoy_local()
+        r = resumen_trimestre(db, update.effective_user.id, hoy.year, trimestre_de(hoy))
+        await update.message.reply_text(formato.resumen_trimestre(r))
