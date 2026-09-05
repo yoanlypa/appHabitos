@@ -1,0 +1,6 @@
+# Solo para desarrollar y ejecutar los tests. En Railway no se instala:
+# el servicio arranca con requirements.txt a secas.
+-r requirements.txt
+pytest>=8.0,<9.0
+pytest-asyncio>=0.23,<2.0
+httpx>=0.27,<1.0
