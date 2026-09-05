@@ -1,8 +1,14 @@
 """Forma de las peticiones y respuestas HTTP. Solo forma, nada de reglas."""
 from datetime import date, datetime, time
 from decimal import Decimal
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, PlainSerializer
+
+# Los importes salen siempre con dos decimales. Sin esto, un mismo listado
+# mezcla "120", "45.5" y "980.50", que en el CSV que va al gestor queda como
+# si estuvieran mal apuntados.
+Importe = Annotated[Decimal, PlainSerializer(lambda v: f"{v:.2f}", return_type=str)]
 
 
 class ApunteEntrada(BaseModel):
@@ -17,7 +23,7 @@ class ApunteSalida(BaseModel):
     fecha: date
     tipo: str
     concepto: str
-    importe: Decimal
+    importe: Importe
     pendiente: bool
     origen: str
     creado: datetime
@@ -25,10 +31,10 @@ class ApunteSalida(BaseModel):
 
 
 class ResumenSalida(BaseModel):
-    cobrado: Decimal
-    pendiente: Decimal
-    gastos: Decimal
-    neto: Decimal
+    cobrado: Importe
+    pendiente: Importe
+    gastos: Importe
+    neto: Importe
 
 
 class ApunteCreado(BaseModel):
@@ -36,6 +42,25 @@ class ApunteCreado(BaseModel):
 
     apunte: ApunteSalida
     candidatos: list["ClienteSalida"] = []
+
+
+class ApunteCambios(BaseModel):
+    concepto: str | None = None
+    importe: Decimal | None = None
+    pendiente: bool | None = None
+    fecha: date | None = None
+
+
+class TrimestreSalida(BaseModel):
+    anio: int
+    trimestre: int
+    desde: date
+    hasta: date
+    cobrado: Importe
+    pendiente: Importe
+    gastos: Importe
+    neto: Importe
+    estimacion_130: Importe
 
 
 class ClienteEntrada(BaseModel):
@@ -66,14 +91,14 @@ class ClienteListado(BaseModel):
     """El cliente más lo que debe: es como se mira la lista."""
 
     cliente: ClienteSalida
-    debe: Decimal
+    debe: Importe
     total_trabajos: int
 
 
 class FichaClienteSalida(BaseModel):
     cliente: ClienteSalida
-    debe: Decimal
-    cobrado: Decimal
+    debe: Importe
+    cobrado: Importe
     apuntes: list[ApunteSalida]
     citas: list["CitaSalida"]
 
