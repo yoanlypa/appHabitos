@@ -11,7 +11,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.dominio.models import Apunte
-from app.dominio.parsing import interpretar_texto
+from app.dominio.parsing import TextoNoInterpretable, interpretar_texto
 from app.nucleo.tiempo import hoy_local
 from app.servicios.clientes import clientes_mencionados
 
@@ -31,6 +31,31 @@ def crear_apunte(
         concepto=interpretado.concepto,
         importe=interpretado.importe,
         pendiente=interpretado.pendiente,
+        origen=origen,
+        cliente_id=cliente_id,
+    )
+    db.add(apunte)
+    db.commit()
+    db.refresh(apunte)
+    return apunte
+
+
+def crear_nota(
+    db: Session, user_id: int, texto: str, origen: str, cliente_id: int | None = None
+) -> Apunte:
+    """Un apunte sin dinero: "llamar a Ana el martes".
+
+    Nace con las notas de voz, donde no todo lo que se dicta es un trabajo o
+    un gasto, y perder lo dictado por no llevar importe sería peor que
+    guardarlo. Importe 0 y tipo "nota", que los resúmenes no suman.
+    """
+    apunte = Apunte(
+        user_id=user_id,
+        fecha=hoy_local(),
+        tipo="nota",
+        concepto=texto.strip(),
+        importe=Decimal("0"),
+        pendiente=False,
         origen=origen,
         cliente_id=cliente_id,
     )
@@ -114,15 +139,29 @@ class ApunteAnotado:
     candidatos: list = field(default_factory=list)
 
 
-def anotar(db: Session, user_id: int, texto: str, origen: str) -> ApunteAnotado:
+def anotar(
+    db: Session, user_id: int, texto: str, origen: str, admite_nota: bool = False
+) -> ApunteAnotado:
     """Crea el apunte y lo cuelga del cliente nombrado, si no hay duda.
 
     La regla vive aquí y no en el bot para que la web haga exactamente lo
     mismo: es el motivo por el que existe esta capa.
+
+    Con `admite_nota`, lo que no se entiende como importe se guarda como
+    nota en vez de rechazarse: "llamar al fontanero el martes" es algo que
+    hay que recordar aunque no lleve dinero, y perderlo por no saber
+    interpretarlo es peor que guardarlo tal cual.
+
+    El texto vacío se rechaza siempre: una nota en blanco no es nada.
     """
     mencionados = clientes_mencionados(db, user_id, texto)
     unico = mencionados[0].id if len(mencionados) == 1 else None
-    apunte = crear_apunte(db, user_id, texto, origen, cliente_id=unico)
+    try:
+        apunte = crear_apunte(db, user_id, texto, origen, cliente_id=unico)
+    except TextoNoInterpretable:
+        if not admite_nota or not texto.strip():
+            raise
+        apunte = crear_nota(db, user_id, texto, origen, cliente_id=unico)
     return ApunteAnotado(
         apunte=apunte,
         candidatos=mencionados if len(mencionados) > 1 else [],

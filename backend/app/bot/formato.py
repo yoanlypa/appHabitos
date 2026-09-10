@@ -18,10 +18,20 @@ def euros(importe: Decimal) -> str:
 
 
 def apunte_creado(apunte: Apunte) -> str:
+    if apunte.tipo == "nota":
+        return f"Nota guardada: {apunte.concepto}  (#{apunte.id})"
     if apunte.tipo == "gasto":
         return f"Gasto anotado: {apunte.concepto} — {euros(apunte.importe)}  (#{apunte.id})"
     estado = "pendiente de cobro" if apunte.pendiente else "cobrado"
     return f"Trabajo anotado ({estado}): {apunte.concepto} — {euros(apunte.importe)}  (#{apunte.id})"
+
+
+def escuchado(texto: str) -> str:
+    """Lo que se entendió del audio, siempre delante de lo anotado.
+
+    Sin esto, un "20" oído como "120" no se descubre hasta cuadrar el mes.
+    """
+    return f'He oído: «{texto}»'
 
 
 def apunte_cobrado(apunte: Apunte) -> str:
@@ -44,7 +54,10 @@ def ayuda() -> str:
         "Escríbeme lo que has hecho y lo anoto:\n"
         "  Cambio de grifo Ana 120     → trabajo cobrado\n"
         "  pendiente Reforma baño 980  → trabajo sin cobrar\n"
-        "  -45 gasolina                → gasto\n\n"
+        "  -45 gasolina                → gasto\n"
+        "  Llamar al fontanero martes  → nota, sin dinero\n\n"
+        "Cuando no puedas escribir, mándame una nota de voz: la escucho y\n"
+        "la anoto igual.\n\n"
         "Comandos:\n"
         "  /hoy — resumen del día\n"
         "  /mes — resumen del mes\n"

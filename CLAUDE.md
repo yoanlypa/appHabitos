@@ -49,10 +49,12 @@ parte-del-dia/
 ├── CLAUDE.md              este archivo
 ├── backend/
 │   ├── app/
-│   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py
+│   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py,
+│   │   │                     transcripcion.py
 │   │   ├── dominio/       ✅ models.py (Apunte, Cliente, Cita, Ajuste, TokenAcceso, Centimos),
 │   │   │                     parsing.py, parsing_citas.py
-│   │   ├── servicios/     ✅ apuntes, resumen, export, auth, avisos, clientes, agenda
+│   │   ├── servicios/     ✅ apuntes, resumen, export, auth, avisos, clientes,
+│   │   │                     agenda, trimestres, voz
 │   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export, clientes, agenda
 │   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py
 │   ├── requirements.txt
@@ -121,6 +123,36 @@ parte-del-dia/
   modelo 130 (20% del neto) se presenta siempre como orientativa: aquí no
   se sabe qué gastos son deducibles ni qué retenciones han practicado los
   clientes. Nunca sustituye a una gestoría.
+- **Las notas de voz se transcriben y se anotan solas.** Se apunta con las
+  manos ocupadas, que es justo cuando se pierden los trabajos: mandar un
+  audio al bot tiene que valer lo mismo que escribirlo. Transcribe OpenAI
+  (`nucleo/transcripcion.py`, `OPENAI_API_KEY`, menos de un céntimo por
+  minuto); el OGG/Opus de Telegram va tal cual, sin convertir nada ni
+  necesitar ffmpeg. Tres decisiones que no son de adorno:
+  - **Es asíncrono.** La API y el bot comparten proceso, así que transcribir
+    en bloqueante dejaría la web colgada varios segundos por cada nota.
+  - **Se responde siempre con lo que se ha entendido.** Si oyó "120" donde
+    se dijo "20", hay que verlo en el momento y no al cuadrar el mes.
+  - **Nada de lo anotado se pierde por no llevar importe** (`admite_nota` en
+    `servicios/apuntes`). "Llamar a Ana el martes" se guarda como apunte de
+    tipo `nota` (importe 0, no suma en ningún resumen) en lugar de
+    rechazarse.
+  Sin clave el bot lo dice y no pasa nada más: el audio sigue en el chat.
+
+- **Escribir es gratis y también se guarda todo.** El audio se manda cuando
+  no hay más remedio (con las manos ocupadas), y solo entonces se paga por
+  transcribirlo; teclear no llama a nadie de fuera. Por eso lo escrito sin
+  importe tampoco se rechaza: se guarda como `nota` igual que lo dictado,
+  en el bot y en la web, que la caja de texto es la misma. `POST /apuntes`
+  solo devuelve 422 con el texto en blanco: una nota vacía no es nada.
+
+- **El parser entiende lo dictado, no solo lo tecleado.** Nadie pronuncia el
+  guion de "-45" ni se calla la palabra "euros", así que `dominio/parsing.py`
+  admite "120 euros.", "980 €" y "gasto de 45 en gasolina". Con una cautela:
+  "gasto de 45 euros" sin concepto se guarda igual como gasto, porque dejarlo
+  caer en la regla de trabajo lo apuntaría como dinero que entra, y ese es el
+  error que más caro sale.
+
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
   usuario/contraseña. Falta que el bot lo genere con `/web`
@@ -135,14 +167,16 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-74 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
+101 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
 Los tests no son de adorno: cada uno de los tres fallos que ya han ocurrido
 tiene el suyo (el error de escala de cien veces en `test_dinero.py`, la
 cabecera CORS en los errores en `test_api.py`, y las tildes del CSV en
-`test_copias.py`). Al añadir algo, el test que hace falta es el del caso
+`test_copias.py`). `test_voz.py` cubre lo que puede romperse en silencio de
+las notas de voz: que una nota no cuente como cobrado en el resumen, y que
+un fallo del transcriptor se cuente en vez de tragarse. Al añadir algo, el test que hace falta es el del caso
 que se te ocurra que podría romperse en silencio.
 
 ## Convenciones de código
@@ -192,13 +226,14 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   `Authorization: Bearer <token>` (`api/dependencias.py`, 401 si falta o
   no es válido). Probado levantando el servidor real con uvicorn y
   `curl`: crear los tres tipos de apunte, 401 sin token, 422 con texto
-  sin importe, marcar cobrado (+404 si no existe), resumen antes/después
+  en blanco, marcar cobrado (+404 si no existe), resumen antes/después
   de cobrar, y export a CSV — todo correcto de punta a punta por HTTP.
 - `bot/main.py` arranca por **polling** (no webhook: no necesita URL
   pública, y en Railway es otro proceso del mismo repo — ver `Procfile`).
   `bot/handlers.py` tiene `/start`, `/hoy`, `/mes`, `/cobrado <id>`,
-  `/web`, y un handler de texto libre que anota cualquier mensaje que no
-  sea comando. `bot/formato.py` solo pinta (importes a la española:
+  `/web`, un handler de texto libre que anota cualquier mensaje que no
+  sea comando, y otro de notas de voz (`filters.VOICE | filters.AUDIO`) que
+  las transcribe y las anota igual. `bot/formato.py` solo pinta (importes a la española:
   `1.234,50 €`). Probado con un `Update` simulado, sin tocar Telegram:
   los tres tipos de apunte, texto no entendido, `/cobrado` con y sin
   almohadilla, sin argumento y con id inexistente, resumen antes/después

@@ -24,7 +24,7 @@ import {
   type Resumen,
   type ResumenTrimestre,
 } from '../api'
-import { euros as importe, iso } from '../utiles'
+import { etiqueta, euros as importe, iso } from '../utiles'
 
 type Props = {
   token: string
@@ -205,7 +205,8 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
       </form>
       <p className="ayuda">
         <code>Cambio de grifo Ana 120</code> cobrado ·{' '}
-        <code>pendiente Reforma baño 980</code> sin cobrar · <code>-45 gasolina</code> gasto
+        <code>pendiente Reforma baño 980</code> sin cobrar · <code>-45 gasolina</code> gasto ·
+        lo que no lleve importe se guarda como nota
       </p>
 
       {duda && (
@@ -241,10 +242,13 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
             {apuntes.map((a) => (
               <li key={a.id} className={a.tipo}>
                 <span className="concepto">{a.concepto}</span>
-                <span className={`importe ${a.tipo}`}>
-                  {a.tipo === 'gasto' ? '−' : ''}
-                  {importe(a.importe)}
-                </span>
+                {/* Una nota no lleva dinero: enseñar "0,00 €" sería ruido. */}
+                {a.tipo !== 'nota' && (
+                  <span className={`importe ${a.tipo}`}>
+                    {a.tipo === 'gasto' ? '−' : ''}
+                    {importe(a.importe)}
+                  </span>
+                )}
                 {a.pendiente ? (
                   <button
                     className="cobrar"
@@ -253,7 +257,7 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
                     Cobrar
                   </button>
                 ) : (
-                  <span className="etiqueta">{a.tipo === 'gasto' ? 'gasto' : 'cobrado'}</span>
+                  <span className="etiqueta">{etiqueta(a.tipo)}</span>
                 )}
                 <button
                   className="mini borrar"

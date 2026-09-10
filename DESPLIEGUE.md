@@ -49,7 +49,12 @@ supone ningún motor concreto.
    TZ_LOCAL=Europe/Madrid
    HORA_AVISO=21:00
    CORS_ORIGENES=<la URL del front, se rellena en el paso 3>
+   OPENAI_API_KEY=<solo para transcribir las notas de voz>
    ```
+
+   `OPENAI_API_KEY` es opcional: sin ella todo sigue igual, y a las notas
+   de voz el bot contesta que todavía no sabe escuchar. Se saca en
+   platform.openai.com y se gasta menos de un céntimo por minuto de audio.
 
    Las cuatro barras de `sqlite:////data/...` no son una errata: tres son
    ruta relativa, cuatro son ruta absoluta.

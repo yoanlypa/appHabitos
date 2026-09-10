@@ -40,9 +40,13 @@ def crear(
     Si hay dos clientes con ese nombre no se elige por el usuario: se
     devuelven en `candidatos` para que la web pregunte, igual que hace el
     bot con sus botones.
+
+    Lo que no lleve importe se guarda como nota, como en el bot: la misma
+    caja de texto tiene que hacer lo mismo en los dos sitios. Solo se
+    rechaza (422) el texto vacío.
     """
     try:
-        creado = anotar(db, user_id, entrada.texto, entrada.origen)
+        creado = anotar(db, user_id, entrada.texto, entrada.origen, admite_nota=True)
     except TextoNoInterpretable as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     return ApunteCreado(apunte=creado.apunte, candidatos=creado.candidatos)

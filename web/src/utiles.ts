@@ -6,6 +6,13 @@ export function euros(valor: string | number) {
   return EUROS.format(Number(valor))
 }
 
+/** Cómo se llama cada tipo de apunte en la lista. */
+export function etiqueta(tipo: string) {
+  if (tipo === 'gasto') return 'gasto'
+  if (tipo === 'nota') return 'nota'
+  return 'cobrado'
+}
+
 /** YYYY-MM-DD, que es lo que espera la API. "sv-SE" lo da tal cual. */
 export function iso(fecha: Date) {
   return fecha.toLocaleDateString('sv-SE')

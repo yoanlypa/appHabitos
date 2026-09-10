@@ -46,6 +46,51 @@ class TestApuntes:
             interpretar_texto("   ")
 
 
+class TestDictado:
+    """Lo que llega transcrito de una nota de voz.
+
+    Nadie dice "menos cuarenta y cinco" ni se calla la palabra "euros", así
+    que sin estas reglas media nota dictada acabaría sin importe.
+    """
+
+    def test_se_dice_euros_y_se_acaba_en_punto(self):
+        r = interpretar_texto("Cambio de grifo Ana 120 euros.")
+        assert (r.tipo, r.concepto, r.importe) == ("trabajo", "Cambio de grifo Ana", Decimal("120"))
+
+    def test_el_simbolo_del_euro_tambien(self):
+        assert interpretar_texto("Reforma baño 980 €").importe == Decimal("980")
+
+    def test_pendiente_dictado(self):
+        r = interpretar_texto("Pendiente reforma del baño 980 euros")
+        assert r.pendiente is True
+        assert r.concepto == "reforma del baño"
+
+    def test_gasto_dicho_con_palabras(self):
+        r = interpretar_texto("gasto de 45 en gasolina")
+        assert (r.tipo, r.concepto, r.importe) == ("gasto", "gasolina", Decimal("45"))
+
+    def test_gasto_con_el_importe_detras(self):
+        r = interpretar_texto("gasto gasolina 45,50")
+        assert (r.tipo, r.concepto, r.importe) == ("gasto", "gasolina", Decimal("45.50"))
+
+    def test_los_euros_de_en_medio_no_son_el_concepto(self):
+        assert interpretar_texto("gasto de 12 euros en tornillos").concepto == "tornillos"
+
+    def test_un_gasto_sin_concepto_sigue_siendo_un_gasto(self):
+        """Caer en la regla de trabajo lo apuntaría como dinero que entra."""
+        r = interpretar_texto("gasto de 45 euros")
+        assert (r.tipo, r.importe) == ("gasto", Decimal("45"))
+
+    def test_menos_no_convierte_un_trabajo_en_gasto(self):
+        """'menos mal que vino Ana' empieza por menos y no es ningún gasto."""
+        assert interpretar_texto("menos mal que vino Ana 120").tipo == "trabajo"
+
+    def test_lo_que_no_lleva_importe_se_sigue_rechazando(self):
+        """Aquí no se decide guardar una nota: eso lo hace el servicio."""
+        with pytest.raises(TextoNoInterpretable):
+            interpretar_texto("Llamar al fontanero el martes")
+
+
 class TestCitas:
     def test_manana_con_y_sin_tilde(self):
         con = interpretar_cita("mañana 10:00 Cambiar grifo", VIERNES)

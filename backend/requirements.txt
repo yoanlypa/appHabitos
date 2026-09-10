@@ -6,3 +6,6 @@ tzdata>=2024.1; sys_platform == "win32"
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.30,<1.0
 python-telegram-bot[job-queue]>=21.0,<23.0
+# Para transcribir las notas de voz. Ya viene con python-telegram-bot, pero
+# se declara porque este código lo usa por su cuenta.
+httpx>=0.27,<1.0

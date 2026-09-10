@@ -43,6 +43,8 @@ def construir_app() -> Application:
     app.add_handler(CommandHandler("copia", handlers.copia))
     app.add_handler(CommandHandler("trimestre", handlers.trimestre))
     app.add_handler(CallbackQueryHandler(handlers.elegir_cliente, pattern=r"^cli:"))
+    # Notas de voz y audios: se transcriben y se anotan como el texto.
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handlers.nota_de_voz))
     # Lo último: cualquier texto que no sea un comando se anota como apunte.
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.anotar))
 

@@ -82,12 +82,26 @@ def test_borrar_algo_que_no_existe_da_404(cliente, cabeceras):
     assert cliente.delete("/apuntes/999999", headers=cabeceras).status_code == 404
 
 
-def test_texto_sin_importe_da_422_explicando_por_que(cliente, cabeceras):
+def test_texto_sin_importe_se_guarda_como_nota(cliente, cabeceras):
+    """Escribir no cuesta nada, así que tampoco se pierde nada por escribirlo."""
     respuesta = cliente.post(
-        "/apuntes", json={"texto": "hola qué tal", "origen": "web"}, headers=cabeceras
+        "/apuntes",
+        json={"texto": "Llamar al fontanero el martes", "origen": "web"},
+        headers=cabeceras,
+    )
+    assert respuesta.status_code == 201
+    apunte = respuesta.json()["apunte"]
+    assert apunte["tipo"] == "nota"
+    assert apunte["importe"] == "0.00"
+    assert apunte["concepto"] == "Llamar al fontanero el martes"
+
+
+def test_un_texto_en_blanco_si_da_422(cliente, cabeceras):
+    """Una nota vacía no es nada: eso sí es un error de quien llama."""
+    respuesta = cliente.post(
+        "/apuntes", json={"texto": "   ", "origen": "web"}, headers=cabeceras
     )
     assert respuesta.status_code == 422
-    assert "importe" in respuesta.json()["detail"]
 
 
 def test_dos_clientes_iguales_se_devuelven_para_preguntar(cliente, cabeceras):
@@ -111,7 +125,7 @@ def test_los_errores_tambien_llevan_cabecera_cors(cliente, cabeceras):
     """Sin esto el navegador bloquea la respuesta y la web no puede explicar el fallo."""
     respuesta = cliente.post(
         "/apuntes",
-        json={"texto": "sin importe", "origen": "web"},
+        json={"texto": "   ", "origen": "web"},
         headers={**cabeceras, "Origin": ORIGEN_WEB},
     )
     assert respuesta.status_code == 422

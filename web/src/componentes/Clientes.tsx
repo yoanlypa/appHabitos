@@ -16,7 +16,7 @@ import {
   type FichaCliente,
   type ClienteListado,
 } from '../api'
-import { euros, fechaCorta, hhmm } from '../utiles'
+import { etiqueta, euros, fechaCorta, hhmm } from '../utiles'
 
 type Props = {
   token: string
@@ -150,10 +150,12 @@ export function Clientes({ token, onTokenInvalido }: Props) {
                   {a.concepto}
                   <small>{fechaCorta(a.fecha)}</small>
                 </span>
-                <span className="importe">
-                  {a.tipo === 'gasto' ? '−' : ''}
-                  {euros(a.importe)}
-                </span>
+                {a.tipo !== 'nota' && (
+                  <span className="importe">
+                    {a.tipo === 'gasto' ? '−' : ''}
+                    {euros(a.importe)}
+                  </span>
+                )}
                 {a.pendiente ? (
                   <button
                     className="cobrar"
@@ -162,7 +164,7 @@ export function Clientes({ token, onTokenInvalido }: Props) {
                     Cobrar
                   </button>
                 ) : (
-                  <span className="etiqueta">{a.tipo === 'gasto' ? 'gasto' : 'cobrado'}</span>
+                  <span className="etiqueta">{etiqueta(a.tipo)}</span>
                 )}
               </li>
             ))}

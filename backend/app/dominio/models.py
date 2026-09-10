@@ -49,7 +49,9 @@ class Apunte(Base):
     # Postgres; en SQLite daría igual, pero el motor puede cambiar.
     user_id = Column(BigInteger, nullable=False, index=True)
     fecha = Column(Date, nullable=False, index=True)
-    tipo = Column(String, nullable=False)  # "trabajo" | "gasto"
+    # "nota" es lo que se dicta sin importe ("llamar a Ana el martes"): va
+    # con importe 0 y los resúmenes no la suman.
+    tipo = Column(String, nullable=False)  # "trabajo" | "gasto" | "nota"
     concepto = Column(String, nullable=False)
     importe = Column(Centimos, nullable=False)  # euros en Python, céntimos en BD
     pendiente = Column(Boolean, nullable=False, default=False)  # solo aplica a tipo="trabajo"

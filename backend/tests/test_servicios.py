@@ -9,6 +9,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.dominio.parsing import TextoNoInterpretable
 from app.servicios.agenda import (
     CitaNoEncontrada,
     citas_del_dia,
@@ -84,6 +85,35 @@ class TestApuntes:
             marcar_cobrado(db, OTRO, mio.id)
         with pytest.raises(ApunteNoEncontrado):
             actualizar_apunte(db, OTRO, mio.id, importe=Decimal("1"))
+
+
+class TestNotas:
+    """Lo que no lleva importe, venga escrito o dictado, no se tira."""
+
+    def test_lo_escrito_sin_importe_se_guarda_como_nota(self, db):
+        resultado = anotar(
+            db, USUARIO, "Llamar al fontanero el martes", origen="bot", admite_nota=True
+        )
+
+        assert resultado.apunte.tipo == "nota"
+        assert resultado.apunte.importe == Decimal("0")
+
+    def test_sin_admitir_notas_se_sigue_rechazando(self, db):
+        """La API vieja y cualquier sitio que quiera un importe de verdad."""
+        with pytest.raises(TextoNoInterpretable):
+            anotar(db, USUARIO, "Llamar al fontanero el martes", origen="bot")
+
+    def test_una_nota_en_blanco_no_es_nada(self, db):
+        with pytest.raises(TextoNoInterpretable):
+            anotar(db, USUARIO, "   ", origen="bot", admite_nota=True)
+
+    def test_una_nota_no_suma_en_el_resumen(self, db):
+        anotar(db, USUARIO, "Pasar a ver la caldera", origen="bot", admite_nota=True)
+        crear_apunte(db, USUARIO, "Cambio de grifo 120", origen="bot")
+
+        r = resumen_dia(db, USUARIO)
+        assert r.cobrado == Decimal("120")
+        assert r.neto == Decimal("120")
 
 
 class TestClientes:

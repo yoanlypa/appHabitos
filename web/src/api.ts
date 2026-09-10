@@ -9,7 +9,8 @@ const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 export type Apunte = {
   id: number
   fecha: string
-  tipo: 'trabajo' | 'gasto'
+  // "nota" es lo dictado sin importe: se guarda con importe 0 y no suma.
+  tipo: 'trabajo' | 'gasto' | 'nota'
   concepto: string
   importe: string // Decimal, llega como texto para no perder céntimos
   pendiente: boolean

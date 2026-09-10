@@ -25,6 +25,14 @@ TZ_LOCAL = os.getenv("TZ_LOCAL", "Europe/Madrid")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 HORA_AVISO = os.getenv("HORA_AVISO", "21:00")  # "HH:MM", hora local
 
+# Transcripción de las notas de voz del bot. Sin clave, el bot lo dice y no
+# se pierde nada: el audio sigue estando en el chat de Telegram.
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+MODELO_TRANSCRIPCION = os.getenv("MODELO_TRANSCRIPCION", "gpt-4o-mini-transcribe")
+# Decírselo evita que una nota corta en español salga transcrita en otro
+# idioma, que es el fallo típico de estos modelos con dos palabras sueltas.
+IDIOMA_VOZ = os.getenv("IDIOMA_VOZ", "es")
+
 # Desde qué webs se puede llamar a la API. En local, el servidor de Vite;
 # en Railway, la URL del front. Separados por comas.
 CORS_ORIGENES = [
