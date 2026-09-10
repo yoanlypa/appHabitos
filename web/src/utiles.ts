@@ -6,6 +6,26 @@ export function euros(valor: string | number) {
   return EUROS.format(Number(valor))
 }
 
+/**
+ * Todos los días que ocupa algo, del primero al último incluidos.
+ *
+ * Hace falta para el calendario: una reforma del martes al jueves tiene que
+ * poner punto en los tres días, o el miércoles parece libre.
+ */
+export function diasDelRango(desde: string, hasta: string | null): string[] {
+  if (!hasta || hasta <= desde) return [desde]
+  const dias: string[] = []
+  const [a, m, d] = desde.split('-').map(Number)
+  const cursor = new Date(a, m - 1, d)
+  // Las fechas ISO se comparan como texto sin problema: "2026-09-02" es
+  // menor que "2026-09-10" también en orden alfabético.
+  while (iso(cursor) <= hasta) {
+    dias.push(iso(cursor))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  return dias
+}
+
 /** Cómo se llama cada tipo de apunte en la lista. */
 export function etiqueta(tipo: string) {
   if (tipo === 'gasto') return 'gasto'

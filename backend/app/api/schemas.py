@@ -106,10 +106,23 @@ class FichaClienteSalida(BaseModel):
 class CitaEntrada(BaseModel):
     fecha: date
     titulo: str
+    fecha_fin: date | None = None  # vacía: empieza y acaba el mismo día
     hora: time | None = None
     direccion: str | None = None
     cliente_id: int | None = None
     notas: str | None = None
+
+
+class CitaCambios(BaseModel):
+    """Lo que se puede corregir de una cita. Solo cambia lo que se manda."""
+
+    titulo: str | None = None
+    fecha: date | None = None
+    fecha_fin: date | None = None
+    hora: time | None = None
+    direccion: str | None = None
+    notas: str | None = None
+    cliente_id: int | None = None
 
 
 class CitaSalida(BaseModel):
@@ -117,6 +130,7 @@ class CitaSalida(BaseModel):
 
     id: int
     fecha: date
+    fecha_fin: date | None
     hora: time | None
     titulo: str
     direccion: str | None
@@ -124,6 +138,33 @@ class CitaSalida(BaseModel):
     hecha: bool
     cliente_id: int | None
     cliente: ClienteSalida | None = None
+
+
+class NotaEntrada(BaseModel):
+    texto: str
+
+
+class NotaSalida(BaseModel):
+    """Una nota del buzón. Por debajo es un apunte de tipo "nota"."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    fecha: date  # el día en que se apuntó, no el día en que toca
+    concepto: str
+    origen: str
+    creado: datetime
+    cliente_id: int | None = None
+    cliente: ClienteSalida | None = None
+
+
+class AgendarNota(BaseModel):
+    """Ponerle fecha a una nota: deja de ser nota y pasa a la agenda."""
+
+    fecha: date
+    fecha_fin: date | None = None
+    hora: time | None = None
+    titulo: str | None = None  # para retocar el texto al agendarla
 
 
 class AsignarCliente(BaseModel):

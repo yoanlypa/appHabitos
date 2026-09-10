@@ -65,14 +65,21 @@ def crear_nota(
     return apunte
 
 
-def listar_apuntes(db: Session, user_id: int, fecha: date | None = None) -> list[Apunte]:
-    """Los apuntes de un día, el más reciente primero (que es como se miran)."""
-    return (
-        db.query(Apunte)
-        .filter(Apunte.user_id == user_id, Apunte.fecha == (fecha or hoy_local()))
-        .order_by(Apunte.id.desc())
-        .all()
+def listar_apuntes(
+    db: Session, user_id: int, fecha: date | None = None, incluir_notas: bool = False
+) -> list[Apunte]:
+    """Los apuntes de un día, el más reciente primero (que es como se miran).
+
+    Sin las notas: esta lista es la del dinero del día, y las notas tienen
+    su propio buzón (`servicios/notas.py`), donde siguen estando aunque
+    sean de la semana pasada. Salir en los dos sitios sería duplicarlas.
+    """
+    consulta = db.query(Apunte).filter(
+        Apunte.user_id == user_id, Apunte.fecha == (fecha or hoy_local())
     )
+    if not incluir_notas:
+        consulta = consulta.filter(Apunte.tipo != "nota")
+    return consulta.order_by(Apunte.id.desc()).all()
 
 
 def _suyo(db: Session, user_id: int, apunte_id: int) -> Apunte:

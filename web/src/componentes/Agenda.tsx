@@ -17,7 +17,7 @@ import {
   type Cita,
   type ClienteListado,
 } from '../api'
-import { DIAS, MESES, hhmm, iso } from '../utiles'
+import { DIAS, MESES, diasDelRango, fechaCorta, hhmm, iso } from '../utiles'
 
 type Props = {
   token: string
@@ -76,7 +76,9 @@ export function Agenda({ token, onTokenInvalido }: Props) {
     ...Array<null>(huecoInicial).fill(null),
     ...Array.from({ length: diasDelMes }, (_, i) => i + 1),
   ]
-  const conCita = new Set(delMes.map((c) => c.fecha))
+  // Una cita de varios días pone punto en todos: si solo lo pusiera el
+  // primero, el resto del rango parecería libre justo cuando no lo está.
+  const conCita = new Set(delMes.flatMap((c) => diasDelRango(c.fecha, c.fecha_fin)))
 
   function cambiarMes(salto: number) {
     const d = new Date(anio, mes - 1 + salto, 1)
@@ -102,9 +104,11 @@ export function Agenda({ token, onTokenInvalido }: Props) {
     if (!titulo) return
     const cliente = String(datos.get('cliente') ?? '')
     await accion(async () => {
+      const hasta = String(datos.get('hasta') ?? '')
       await crearCita(token, {
         fecha: diaElegido,
         titulo,
+        fecha_fin: hasta && hasta > diaElegido ? hasta : null,
         hora: String(datos.get('hora') ?? '') || null,
         direccion: String(datos.get('direccion') ?? '').trim() || null,
         cliente_id: cliente ? Number(cliente) : null,
@@ -180,6 +184,10 @@ export function Agenda({ token, onTokenInvalido }: Props) {
               </select>
             </div>
             <input name="direccion" placeholder="Dirección (opcional)" aria-label="Dirección" />
+            <label className="casilla">
+              Hasta el día
+              <input name="hasta" type="date" min={diaElegido} aria-label="Último día" />
+            </label>
             <button type="submit">Guardar cita</button>
           </form>
         )}
@@ -193,8 +201,10 @@ export function Agenda({ token, onTokenInvalido }: Props) {
                 <span className="hora">{hhmm(c.hora) ?? '—'}</span>
                 <span className="concepto">
                   {c.titulo}
-                  {(c.cliente || c.direccion) && (
+                  {(c.cliente || c.direccion || c.fecha_fin) && (
                     <small>
+                      {c.fecha_fin ? `hasta el ${fechaCorta(c.fecha_fin)}` : ''}
+                      {c.fecha_fin && (c.cliente || c.direccion) ? ' · ' : ''}
                       {c.cliente?.nombre}
                       {c.cliente && c.direccion ? ' · ' : ''}
                       {c.direccion}

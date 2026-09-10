@@ -139,6 +139,8 @@ export type FichaCliente = {
 export type Cita = {
   id: number
   fecha: string
+  /** Último día, incluido. Vacío = empieza y acaba el mismo día. */
+  fecha_fin: string | null
   hora: string | null
   titulo: string
   direccion: string | null
@@ -206,6 +208,7 @@ export function crearCita(
   datos: {
     fecha: string
     titulo: string
+    fecha_fin?: string | null
     hora?: string | null
     direccion?: string | null
     cliente_id?: number | null
@@ -216,6 +219,26 @@ export function crearCita(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(datos),
+  })
+}
+
+export function editarCita(
+  token: string,
+  id: number,
+  cambios: {
+    titulo?: string
+    fecha?: string
+    fecha_fin?: string | null
+    hora?: string | null
+    direccion?: string | null
+    notas?: string | null
+    cliente_id?: number | null
+  },
+) {
+  return pedir<Cita>(token, `/citas/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cambios),
   })
 }
 
@@ -257,4 +280,58 @@ export type ResumenTrimestre = {
 
 export function resumenTrimestre(token: string) {
   return pedir<ResumenTrimestre>(token, '/resumen/trimestre')
+}
+
+// ---------- Buzón de notas ----------
+
+/**
+ * Una nota es lo apuntado que todavía no tiene ni fecha ni precio. Por
+ * debajo es un apunte de tipo "nota", el mismo que crea el bot cuando se le
+ * dicta algo sin importe: es la misma fila, no una copia.
+ */
+export type Nota = {
+  id: number
+  fecha: string // el día en que se apuntó, no el día en que toca
+  concepto: string
+  origen: string
+  creado: string
+  cliente_id: number | null
+  cliente: Cliente | null
+}
+
+export function listarNotas(token: string) {
+  return pedir<Nota[]>(token, '/notas')
+}
+
+export function crearNota(token: string, texto: string) {
+  return pedir<Nota>(token, '/notas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ texto }),
+  })
+}
+
+export function editarNota(token: string, id: number, texto: string) {
+  return pedir<Nota>(token, `/notas/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ texto }),
+  })
+}
+
+export async function borrarNota(token: string, id: number) {
+  await pedirSinCuerpo(token, `/notas/${id}`, { method: 'DELETE' })
+}
+
+/** Le pone fecha: devuelve la cita nueva y la nota deja de existir. */
+export function agendarNota(
+  token: string,
+  id: number,
+  datos: { fecha: string; fecha_fin?: string | null; hora?: string | null; titulo?: string },
+) {
+  return pedir<Cita>(token, `/notas/${id}/agendar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos),
+  })
 }

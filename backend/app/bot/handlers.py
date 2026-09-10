@@ -31,6 +31,7 @@ from app.servicios.apuntes import anotar as anotar_apunte
 from app.servicios.auth import generar_token
 from app.servicios.avisos import activar_avisos, avisos_activos
 from app.servicios.clientes import asignar_cliente, crear_cliente, pendientes_de_cobro
+from app.servicios.notas import listar_notas
 from app.servicios.resumen import resumen_dia, resumen_mes
 from app.servicios.trimestres import resumen_trimestre, trimestre_de
 from app.servicios.voz import NadaQueAnotar, anotar_audio
@@ -306,6 +307,18 @@ async def cita(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
             hora=interpretada.hora,
         )
         await update.message.reply_text(formato.cita_creada(nueva))
+
+
+async def notas(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """El buzón: lo apuntado que sigue sin fecha ni precio.
+
+    Solo listar. Ponerle fecha abre un modal con rango de días y texto
+    editable, y eso es cosa de la web; aquí sería un baile de botones.
+    """
+    with sesion() as db:
+        await update.message.reply_text(
+            formato.lista_notas(listar_notas(db, update.effective_user.id))
+        )
 
 
 async def deben(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:

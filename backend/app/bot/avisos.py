@@ -44,6 +44,8 @@ def _componer(aviso) -> str:
         partes.append(formato.resumen("Resumen de hoy:", aviso.resumen))
     if aviso.citas_manana:
         partes.append(formato.lista_citas("Mañana:", aviso.citas_manana))
+    if aviso.notas_pendientes:
+        partes.append(formato.recordatorio_de_notas(aviso.notas_pendientes))
     return "\n\n".join(partes)
 
 

@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencias import get_current_user_id
-from app.api.schemas import CitaEntrada, CitaSalida
+from app.api.schemas import CitaCambios, CitaEntrada, CitaSalida
 from app.nucleo.db import get_db
 from app.servicios.agenda import (
     CitaNoEncontrada,
+    RangoAlReves,
+    actualizar_cita,
     borrar_cita,
     citas_del_dia,
     citas_del_mes,
@@ -59,9 +61,32 @@ def crear(
             direccion=entrada.direccion,
             cliente_id=entrada.cliente_id,
             notas=entrada.notas,
+            fecha_fin=entrada.fecha_fin,
         )
+    except RangoAlReves as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+
+
+@router.patch("/{cita_id}", response_model=CitaSalida)
+def editar(
+    cita_id: int,
+    cambios: CitaCambios,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Corrige una cita ya puesta: el texto, el día, el rango, la hora.
+
+    `exclude_unset` es lo que hace que se pueda vaciar la hora sin borrar
+    de paso todo lo demás: lo que no se manda, no se toca.
+    """
+    try:
+        return actualizar_cita(db, user_id, cita_id, **cambios.model_dump(exclude_unset=True))
+    except CitaNoEncontrada as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except RangoAlReves as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
 
 @router.post("/{cita_id}/hecha", response_model=CitaSalida)

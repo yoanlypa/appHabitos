@@ -150,3 +150,76 @@ def test_el_csv_sale_con_sus_columnas(cliente, cabeceras):
     lineas = respuesta.text.strip().splitlines()
     assert lineas[0].startswith("fecha,tipo,concepto,importe")
     assert "Cambio de grifo" in lineas[1]
+
+
+def test_el_buzon_pide_token(cliente):
+    assert cliente.get("/notas").status_code == 401
+
+
+def test_el_ciclo_entero_de_una_nota(cliente, cabeceras):
+    """Crear, editar, agendar: lo que hacen los botones del buzón."""
+    creada = cliente.post("/notas", json={"texto": "Revisar el coche"}, headers=cabeceras)
+    assert creada.status_code == 201
+    nota = creada.json()
+    assert nota["concepto"] == "Revisar el coche"
+
+    editada = cliente.patch(
+        f"/notas/{nota['id']}", json={"texto": "Revisar el coche y las ruedas"}, headers=cabeceras
+    )
+    assert editada.json()["concepto"] == "Revisar el coche y las ruedas"
+
+    assert len(cliente.get("/notas", headers=cabeceras).json()) == 1
+
+
+def test_agendar_una_nota_la_saca_del_buzon(cliente, cabeceras):
+    nota = cliente.post("/notas", json={"texto": "Reforma"}, headers=cabeceras).json()
+
+    respuesta = cliente.post(
+        f"/notas/{nota['id']}/agendar",
+        json={"fecha": "2026-09-09", "fecha_fin": "2026-09-11", "titulo": "Reforma del baño"},
+        headers=cabeceras,
+    )
+
+    assert respuesta.status_code == 201
+    cita = respuesta.json()
+    assert (cita["fecha"], cita["fecha_fin"], cita["titulo"]) == (
+        "2026-09-09",
+        "2026-09-11",
+        "Reforma del baño",
+    )
+    assert cliente.get("/notas", headers=cabeceras).json() == []
+    # Y sale el día de en medio, que es lo que se mira en el calendario.
+    del_dia = cliente.get("/citas?fecha=2026-09-10", headers=cabeceras).json()
+    assert [c["id"] for c in del_dia] == [cita["id"]]
+
+
+def test_un_rango_al_reves_da_422(cliente, cabeceras):
+    nota = cliente.post("/notas", json={"texto": "Reforma"}, headers=cabeceras).json()
+
+    respuesta = cliente.post(
+        f"/notas/{nota['id']}/agendar",
+        json={"fecha": "2026-09-11", "fecha_fin": "2026-09-09"},
+        headers=cabeceras,
+    )
+
+    assert respuesta.status_code == 422
+    assert len(cliente.get("/notas", headers=cabeceras).json()) == 1
+
+
+def test_borrar_una_nota_que_no_existe_da_404(cliente, cabeceras):
+    assert cliente.delete("/notas/999999", headers=cabeceras).status_code == 404
+
+
+def test_corregir_una_cita(cliente, cabeceras):
+    cita = cliente.post(
+        "/citas", json={"fecha": "2026-09-09", "titulo": "Reforma", "hora": "09:00"},
+        headers=cabeceras,
+    ).json()
+
+    cambiada = cliente.patch(
+        f"/citas/{cita['id']}", json={"titulo": "Reforma del baño", "hora": None}, headers=cabeceras
+    )
+
+    assert cambiada.status_code == 200
+    assert cambiada.json()["titulo"] == "Reforma del baño"
+    assert cambiada.json()["hora"] is None

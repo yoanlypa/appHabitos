@@ -13,13 +13,21 @@ from sqlalchemy.orm import Session
 from app.dominio.models import Apunte
 
 
-def exportar_csv(db: Session, user_id: int, desde: date, hasta: date) -> str:
-    apuntes = (
-        db.query(Apunte)
-        .filter(Apunte.user_id == user_id, Apunte.fecha >= desde, Apunte.fecha <= hasta)
-        .order_by(Apunte.fecha, Apunte.id)
-        .all()
+def exportar_csv(
+    db: Session, user_id: int, desde: date, hasta: date, incluir_notas: bool = False
+) -> str:
+    """El CSV del gestor no lleva notas: son recordatorios, no dinero.
+
+    Una columna de importes llena de ceros con "llamar al fontanero" al lado
+    solo sirve para que quien lo abra pregunte qué es eso. En la copia de
+    seguridad sí van, que ahí lo que se guarda es todo.
+    """
+    consulta = db.query(Apunte).filter(
+        Apunte.user_id == user_id, Apunte.fecha >= desde, Apunte.fecha <= hasta
     )
+    if not incluir_notas:
+        consulta = consulta.filter(Apunte.tipo != "nota")
+    apuntes = consulta.order_by(Apunte.fecha, Apunte.id).all()
     salida = io.StringIO()
     escritor = csv.writer(salida)
     escritor.writerow(["fecha", "tipo", "concepto", "importe", "pendiente", "origen"])
@@ -40,9 +48,9 @@ def exportar_csv(db: Session, user_id: int, desde: date, hasta: date) -> str:
 
 
 def exportar_todo(db: Session, user_id: int) -> str:
-    """Todo el histórico, para la copia de seguridad."""
+    """Todo el histórico, para la copia de seguridad. Notas incluidas."""
     primero = db.query(func.min(Apunte.fecha)).filter(Apunte.user_id == user_id).scalar()
     ultimo = db.query(func.max(Apunte.fecha)).filter(Apunte.user_id == user_id).scalar()
     if primero is None:
         return "fecha,tipo,concepto,importe,pendiente,origen\n"
-    return exportar_csv(db, user_id, primero, ultimo)
+    return exportar_csv(db, user_id, primero, ultimo, incluir_notas=True)

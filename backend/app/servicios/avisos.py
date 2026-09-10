@@ -8,7 +8,10 @@ Tres decisiones de negocio viven aquí, no en el bot:
 2. El aviso lleva las citas de mañana además del dinero de hoy, porque el
    momento en que sirve saber a qué hora hay que estar en un sitio es la
    noche anterior, no la mañana siguiente con el coche arrancado.
-3. Los avisos están activos salvo que los apagues. Así funcionan desde el
+3. El buzón de notas solo se cuenta, nunca dispara el aviso: una nota que
+   lleva ahí tres semanas haría sonar el bot todas las noches para siempre,
+   y eso es exactamente lo que hace que se silencie.
+4. Los avisos están activos salvo que los apagues. Así funcionan desde el
    primer día sin configurar nada, y `Ajuste` solo guarda fila para quien
    ha cambiado algo.
 """
@@ -20,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.dominio.models import Ajuste, Apunte, Cita
 from app.nucleo.tiempo import hoy_local
 from app.servicios.agenda import citas_del_dia
+from app.servicios.notas import contar_notas
 from app.servicios.resumen import ResumenPeriodo, resumen_dia
 
 
@@ -29,6 +33,7 @@ class AvisoDelDia:
     resumen: ResumenPeriodo
     citas_manana: list[Cita]
     hubo_apuntes: bool
+    notas_pendientes: int = 0
 
 
 def avisos_activos(db: Session, user_id: int) -> bool:
@@ -51,9 +56,15 @@ def destinatarios_del_aviso(db: Session) -> list[AvisoDelDia]:
     hoy = hoy_local()
     manana = hoy + timedelta(days=1)
 
+    # Las notas no cuentan como "hoy pasó algo": son apuntes, pero sin dinero.
+    # Si contaran, apuntar un recordatorio dispararía el aviso de la noche con
+    # un resumen de 0,00 €, que es exactamente el mensaje vacío que se evita.
     con_apuntes = {
         fila[0]
-        for fila in db.query(Apunte.user_id).filter(Apunte.fecha == hoy).distinct().all()
+        for fila in db.query(Apunte.user_id)
+        .filter(Apunte.fecha == hoy, Apunte.tipo != "nota")
+        .distinct()
+        .all()
     }
     con_citas = {
         fila[0]
@@ -73,6 +84,7 @@ def destinatarios_del_aviso(db: Session) -> list[AvisoDelDia]:
             resumen=resumen_dia(db, user_id, hoy),
             citas_manana=citas_del_dia(db, user_id, manana),
             hubo_apuntes=user_id in con_apuntes,
+            notas_pendientes=contar_notas(db, user_id),
         )
         for user_id in sorted((con_apuntes | con_citas) - apagados)
     ]

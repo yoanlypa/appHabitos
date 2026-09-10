@@ -54,8 +54,9 @@ parte-del-dia/
 │   │   ├── dominio/       ✅ models.py (Apunte, Cliente, Cita, Ajuste, TokenAcceso, Centimos),
 │   │   │                     parsing.py, parsing_citas.py
 │   │   ├── servicios/     ✅ apuntes, resumen, export, auth, avisos, clientes,
-│   │   │                     agenda, trimestres, voz
-│   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export, clientes, agenda
+│   │   │                     agenda, trimestres, voz, notas
+│   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export,
+│   │   │                     clientes, agenda, notas
 │   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py
 │   ├── requirements.txt
 │   ├── Procfile           ✅ dos procesos: web (uvicorn) y bot (polling)
@@ -146,6 +147,29 @@ parte-del-dia/
   en el bot y en la web, que la caja de texto es la misma. `POST /apuntes`
   solo devuelve 422 con el texto en blanco: una nota vacía no es nada.
 
+- **El buzón de notas es lo que aún no tiene fecha ni precio.** Una nota
+  sigue siendo un `Apunte` de tipo `nota`, no una tabla nueva: lo que se
+  dicta por Telegram y lo que se ve en la web tienen que ser la misma fila,
+  y el día que fueran dos cosas habría que sincronizarlas. De ahí salen tres
+  reglas:
+  - **Ponerle fecha la saca del buzón.** `servicios/notas.agendar()` crea la
+    cita (heredando el cliente) y borra la nota. Un buzón donde se queda
+    todo deja de mirarse a la tercera semana.
+  - **En el buzón un número al final no es dinero.** "Cambiar 2 grifos" es
+    una tarea. Solo interpreta importes la caja de "Hoy" y el texto libre
+    del bot.
+  - **Las notas no salen en la lista del día ni en el CSV del gestor**, pero
+    sí en la copia de seguridad. Y no disparan el aviso de las 21:00: son
+    apuntes, así que si contaran, un recordatorio haría sonar el bot con un
+    resumen de 0,00 €. Se cuentan en el aviso de quien ya lo recibe.
+
+- **Una cita puede durar varios días** (`Cita.fecha_fin`, vacía = un solo
+  día). Una reforma de tres días es UNA cosa: se edita, se marca hecha y se
+  borra de una vez. El precio es que las consultas miran el rango entero
+  (`_ULTIMO_DIA` en `servicios/agenda.py`) — si miraran solo `fecha`, el
+  miércoles de una reforma de martes a jueves parecería libre en el
+  calendario, que es justo el día en que hace falta saberlo.
+
 - **El parser entiende lo dictado, no solo lo tecleado.** Nadie pronuncia el
   guion de "-45" ni se calla la palabra "euros", así que `dominio/parsing.py`
   admite "120 euros.", "980 €" y "gasto de 45 en gasolina". Con una cautela:
@@ -167,7 +191,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-101 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
+132 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
@@ -260,6 +284,11 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   (uno los apaga, otro no anota nada, otro sí) y comprobando que si uno
   bloqueó el bot los demás reciben su aviso igual.
 
+- `web/componentes/Notas.tsx` es el buzón: alta, edición en la propia línea
+  (cambiar una palabra no merece abrir una ventana) y un modal para ponerle
+  fecha, donde se elige día o rango, hora opcional y se retoca el texto —
+  que es el momento en que se está pensando en ello. Al agendar salta a la
+  agenda para verlo ya puesto.
 - `web/` es el front en React: `api.ts` es el único sitio que sabe de HTTP,
   `componentes/Entrada.tsx` pide el token que da `/web` en el bot (se
   guarda en localStorage; si la API lo rechaza, se borra y se vuelve a

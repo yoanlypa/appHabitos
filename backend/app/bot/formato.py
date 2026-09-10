@@ -67,6 +67,7 @@ def ayuda() -> str:
         "  /agenda — lo que toca hoy\n"
         "  /manana — lo que toca mañana\n"
         "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
+        "  /notas — el buzón de lo que no tiene fecha\n"
         "  /deben — quién te debe dinero\n"
         "  /cliente Ana Ruiz 600111222 — da de alta un cliente\n"
         "  /avisos on|off — resumen automático cada noche\n"
@@ -75,11 +76,39 @@ def ayuda() -> str:
     )
 
 
+def cuando(cita) -> str:
+    """El día, o el rango si dura varios. "9/09 a 11/09" se lee de un vistazo."""
+    inicio = cita.fecha.strftime("%d/%m")
+    if cita.fecha_fin is None:
+        return inicio
+    return f"{inicio} a {cita.fecha_fin.strftime('%d/%m')}"
+
+
 def cita_creada(cita) -> str:
-    cuando = cita.fecha.strftime("%d/%m")
     hora = cita.hora.strftime(" a las %H:%M") if cita.hora else ""
     quien = f" — {cita.cliente.nombre}" if cita.cliente else ""
-    return f"Apuntado para el {cuando}{hora}: {cita.titulo}{quien}"
+    dias = "los días " if cita.fecha_fin else "el "
+    return f"Apuntado para {dias}{cuando(cita)}{hora}: {cita.titulo}{quien}"
+
+
+def lista_notas(notas: list) -> str:
+    """El buzón: lo apuntado que aún no tiene ni fecha ni precio."""
+    if not notas:
+        return "No tienes notas pendientes."
+    lineas = [f"Tienes {len(notas)} nota{'s' if len(notas) > 1 else ''}:"]
+    for n in notas:
+        quien = f" — {n.cliente.nombre}" if n.cliente else ""
+        lineas.append(f"  #{n.id} {n.concepto}{quien} ({n.fecha.strftime('%d/%m')})")
+    lineas.append("")
+    lineas.append("Ponles fecha desde la web, o quítalas con /borrar <número>.")
+    return "\n".join(lineas)
+
+
+def recordatorio_de_notas(cuantas: int) -> str:
+    """Una línea en el aviso de la noche, para que el buzón no sea un cajón."""
+    if cuantas == 1:
+        return "Tienes 1 nota sin fecha. Míralas con /notas."
+    return f"Tienes {cuantas} notas sin fecha. Míralas con /notas."
 
 
 def lista_citas(titulo: str, citas: list) -> str:
@@ -91,7 +120,8 @@ def lista_citas(titulo: str, citas: list) -> str:
         marca = "✓ " if c.hecha else ""
         donde = f" ({c.direccion})" if c.direccion else ""
         quien = f" — {c.cliente.nombre}" if c.cliente else ""
-        lineas.append(f"{hora}  {marca}{c.titulo}{quien}{donde}")
+        dura = f" [hasta el {c.fecha_fin.strftime('%d/%m')}]" if c.fecha_fin else ""
+        lineas.append(f"{hora}  {marca}{c.titulo}{quien}{donde}{dura}")
     return "\n".join(lineas)
 
 

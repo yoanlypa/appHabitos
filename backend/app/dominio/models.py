@@ -107,13 +107,18 @@ class Cita(Base):
 
     La hora es opcional: hay avisos que son "el martes paso por allí" sin
     hora cerrada, y obligar a poner una obligaría a inventársela.
+
+    `fecha_fin` también: una reforma de tres días es UNA cosa, no tres citas
+    sueltas que haya que marcar y borrar una a una. Vacía significa que
+    empieza y acaba el mismo día, que es el caso normal.
     """
 
     __tablename__ = "citas"
 
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger, nullable=False, index=True)
-    fecha = Column(Date, nullable=False, index=True)
+    fecha = Column(Date, nullable=False, index=True)  # el día, o el primero
+    fecha_fin = Column(Date, nullable=True, index=True)  # último día, incluido
     hora = Column(Time, nullable=True)
     titulo = Column(String, nullable=False)
     direccion = Column(String, nullable=True)
