@@ -116,6 +116,56 @@ class TestCitas:
             interpretar_cita("mañana 10:00", VIERNES)
 
 
+class TestCitasComoSeHablan:
+    """El día se dice "20 septiembre" y la hora "10am", no "20/09" y "10:00".
+
+    Pasó de verdad: "/cita 20 septiembre 10am para casa y trabajo" acabó
+    puesta en el día de hoy, con la fecha entera metida en el título. Una
+    cita en el día equivocado se descubre tarde, cuando ya no sirve.
+    """
+
+    def test_el_caso_que_fallo(self):
+        r = interpretar_cita("20 septiembre 10am para casa y trabajo", VIERNES)
+        assert r.fecha == date(2026, 9, 20)
+        assert r.hora == time(10, 0)
+        assert r.titulo == "para casa y trabajo"
+
+    def test_dicho_del_todo_con_palabras(self):
+        r = interpretar_cita("para el 20 de septiembre a las 10 Ver la casa", VIERNES)
+        assert (r.fecha, r.hora, r.titulo) == (date(2026, 9, 20), time(10, 0), "Ver la casa")
+
+    def test_el_mes_abreviado(self):
+        assert interpretar_cita("20 sept 9h Presupuesto", VIERNES).fecha == date(2026, 9, 20)
+
+    def test_con_ano_se_respeta(self):
+        assert interpretar_cita("20 septiembre 2027 Revisión", VIERNES).fecha == date(2027, 9, 20)
+
+    def test_un_dia_ya_pasado_es_del_ano_que_viene(self):
+        """Una cita es algo que viene: el 1 de septiembre ya no se puede agendar."""
+        assert interpretar_cita("1 septiembre Revisar caldera", VIERNES).fecha == date(2027, 9, 1)
+
+    def test_pero_lo_que_aun_no_ha_llegado_es_de_este_ano(self):
+        assert interpretar_cita("5 septiembre Revisar caldera", VIERNES).fecha == date(2026, 9, 5)
+
+    def test_la_tarde_en_formato_de_doce_horas(self):
+        assert interpretar_cita("20 septiembre 10 pm Cena", VIERNES).hora == time(22, 0)
+
+    def test_las_doce_de_la_noche_no_son_las_doce_del_mediodia(self):
+        assert interpretar_cita("12am Guardia", VIERNES).hora == time(0, 0)
+        assert interpretar_cita("12pm Comida", VIERNES).hora == time(12, 0)
+
+    def test_lo_que_no_es_fecha_no_pierde_palabras(self):
+        """"para casa de Ana" no puede quedarse en "casa de Ana"."""
+        r = interpretar_cita("para casa de Ana", VIERNES)
+        assert r.titulo == "para casa de Ana"
+        assert r.fecha == VIERNES
+
+    def test_un_numero_pelado_sigue_sin_ser_una_hora(self):
+        r = interpretar_cita("20 septiembre Reforma 3 baños", VIERNES)
+        assert r.hora is None
+        assert r.titulo == "Reforma 3 baños"
+
+
 class TestDeteccionDeClientes:
     GENTE = [
         Candidato(1, "Ana Ruiz"),

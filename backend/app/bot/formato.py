@@ -4,9 +4,11 @@ Solo presentación: aquí no se decide nada, solo se pinta lo que ya
 calcularon los servicios. Los importes se escriben a la española
 (1.234,50 €), que es como los va a leer quien usa el bot.
 """
+from datetime import timedelta
 from decimal import Decimal
 
 from app.dominio.models import Apunte
+from app.nucleo.tiempo import hoy_local
 from app.servicios.resumen import ResumenPeriodo
 
 
@@ -67,6 +69,7 @@ def ayuda() -> str:
         "  /agenda — lo que toca hoy\n"
         "  /manana — lo que toca mañana\n"
         "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
+        "      también vale: /cita 20 de septiembre a las 10am Ver la casa\n"
         "  /notas — el buzón de lo que no tiene fecha\n"
         "  /hecha <número> — marca una nota como cumplida\n"
         "  /deben — quién te debe dinero\n"
@@ -85,11 +88,32 @@ def cuando(cita) -> str:
     return f"{inicio} a {cita.fecha_fin.strftime('%d/%m')}"
 
 
+_NOMBRE_DIA = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+
+
+def dia_con_nombre(fecha) -> str:
+    """"el domingo 20/09", o "hoy" y "mañana" cuando toca.
+
+    El día de la semana no es adorno: al confirmar una cita es lo que hace
+    que un día equivocado salte a la vista. Un "20/09" suelto se lee sin
+    mirarlo; un "sábado" cuando pensabas en el domingo, no.
+    """
+    hoy = hoy_local()
+    if fecha == hoy:
+        return "hoy"
+    if fecha == hoy + timedelta(days=1):
+        return "mañana"
+    return f"el {_NOMBRE_DIA[fecha.weekday()]} {fecha.strftime('%d/%m')}"
+
+
 def cita_creada(cita) -> str:
     hora = cita.hora.strftime(" a las %H:%M") if cita.hora else ""
     quien = f" — {cita.cliente.nombre}" if cita.cliente else ""
-    dias = "los días " if cita.fecha_fin else "el "
-    return f"Apuntado para {dias}{cuando(cita)}{hora}: {cita.titulo}{quien}"
+    if cita.fecha_fin:
+        cuando_dura = f"desde {dia_con_nombre(cita.fecha)} hasta {dia_con_nombre(cita.fecha_fin)}"
+    else:
+        cuando_dura = f"para {dia_con_nombre(cita.fecha)}"
+    return f"Apuntado {cuando_dura}{hora}: {cita.titulo}{quien}"
 
 
 def lista_notas(notas: list) -> str:

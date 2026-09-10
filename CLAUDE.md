@@ -176,6 +176,17 @@ parte-del-dia/
   miércoles de una reforma de martes a jueves parecería libre en el
   calendario, que es justo el día en que hace falta saberlo.
 
+- **Las citas se escriben como se hablan.** `/cita 20 septiembre 10am ...`
+  ponía la cita en el día de hoy y se tragaba la fecha dentro del título:
+  `dominio/parsing_citas.py` solo entendía "20/09" y "10:00". Ahora admite
+  el mes por su nombre, el año opcional, "a las", y las horas en formato de
+  doce ("10am", "10 pm"). La regla que lo hace seguro es que **nada se
+  consume si no se ha entendido**: si "para casa" no es una fecha, esas
+  palabras siguen en el título. Y el bot confirma con el día de la semana
+  ("Apuntado para el domingo 20/09"), que es lo que hace saltar a la vista
+  un día equivocado — una cita en el día que no es se descubre tarde, igual
+  que un trabajo colgado de la Ana equivocada.
+
 - **El parser entiende lo dictado, no solo lo tecleado.** Nadie pronuncia el
   guion de "-45" ni se calla la palabra "euros", así que `dominio/parsing.py`
   admite "120 euros.", "980 €" y "gasto de 45 en gasolina". Con una cautela:
@@ -197,7 +208,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-138 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
+148 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
