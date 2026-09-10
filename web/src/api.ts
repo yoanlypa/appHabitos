@@ -293,14 +293,20 @@ export type Nota = {
   id: number
   fecha: string // el día en que se apuntó, no el día en que toca
   concepto: string
+  hecha: boolean
   origen: string
   creado: string
   cliente_id: number | null
   cliente: Cliente | null
 }
 
-export function listarNotas(token: string) {
-  return pedir<Nota[]>(token, '/notas')
+/** Por defecto, lo que queda por hacer; con `hechas`, las ya cumplidas. */
+export function listarNotas(token: string, hechas = false) {
+  return pedir<Nota[]>(token, `/notas${hechas ? '?hechas=true' : ''}`)
+}
+
+export function marcarNotaHecha(token: string, id: number, hecha = true) {
+  return pedir<Nota>(token, `/notas/${id}/hecha?hecha=${hecha}`, { method: 'POST' })
 }
 
 export function crearNota(token: string, texto: string) {

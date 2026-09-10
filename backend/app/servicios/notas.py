@@ -9,6 +9,10 @@ sincronizarlas.
 El buzón solo guarda lo que no tiene fecha. En cuanto se le pone una, deja
 de ser una nota y pasa a la agenda: por eso `agendar()` crea la cita y borra
 la nota. Un buzón donde se queda todo deja de mirarse a la tercera semana.
+
+Lo cumplido tampoco se borra: se marca. "Revisar el coche" cuando ya lo
+revisaste no es un error del que haya que deshacerse, y borrarlo quitaría
+la única prueba de que se hizo.
 """
 from datetime import date, time
 
@@ -31,25 +35,36 @@ def _suya(db: Session, user_id: int, nota_id: int) -> Apunte:
     return nota
 
 
-def listar_notas(db: Session, user_id: int) -> list[Apunte]:
-    """Todas, sin filtrar por día: una nota sigue pendiente aunque sea vieja.
+def listar_notas(db: Session, user_id: int, hechas: bool | None = False) -> list[Apunte]:
+    """Sin filtrar por día: una nota sigue pendiente aunque sea de hace un mes.
+
+    Por defecto solo lo que queda por hacer, que es para lo que se abre el
+    buzón. `hechas=True` da las cumplidas y `hechas=None` las dos.
 
     De la más nueva a la más vieja, que es el orden en el que se buscan.
     """
-    return (
-        db.query(Apunte)
-        .filter(Apunte.user_id == user_id, Apunte.tipo == "nota")
-        .order_by(Apunte.id.desc())
-        .all()
-    )
+    consulta = db.query(Apunte).filter(Apunte.user_id == user_id, Apunte.tipo == "nota")
+    if hechas is not None:
+        consulta = consulta.filter(Apunte.hecha.is_(hechas))
+    return consulta.order_by(Apunte.id.desc()).all()
 
 
 def contar_notas(db: Session, user_id: int) -> int:
+    """Las que quedan por hacer: es lo que se cuenta en el aviso de la noche."""
     return (
         db.query(Apunte)
-        .filter(Apunte.user_id == user_id, Apunte.tipo == "nota")
+        .filter(Apunte.user_id == user_id, Apunte.tipo == "nota", Apunte.hecha.is_(False))
         .count()
     )
+
+
+def marcar_hecha(db: Session, user_id: int, nota_id: int, hecha: bool = True) -> Apunte:
+    """Marca una nota como cumplida, o la devuelve al buzón si se marcó sin querer."""
+    nota = _suya(db, user_id, nota_id)
+    nota.hecha = hecha
+    db.commit()
+    db.refresh(nota)
+    return nota
 
 
 def crear(db: Session, user_id: int, texto: str, origen: str) -> Apunte:

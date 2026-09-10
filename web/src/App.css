@@ -679,3 +679,18 @@ select {
   font-size: 0.8rem;
   color: var(--apagado);
 }
+
+/* Lo hecho, apagado y tachado: se ve que está, y se ve que ya no cuenta. */
+.notas.cumplidas li {
+  border-left-color: var(--borde);
+  opacity: 0.65;
+}
+
+.notas.cumplidas .concepto {
+  text-decoration: line-through;
+}
+
+button.mini.hecha:hover {
+  color: var(--cobrado);
+  border-color: var(--cobrado);
+}

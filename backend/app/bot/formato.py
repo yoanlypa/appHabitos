@@ -68,6 +68,7 @@ def ayuda() -> str:
         "  /manana — lo que toca mañana\n"
         "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
         "  /notas — el buzón de lo que no tiene fecha\n"
+        "  /hecha <número> — marca una nota como cumplida\n"
         "  /deben — quién te debe dinero\n"
         "  /cliente Ana Ruiz 600111222 — da de alta un cliente\n"
         "  /avisos on|off — resumen automático cada noche\n"
@@ -100,8 +101,14 @@ def lista_notas(notas: list) -> str:
         quien = f" — {n.cliente.nombre}" if n.cliente else ""
         lineas.append(f"  #{n.id} {n.concepto}{quien} ({n.fecha.strftime('%d/%m')})")
     lineas.append("")
-    lineas.append("Ponles fecha desde la web, o quítalas con /borrar <número>.")
+    lineas.append("/hecha <número> cuando la cumplas. Ponerles fecha, desde la web.")
     return "\n".join(lineas)
+
+
+def nota_hecha(nota, hecha: bool = True) -> str:
+    if hecha:
+        return f"Hecha: {nota.concepto}"
+    return f"De vuelta al buzón: {nota.concepto}  (#{nota.id})"
 
 
 def recordatorio_de_notas(cuantas: int) -> str:

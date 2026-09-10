@@ -11,6 +11,10 @@
  * más frecuente y no merece abrir una ventana. El modal se guarda para
  * agendar, que es donde hay varias decisiones a la vez (qué días, a qué
  * hora, y con qué texto se va a quedar).
+ *
+ * Lo cumplido se marca, no se borra: sale de la lista pero se puede abrir
+ * abajo y devolver al buzón. Borrar es para lo que se apuntó mal, y son dos
+ * cosas distintas que no pueden compartir botón.
  */
 import { useCallback, useEffect, useState } from 'react'
 import {
@@ -19,6 +23,7 @@ import {
   crearNota,
   editarNota,
   listarNotas,
+  marcarNotaHecha,
   TokenInvalido,
   type Nota,
 } from '../api'
@@ -37,6 +42,8 @@ export function Notas({ token, onTokenInvalido, onAgendada }: Props) {
   const [editando, setEditando] = useState<number | null>(null)
   const [borrador, setBorrador] = useState('')
   const [agendando, setAgendando] = useState<Nota | null>(null)
+  const [hechas, setHechas] = useState<Nota[]>([])
+  const [verHechas, setVerHechas] = useState(false)
   const [recargas, setRecargas] = useState(0)
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(true)
@@ -53,9 +60,14 @@ export function Notas({ token, onTokenInvalido, onAgendada }: Props) {
     let cancelado = false
     async function cargar() {
       try {
-        const lista = await listarNotas(token)
+        // Las hechas solo se piden si se van a enseñar: son las que crecen.
+        const [lista, cumplidas] = await Promise.all([
+          listarNotas(token),
+          verHechas ? listarNotas(token, true) : Promise.resolve([]),
+        ])
         if (cancelado) return
         setNotas(lista)
+        setHechas(cumplidas)
         setError('')
       } catch (e) {
         if (!cancelado) fallo(e)
@@ -67,7 +79,7 @@ export function Notas({ token, onTokenInvalido, onAgendada }: Props) {
     return () => {
       cancelado = true
     }
-  }, [token, recargas, fallo])
+  }, [token, recargas, verHechas, fallo])
 
   async function accion(hacer: () => Promise<unknown>) {
     try {
@@ -162,6 +174,13 @@ export function Notas({ token, onTokenInvalido, onAgendada }: Props) {
               )}
 
               <div className="acciones">
+                <button
+                  className="mini hecha"
+                  title="Marcar como hecha"
+                  onClick={() => void accion(() => marcarNotaHecha(token, n.id))}
+                >
+                  ✓
+                </button>
                 <button className="mini" title="Ponerle fecha" onClick={() => setAgendando(n)}>
                   Agendar
                 </button>
@@ -184,6 +203,48 @@ export function Notas({ token, onTokenInvalido, onAgendada }: Props) {
           ))}
         </ul>
       )}
+
+      <div className="titulo-fila">
+        <button className="enlace" onClick={() => setVerHechas((v) => !v)}>
+          {verHechas ? 'Ocultar lo hecho' : 'Ver lo hecho'}
+        </button>
+      </div>
+
+      {verHechas &&
+        (hechas.length === 0 ? (
+          <p className="vacio">Todavía no has marcado nada como hecho.</p>
+        ) : (
+          <ul className="notas cumplidas">
+            {hechas.map((n) => (
+              <li key={n.id}>
+                <span className="concepto">
+                  {n.concepto}
+                  <small>{fechaCorta(n.fecha)}</small>
+                </span>
+                <div className="acciones">
+                  <button
+                    className="mini"
+                    title="Devolver al buzón"
+                    onClick={() => void accion(() => marcarNotaHecha(token, n.id, false))}
+                  >
+                    ↩
+                  </button>
+                  <button
+                    className="mini borrar"
+                    title="Borrar"
+                    onClick={() => {
+                      if (confirm(`¿Borrar «${n.concepto}»?`)) {
+                        void accion(() => borrarNota(token, n.id))
+                      }
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ))}
 
       {agendando && (
         <ModalAgendar

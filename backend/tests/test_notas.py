@@ -83,6 +83,42 @@ class TestBuzon:
         assert "Revisar el coche" in exportar_todo(db, USUARIO)
 
 
+class TestMarcarHecha:
+    def test_lo_hecho_sale_del_buzon_pero_no_se_borra(self, db):
+        """Cumplido y equivocado son cosas distintas: una se marca, otra se borra."""
+        nota = buzon.crear(db, USUARIO, "Revisar el coche", origen="bot")
+
+        buzon.marcar_hecha(db, USUARIO, nota.id)
+
+        assert buzon.listar_notas(db, USUARIO) == []
+        assert [n.id for n in buzon.listar_notas(db, USUARIO, hechas=True)] == [nota.id]
+        assert len(buzon.listar_notas(db, USUARIO, hechas=None)) == 1
+
+    def test_se_puede_devolver_al_buzon(self, db):
+        nota = buzon.crear(db, USUARIO, "Revisar el coche", origen="bot")
+        buzon.marcar_hecha(db, USUARIO, nota.id)
+
+        buzon.marcar_hecha(db, USUARIO, nota.id, hecha=False)
+
+        assert [n.id for n in buzon.listar_notas(db, USUARIO)] == [nota.id]
+
+    def test_una_nota_nace_por_hacer(self, db):
+        assert buzon.crear(db, USUARIO, "Revisar el coche", origen="web").hecha is False
+
+    def test_lo_hecho_ya_no_se_cuenta_en_el_aviso(self, db):
+        """Si siguiera contando, el aviso diría 'tienes 8 notas' para siempre."""
+        nota = buzon.crear(db, USUARIO, "Revisar el coche", origen="bot")
+        assert buzon.contar_notas(db, USUARIO) == 1
+
+        buzon.marcar_hecha(db, USUARIO, nota.id)
+        assert buzon.contar_notas(db, USUARIO) == 0
+
+    def test_no_se_marca_lo_de_otro(self, db):
+        nota = buzon.crear(db, USUARIO, "Revisar el coche", origen="web")
+        with pytest.raises(ApunteNoEncontrado):
+            buzon.marcar_hecha(db, OTRO, nota.id)
+
+
 class TestAgendarUnaNota:
     def test_al_ponerle_fecha_nace_la_cita_y_muere_la_nota(self, db):
         nota = buzon.crear(db, USUARIO, "Revisar el coche", origen="bot")

@@ -38,6 +38,7 @@ def construir_app() -> Application:
     app.add_handler(CommandHandler("manana", handlers.manana))
     app.add_handler(CommandHandler("cita", handlers.cita))
     app.add_handler(CommandHandler("notas", handlers.notas))
+    app.add_handler(CommandHandler("hecha", handlers.hecha))
     app.add_handler(CommandHandler("deben", handlers.deben))
     app.add_handler(CommandHandler("cliente", handlers.cliente))
     app.add_handler(CommandHandler("borrar", handlers.borrar))

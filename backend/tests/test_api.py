@@ -223,3 +223,18 @@ def test_corregir_una_cita(cliente, cabeceras):
     assert cambiada.status_code == 200
     assert cambiada.json()["titulo"] == "Reforma del baño"
     assert cambiada.json()["hora"] is None
+
+
+def test_marcar_una_nota_hecha_y_deshacerlo(cliente, cabeceras):
+    nota = cliente.post("/notas", json={"texto": "Revisar el coche"}, headers=cabeceras).json()
+
+    hecha = cliente.post(f"/notas/{nota['id']}/hecha", headers=cabeceras)
+    assert hecha.status_code == 200
+    assert hecha.json()["hecha"] is True
+
+    assert cliente.get("/notas", headers=cabeceras).json() == []
+    cumplidas = cliente.get("/notas?hechas=true", headers=cabeceras).json()
+    assert [n["id"] for n in cumplidas] == [nota["id"]]
+
+    cliente.post(f"/notas/{nota['id']}/hecha?hecha=false", headers=cabeceras)
+    assert len(cliente.get("/notas", headers=cabeceras).json()) == 1

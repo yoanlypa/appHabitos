@@ -152,6 +152,7 @@ class NotaSalida(BaseModel):
     id: int
     fecha: date  # el día en que se apuntó, no el día en que toca
     concepto: str
+    hecha: bool
     origen: str
     creado: datetime
     cliente_id: int | None = None

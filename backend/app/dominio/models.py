@@ -20,7 +20,7 @@ from sqlalchemy import (
     TypeDecorator,
 )
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, text
 
 from app.nucleo.db import Base
 
@@ -55,6 +55,9 @@ class Apunte(Base):
     concepto = Column(String, nullable=False)
     importe = Column(Centimos, nullable=False)  # euros en Python, céntimos en BD
     pendiente = Column(Boolean, nullable=False, default=False)  # solo aplica a tipo="trabajo"
+    # Solo aplica a tipo="nota". Una nota cumplida no es una nota equivocada:
+    # se marca y sale del buzón, pero se puede seguir viendo y deshacer.
+    hecha = Column(Boolean, nullable=False, default=False, server_default=text("0"))
     origen = Column(String, nullable=False)  # "web" | "bot"
     creado = Column(DateTime(timezone=True), server_default=func.now())
     # Opcional a propósito: apuntar rápido desde el móvil no puede exigir

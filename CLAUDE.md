@@ -158,10 +158,16 @@ parte-del-dia/
   - **En el buzón un número al final no es dinero.** "Cambiar 2 grifos" es
     una tarea. Solo interpreta importes la caja de "Hoy" y el texto libre
     del bot.
+  - **Lo cumplido se marca, no se borra** (`Apunte.hecha`, botón ✓ en la web
+    y `/hecha <número>` en el bot). "Revisar el coche" cuando ya lo
+    revisaste no es un error del que deshacerse, y borrarlo quitaría la
+    única prueba de que se hizo. Sale del buzón, se puede abrir aparte y
+    devolver. Borrar sigue estando, pero es para lo que se apuntó mal.
   - **Las notas no salen en la lista del día ni en el CSV del gestor**, pero
     sí en la copia de seguridad. Y no disparan el aviso de las 21:00: son
     apuntes, así que si contaran, un recordatorio haría sonar el bot con un
-    resumen de 0,00 €. Se cuentan en el aviso de quien ya lo recibe.
+    resumen de 0,00 €. A quien ya lo recibe se le cuentan las que quedan por
+    hacer — las hechas no, o el aviso diría "tienes 8 notas" para siempre.
 
 - **Una cita puede durar varios días** (`Cita.fecha_fin`, vacía = un solo
   día). Una reforma de tres días es UNA cosa: se edita, se marca hecha y se
@@ -191,7 +197,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-132 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
+138 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

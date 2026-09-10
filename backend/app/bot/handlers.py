@@ -32,6 +32,7 @@ from app.servicios.auth import generar_token
 from app.servicios.avisos import activar_avisos, avisos_activos
 from app.servicios.clientes import asignar_cliente, crear_cliente, pendientes_de_cobro
 from app.servicios.notas import listar_notas
+from app.servicios.notas import marcar_hecha as marcar_nota_hecha
 from app.servicios.resumen import resumen_dia, resumen_mes
 from app.servicios.trimestres import resumen_trimestre, trimestre_de
 from app.servicios.voz import NadaQueAnotar, anotar_audio
@@ -319,6 +320,25 @@ async def notas(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
             formato.lista_notas(listar_notas(db, update.effective_user.id))
         )
+
+
+async def hecha(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """Marca una nota como cumplida: /hecha 42.
+
+    No se borra: lo cumplido no es lo equivocado, y la web deja verlo y
+    deshacerlo. Para lo equivocado ya está /borrar.
+    """
+    if not contexto.args or not contexto.args[0].lstrip("#").isdigit():
+        await update.message.reply_text("Dime cuál: /hecha 12")
+        return
+    nota_id = int(contexto.args[0].lstrip("#"))
+    with sesion() as db:
+        try:
+            nota = marcar_nota_hecha(db, update.effective_user.id, nota_id)
+        except ApunteNoEncontrado:
+            await update.message.reply_text(f"No tengo ninguna nota con el número {nota_id}.")
+            return
+        await update.message.reply_text(formato.nota_hecha(nota))
 
 
 async def deben(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
