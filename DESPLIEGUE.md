@@ -38,6 +38,14 @@ supone ningún motor concreto.
 3. **Settings → Config-as-code**: `/backend/railway.json`
    Ojo: la ruta del fichero de configuración **no** sigue al Root Directory,
    hay que escribirla entera desde la raíz del repo.
+   Si este ajuste se pierde, Railway deja de leer `railway.json` y el build
+   falla con *"No start command detected"*: Railpack solo sabe arrancar solo
+   un `main.py` en la raíz, y la app está en `app/api_y_bot.py`. Por eso el
+   comando de arranque está **también** en `backend/railpack.json`, que
+   Railpack lee por su cuenta desde la raíz de lo que construye y no depende
+   de ningún ajuste del panel. Si se cambia el comando, se cambia en los dos.
+   Un build fallido no tumba el servicio (sigue el despliegue anterior),
+   pero ningún push llega a producción hasta arreglarlo.
 4. **Settings → Volumes → New Volume**, con el punto de montaje en `/data`.
    Sin volumen, la base se borra en cada despliegue.
 5. **Settings → Networking → Generate Domain**, para tener la URL pública.

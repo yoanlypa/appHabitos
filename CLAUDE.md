@@ -97,6 +97,14 @@ parte-del-dia/
   porque SQLite recrea la tabla entera para alterarla y necesita nombrar
   las restricciones, y `render_item` en `alembic/env.py` escribe `Centimos`
   como `sa.Integer` para que las migraciones no importen la aplicación.
+- **La base tiene que estar en el volumen, y eso se comprueba, no se
+  supone.** Pasó dos veces: los datos se perdían en cada `git push` porque
+  en Railway faltaba `DATABASE_URL` y la app usaba la ruta por defecto,
+  dentro del contenedor. La app arrancaba igual, sólo que vacía.
+  `nucleo/almacenamiento.py` lo detecta y `/salud` lo dice
+  (`"persistente": false`), pero eso solo sirve si alguien lo mira: tras
+  tocar variables o volúmenes en Railway, abrir `/salud` es obligatorio.
+
 - **`func.sum()` sobre un importe ya devuelve euros.** El tipo `Centimos`
   se aplica también a los agregados, así que dividir otra vez entre 100 es
   un error de escala de cien veces. Pasó y lo cazó una prueba que comparaba
@@ -321,8 +329,13 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   bloquea la respuesta y el front no puede enseñar el motivo.
 
 - Todo listo para Railway: `backend/railway.json` (arranca
-  `app.api_y_bot:app`), `.python-version` con 3.14, y `DESPLIEGUE.md` con
-  los pasos. Se quitó el `Procfile`: Railpack no lo usa para Python y
+  `app.api_y_bot:app`), `backend/railpack.json` con el mismo comando,
+  `.python-version` con 3.14, y `DESPLIEGUE.md` con los pasos. El
+  `railpack.json` no es redundante: Railway solo lee `railway.json` si en el
+  panel está puesta su ruta absoluta (no sigue al Root Directory), ese ajuste
+  se perdió una vez y los builds empezaron a fallar con "No start command
+  detected". Railpack lee `railpack.json` por su cuenta. Si cambia el
+  comando, se cambia en los dos. Se quitó el `Procfile`: Railpack no lo usa para Python y
   describía la topología antigua de dos servicios separados. Comprobado
   levantando la app conjunta con uvicorn contra un Telegram de mentira: la
   API responde mientras el bot hace polling —o sea, el bot no bloquea el
