@@ -33,6 +33,15 @@ MODELO_TRANSCRIPCION = os.getenv("MODELO_TRANSCRIPCION", "gpt-4o-mini-transcribe
 # idioma, que es el fallo típico de estos modelos con dos palabras sueltas.
 IDIOMA_VOZ = os.getenv("IDIOMA_VOZ", "es")
 
+# Ids de Telegram a los que avisar al arrancar si la base no se está
+# guardando, separados por comas. No se pueden sacar de la base: justo cuando
+# falla, está recién creada y no sabe quién la usa.
+ALARMA_TELEGRAM_IDS = [
+    int(trozo)
+    for trozo in os.getenv("ALARMA_TELEGRAM_IDS", "").replace(" ", "").split(",")
+    if trozo.isdigit()
+]
+
 # Desde qué webs se puede llamar a la API. En local, el servidor de Vite;
 # en Railway, la URL del front. Separados por comas.
 CORS_ORIGENES = [

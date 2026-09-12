@@ -32,6 +32,28 @@ export class TokenInvalido extends Error {}
 /** El backend rechazó la petición con un motivo que se le puede enseñar a la gente. */
 export class ErrorDeApi extends Error {}
 
+export type Salud = {
+  estado: string
+  datos: { persistente: boolean; ruta: string | null; aviso: string | null }
+}
+
+/**
+ * Si los datos se están guardando de verdad.
+ *
+ * No pide token a propósito: la alarma tiene que verse también en la
+ * pantalla de entrada. Si la API no contesta devuelve null, porque entonces
+ * no se sabe, y una alarma falsa enseña a no hacerle caso a las verdaderas.
+ */
+export async function salud(): Promise<Salud | null> {
+  try {
+    const respuesta = await fetch(`${BASE}/salud`)
+    if (!respuesta.ok) return null
+    return (await respuesta.json()) as Salud
+  } catch {
+    return null
+  }
+}
+
 async function pedir<T>(token: string, ruta: string, opciones: RequestInit = {}): Promise<T> {
   const respuesta = await fetch(`${BASE}${ruta}`, {
     ...opciones,

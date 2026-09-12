@@ -18,7 +18,7 @@ from telegram.ext import (
     filters,
 )
 
-from app.bot import avisos, copias, handlers
+from app.bot import alarma, avisos, copias, handlers, restaurar
 from app.nucleo.config import TELEGRAM_BOT_TOKEN
 from app.nucleo.migraciones import migrar
 
@@ -28,6 +28,9 @@ def construir_app() -> Application:
         raise RuntimeError("Falta TELEGRAM_BOT_TOKEN en el entorno")
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    # Antes que nada: si los datos no se guardan, que se diga en el chat.
+    alarma.programar(app)
+
     app.add_handler(CommandHandler("start", handlers.start))
     app.add_handler(CommandHandler("hoy", handlers.hoy))
     app.add_handler(CommandHandler("mes", handlers.mes))
@@ -47,6 +50,8 @@ def construir_app() -> Application:
     app.add_handler(CallbackQueryHandler(handlers.elegir_cliente, pattern=r"^cli:"))
     # Notas de voz y audios: se transcriben y se anotan como el texto.
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handlers.nota_de_voz))
+    # Un CSV reenviado es una copia que restaurar.
+    restaurar.registrar(app)
     # Lo último: cualquier texto que no sea un comando se anota como apunte.
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.anotar))
 

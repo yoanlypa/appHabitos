@@ -6,8 +6,14 @@
  *
  * El token se guarda en localStorage porque nadie quiere pegarlo cada vez.
  * Si el backend lo rechaza, se borra y se vuelve a la pantalla de entrada.
+ *
+ * Al abrir se pregunta a /salud si los datos se están guardando. Se perdieron
+ * dos veces sin que nada avisara, y el backend ya lo sabía: solo faltaba que
+ * lo dijera donde se mira. Si no se guardan, sale una franja roja arriba en
+ * todas las pantallas, entrada incluida, y no se puede cerrar.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { salud } from './api'
 import { Agenda } from './componentes/Agenda'
 import { Clientes } from './componentes/Clientes'
 import { Cobros } from './componentes/Cobros'
@@ -32,6 +38,18 @@ export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem(CLAVE) ?? '')
   const [error, setError] = useState('')
   const [seccion, setSeccion] = useState<Seccion>('hoy')
+  const [alarma, setAlarma] = useState('')
+
+  useEffect(() => {
+    let cancelado = false
+    void salud().then((estado) => {
+      if (cancelado || !estado || estado.datos.persistente) return
+      setAlarma(estado.datos.aviso ?? 'La base de datos no está en un sitio que sobreviva.')
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [])
 
   function entrar(nuevo: string) {
     localStorage.setItem(CLAVE, nuevo)
@@ -46,12 +64,27 @@ export default function App() {
     setSeccion('hoy')
   }
 
-  if (!token) return <Entrada onEntrar={entrar} error={error} />
+  const franja = alarma && (
+    <div className="alarma" role="alert">
+      <strong>Los datos no se están guardando.</strong> Lo que apuntes se borrará en el próximo
+      despliegue.
+      <small>{alarma}</small>
+    </div>
+  )
+
+  if (!token)
+    return (
+      <>
+        {franja}
+        <Entrada onEntrar={entrar} error={error} />
+      </>
+    )
 
   const invalido = () => salir('Ese token ya no vale. Pide otro con /web en el bot.')
 
   return (
     <div className="app">
+      {franja}
       <main className="panel">
         <header>
           <h1>Parte del día</h1>

@@ -104,6 +104,23 @@ parte-del-dia/
   `nucleo/almacenamiento.py` lo detecta y `/salud` lo dice
   (`"persistente": false`), pero eso solo sirve si alguien lo mira: tras
   tocar variables o volúmenes en Railway, abrir `/salud` es obligatorio.
+  Y como nadie mira un log, ahora lo dice donde se mira:
+  - **El bot avisa por Telegram** (`bot/alarma.py`): al arrancar, a los ids
+    de `ALARMA_TELEGRAM_IDS`, y en el primer mensaje de cada persona tras
+    cada arranque, sin configurar nada. No se pueden sacar los destinatarios
+    de la base, porque justo cuando falla está recién creada y vacía. Una
+    vez por persona y no en cada mensaje: un aviso repetido se deja de leer.
+  - **La web pone una franja roja** que no se puede cerrar, entrada
+    incluida. Si `/salud` no contesta no la pone: una alarma falsa enseña a
+    ignorar las verdaderas.
+  - **La copia se puede restaurar**: se le reenvía al bot el CSV del domingo
+    (`dominio/copia_csv.py`, `servicios/restauracion.py`, `bot/restaurar.py`).
+    Un apunte "ya está" si coinciden fecha, tipo, concepto e importe;
+    `pendiente` no cuenta, o un trabajo cobrado después volvería a ser
+    deuda. Se cuenta en vez de comparar uno a uno, porque dos gasolinas de
+    45 el mismo día son dos. Siempre enseña antes lo que va a meter y pide
+    un sí: una copia vieja devolvería lo que se borró adrede después. La
+    copia no lleva clientes ni citas, así que eso no vuelve.
 
 - **`func.sum()` sobre un importe ya devuelve euros.** El tipo `Centimos`
   se aplica también a los agregados, así que dividir otra vez entre 100 es
@@ -216,7 +233,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-148 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
+173 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
@@ -225,7 +242,10 @@ tiene el suyo (el error de escala de cien veces en `test_dinero.py`, la
 cabecera CORS en los errores en `test_api.py`, y las tildes del CSV en
 `test_copias.py`). `test_voz.py` cubre lo que puede romperse en silencio de
 las notas de voz: que una nota no cuente como cobrado en el resumen, y que
-un fallo del transcriptor se cuente en vez de tragarse. Al añadir algo, el test que hace falta es el del caso
+un fallo del transcriptor se cuente en vez de tragarse.
+`test_restauracion.py` genera la copia con la misma función que usa el bot,
+para enterarse si cambia su formato, y `test_alarma.py` comprueba que la
+alarma calla cuando todo va bien. Al añadir algo, el test que hace falta es el del caso
 que se te ocurra que podría romperse en silencio.
 
 ## Convenciones de código

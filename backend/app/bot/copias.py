@@ -44,7 +44,10 @@ async def enviar_copia(contexto: ContextTypes.DEFAULT_TYPE, user_id: int) -> boo
         await contexto.bot.send_document(
             chat_id=user_id,
             document=_fichero(csv, user_id),
-            caption=f"Copia de seguridad: {lineas} apuntes. Guárdala por si acaso.",
+            caption=(
+                f"Copia de seguridad: {lineas} apuntes. Guárdala: si algún día "
+                "pierdes datos, reenvíamela y vuelvo a meter lo que falte."
+            ),
         )
         return True
     except TelegramError:

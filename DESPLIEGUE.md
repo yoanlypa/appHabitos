@@ -58,6 +58,7 @@ supone ningún motor concreto.
    HORA_AVISO=21:00
    CORS_ORIGENES=<la URL del front, se rellena en el paso 3>
    OPENAI_API_KEY=<solo para transcribir las notas de voz>
+   ALARMA_TELEGRAM_IDS=<tu id de Telegram: te escribe si la base no se guarda>
    ```
 
    `OPENAI_API_KEY` es opcional: sin ella todo sigue igual, y a las notas

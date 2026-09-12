@@ -694,3 +694,27 @@ button.mini.hecha:hover {
   color: var(--cobrado);
   border-color: var(--cobrado);
 }
+
+/* ---------- Alarma de almacenamiento ---------- */
+
+/* Fija arriba y sin botón de cerrar: es la avería más cara que puede tener
+   esto, y un aviso que se quita con una x se quita sin leerlo. El rojo es
+   fijo y no el del tema: con el rojo claro del modo oscuro, el texto blanco
+   no se leería. */
+.alarma {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: #b91c1c;
+  color: #fff;
+  padding: 0.7rem 1rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.alarma small {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  opacity: 0.9;
+}

@@ -76,7 +76,9 @@ def ayuda() -> str:
         "  /cliente Ana Ruiz 600111222 — da de alta un cliente\n"
         "  /avisos on|off — resumen automático cada noche\n"
         "  /web — token para entrar en la web\n"
-        "  /copia — te mando todo en un CSV, por si acaso"
+        "  /copia — te mando todo en un CSV, por si acaso\n\n"
+        "Si algún día pierdes datos, reenvíame una de esas copias y vuelvo a "
+        "meter lo que falte."
     )
 
 
@@ -133,6 +135,62 @@ def nota_hecha(nota, hecha: bool = True) -> str:
     if hecha:
         return f"Hecha: {nota.concepto}"
     return f"De vuelta al buzón: {nota.concepto}  (#{nota.id})"
+
+
+def alarma_almacenamiento(aviso: str) -> str:
+    """Lo más grave que puede decir el bot: que lo que se apunta se va a perder."""
+    return (
+        "⚠️ OJO: LOS DATOS NO SE ESTÁN GUARDANDO.\n\n"
+        f"{aviso}\n\n"
+        "Lo que apuntes ahora se borrará en el próximo despliegue. "
+        "Arréglalo en Railway antes de seguir apuntando."
+    )
+
+
+def _fila_de_copia(fila) -> str:
+    cuando = fila.fecha.strftime("%d/%m/%Y")
+    if fila.tipo == "nota":
+        return f"{cuando}  nota: {fila.concepto}"
+    signo = "−" if fila.tipo == "gasto" else ""
+    sin_cobrar = " (pendiente)" if fila.pendiente and fila.tipo == "trabajo" else ""
+    return f"{cuando}  {fila.concepto} — {signo}{euros(fila.importe)}{sin_cobrar}"
+
+
+def plan_de_restauracion(plan, muestra: int = 8) -> str:
+    """Lo que entraría al restaurar, antes de pedir el sí."""
+    lineas = [f"En esta copia hay {plan.total} apuntes."]
+    if plan.ya_estaban:
+        lineas.append(f"{plan.ya_estaban} ya los tienes: esos no los toco.")
+    lineas.append("")
+    lineas.append(f"Faltan {len(plan.nuevas)}:")
+    for fila in plan.nuevas[:muestra]:
+        lineas.append(f"  {_fila_de_copia(fila)}")
+    if len(plan.nuevas) > muestra:
+        lineas.append(f"  … y {len(plan.nuevas) - muestra} más")
+    lineas.append("")
+    lineas.append(
+        "Ojo: si borraste alguno a propósito después de hacer esta copia, volverá a entrar. "
+        "Los clientes y las citas no van en la copia."
+    )
+    return "\n".join(lineas)
+
+
+def copia_ya_estaba(plan) -> str:
+    return f"Esta copia tiene {plan.total} apuntes y ya los tienes todos. No hay nada que restaurar."
+
+
+def copia_no_valida(motivo) -> str:
+    return (
+        f"No puedo restaurar ese fichero: {motivo}.\n\n"
+        "Tiene que ser una de las copias que te mando yo (el CSV de /copia)."
+    )
+
+
+def copia_restaurada(cuantos: int) -> str:
+    if cuantos == 0:
+        return "No faltaba nada: ya estaba todo."
+    plural = "s" if cuantos != 1 else ""
+    return f"Restaurado{plural} {cuantos} apunte{plural}. Míralo en la web o con /mes."
 
 
 def recordatorio_de_notas(cuantas: int) -> str:
