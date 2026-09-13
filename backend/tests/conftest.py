@@ -13,7 +13,15 @@ os.environ.setdefault("TZ_LOCAL", "Europe/Madrid")
 
 import pytest  # noqa: E402
 
-from app.dominio.models import Ajuste, Apunte, Cita, Cliente, TokenAcceso  # noqa: E402
+from app.dominio.models import (  # noqa: E402
+    Ajuste,
+    Apunte,
+    Cita,
+    Cliente,
+    Habito,
+    HabitoHecho,
+    TokenAcceso,
+)
 from app.nucleo.db import sesion  # noqa: E402
 from app.nucleo.migraciones import migrar  # noqa: E402
 
@@ -30,6 +38,6 @@ def db():
     """Una sesión limpia por test: lo que escriba uno no lo ve el siguiente."""
     with sesion() as s:
         yield s
-        for modelo in (Apunte, Cita, Cliente, Ajuste, TokenAcceso):
+        for modelo in (HabitoHecho, Habito, Apunte, Cita, Cliente, Ajuste, TokenAcceso):
             s.query(modelo).delete()
         s.commit()

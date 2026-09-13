@@ -72,6 +72,7 @@ def ayuda() -> str:
         "      también vale: /cita 20 de septiembre a las 10am Ver la casa\n"
         "  /notas — el buzón de lo que no tiene fecha\n"
         "  /hecha <número> — marca una nota como cumplida\n"
+        "  /habitos — marca los hábitos de hoy\n"
         "  /deben — quién te debe dinero\n"
         "  /cliente Ana Ruiz 600111222 — da de alta un cliente\n"
         "  /avisos on|off — resumen automático cada noche\n"
@@ -191,6 +192,48 @@ def copia_restaurada(cuantos: int) -> str:
         return "No faltaba nada: ya estaba todo."
     plural = "s" if cuantos != 1 else ""
     return f"Restaurado{plural} {cuantos} apunte{plural}. Míralo en la web o con /mes."
+
+
+def racha_texto(racha: int) -> str:
+    if racha == 0:
+        return "sin racha"
+    if racha == 1:
+        return "1 día seguido"
+    return f"{racha} días seguidos"
+
+
+def lista_habitos(resumenes) -> str:
+    """Los hábitos de hoy. Los botones hacen el trabajo; el texto, la cuenta."""
+    if not resumenes:
+        return "Todavía no tienes hábitos. Créalos en la web, en la pestaña Hábitos."
+
+    de_hoy = [r for r in resumenes if r.toca_hoy]
+    lineas = ["Hábitos de hoy:" if de_hoy else "Hoy no te toca ningún hábito."]
+    for resumen in de_hoy:
+        marca = "✅" if resumen.hecho_hoy else "⬜"
+        lineas.append(f"{marca} {resumen.habito.nombre} — {racha_texto(resumen.racha)}")
+
+    otros = [r.habito.nombre for r in resumenes if not r.toca_hoy]
+    if otros:
+        lineas += ["", f"Hoy no tocan: {', '.join(otros)}"]
+    if de_hoy:
+        lineas += ["", "Toca uno para marcarlo o desmarcarlo."]
+    return "\n".join(lineas)
+
+
+def boton_habito(resumen) -> str:
+    return f"{'✅' if resumen.hecho_hoy else '⬜'} {resumen.habito.nombre}"
+
+
+def recordatorio_habito(resumen) -> str:
+    texto = f"⏰ {resumen.habito.nombre}: hoy todavía no está."
+    if resumen.racha:
+        texto += f" Llevas {racha_texto(resumen.racha)}, no la pierdas."
+    return texto
+
+
+def habito_marcado(resumen) -> str:
+    return f"✅ {resumen.habito.nombre}. Llevas {racha_texto(resumen.racha)}."
 
 
 def recordatorio_de_notas(cuantas: int) -> str:

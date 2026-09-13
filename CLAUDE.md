@@ -52,12 +52,13 @@ parte-del-dia/
 │   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py,
 │   │   │                     transcripcion.py
 │   │   ├── dominio/       ✅ models.py (Apunte, Cliente, Cita, Ajuste, TokenAcceso, Centimos),
-│   │   │                     parsing.py, parsing_citas.py
+│   │   │                     parsing.py, parsing_citas.py, habitos.py, copia_csv.py
 │   │   ├── servicios/     ✅ apuntes, resumen, export, auth, avisos, clientes,
-│   │   │                     agenda, trimestres, voz, notas
+│   │   │                     agenda, trimestres, voz, notas, restauracion, habitos
 │   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export,
-│   │   │                     clientes, agenda, notas
-│   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py
+│   │   │                     clientes, agenda, notas, habitos
+│   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py,
+│   │                         copias.py, alarma.py, restaurar.py, habitos.py
 │   ├── requirements.txt
 │   ├── Procfile           ✅ dos procesos: web (uvicorn) y bot (polling)
 │   └── .env.example
@@ -212,6 +213,25 @@ parte-del-dia/
   un día equivocado — una cita en el día que no es se descubre tarde, igual
   que un trabajo colgado de la Ana equivocada.
 
+- **Hábitos: la racha tiene que animar, no castigar.** Cada hábito toca unos
+  días de la semana (`Habito.dias`, "01234" es de lunes a viernes) y cada día
+  cumplido es una fila en `habitos_hechos`, única por hábito y día para que
+  marcar dos veces no cuente doble. Las reglas son funciones puras en
+  `dominio/habitos.py`, y las tres que importan: un día que no toca no rompe
+  la racha, hoy sin marcar tampoco hasta que acabe el día (si no, amanecería
+  rota cada mañana), y los días de antes de empezar no son fallos. El estado
+  de cada día (hecho, hoy, fallado, futuro, no_toca, antes) lo calcula el
+  backend y la web solo lo pinta: la semana de la lista y el calendario del
+  detalle no pueden contar cosas distintas.
+  Los recordatorios, a la hora de cada hábito, los decide
+  `servicios/habitos.recordatorios_debidos()` y los manda un comprobador
+  cada minuto (`bot/habitos.py`), no una tarea por hábito: así lo creado
+  desde la web entra solo. Lo ya avisado hoy se guarda en la base
+  (`recordado_el`), así que un reinicio no repite; con más de media hora de
+  retraso no se mandan, porque un recordatorio tarde es ruido; y
+  `/avisos off` los apaga también. El botón "Hecho ✓" del recordatorio solo
+  marca, nunca desmarca: si ya se marcó en la web, tocarlo no lo deshace.
+
 - **El parser entiende lo dictado, no solo lo tecleado.** Nadie pronuncia el
   guion de "-45" ni se calla la palabra "euros", así que `dominio/parsing.py`
   admite "120 euros.", "980 €" y "gasto de 45 en gasolina". Con una cautela:
@@ -233,7 +253,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-173 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
+217 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
@@ -245,7 +265,9 @@ las notas de voz: que una nota no cuente como cobrado en el resumen, y que
 un fallo del transcriptor se cuente en vez de tragarse.
 `test_restauracion.py` genera la copia con la misma función que usa el bot,
 para enterarse si cambia su formato, y `test_alarma.py` comprueba que la
-alarma calla cuando todo va bien. Al añadir algo, el test que hace falta es el del caso
+alarma calla cuando todo va bien. `test_habitos_reglas.py` fija las reglas
+que deciden si una racha anima o desanima, y `test_habitos_bot.py` que el
+botón del recordatorio nunca desmarca. Al añadir algo, el test que hace falta es el del caso
 que se te ocurra que podría romperse en silencio.
 
 ## Convenciones de código

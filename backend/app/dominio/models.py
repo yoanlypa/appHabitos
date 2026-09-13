@@ -18,6 +18,7 @@ from sqlalchemy import (
     Text,
     Time,
     TypeDecorator,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func, text
@@ -131,3 +132,50 @@ class Cita(Base):
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
 
     cliente = relationship("Cliente", back_populates="citas")
+
+
+class Habito(Base):
+    """Algo que se quiere hacer con regularidad: beber agua, entrenar.
+
+    `dias` son los días de la semana en que toca, como texto de dígitos
+    ("01234" = de lunes a viernes, 0 es lunes). Un día que no toca no rompe
+    la racha. Las reglas están en `dominio/habitos.py`.
+
+    `inicio` es desde cuándo cuenta: los días de antes no son fallos.
+
+    `recordar_a` es opcional. `recordado_el` guarda el último día en que se
+    mandó el recordatorio en la base y no en memoria: si el proceso se
+    reinicia a media mañana, no lo vuelve a mandar.
+    """
+
+    __tablename__ = "habitos"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    nombre = Column(String, nullable=False)
+    dias = Column(String, nullable=False, default="0123456")
+    inicio = Column(Date, nullable=False)
+    recordar_a = Column(Time, nullable=True)
+    recordado_el = Column(Date, nullable=True)
+    creado = Column(DateTime(timezone=True), server_default=func.now())
+
+    hechos = relationship(
+        "HabitoHecho", back_populates="habito", cascade="all, delete-orphan"
+    )
+
+
+class HabitoHecho(Base):
+    """Un día en que se cumplió. El día que no se hizo no tiene fila.
+
+    Uno por hábito y día: marcar dos veces el mismo día no puede contar doble
+    en la racha.
+    """
+
+    __tablename__ = "habitos_hechos"
+    __table_args__ = (UniqueConstraint("habito_id", "fecha"),)
+
+    id = Column(Integer, primary_key=True)
+    habito_id = Column(Integer, ForeignKey("habitos.id"), nullable=False, index=True)
+    fecha = Column(Date, nullable=False)
+
+    habito = relationship("Habito", back_populates="hechos")

@@ -3,7 +3,7 @@ from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, PlainSerializer
+from pydantic import BaseModel, ConfigDict, PlainSerializer, field_validator
 
 # Los importes salen siempre con dos decimales. Sin esto, un mismo listado
 # mezcla "120", "45.5" y "980.50", que en el CSV que va al gestor queda como
@@ -170,3 +170,69 @@ class AgendarNota(BaseModel):
 
 class AsignarCliente(BaseModel):
     cliente_id: int | None
+
+
+class HabitoEntrada(BaseModel):
+    nombre: str
+    dias: list[int]  # 0 es lunes
+    recordar_a: time | None = None
+
+
+class HabitoCambios(BaseModel):
+    """Solo cambia lo que se manda; `recordar_a: null` quita el recordatorio."""
+
+    nombre: str | None = None
+    dias: list[int] | None = None
+    recordar_a: time | None = None
+
+
+class MarcarDia(BaseModel):
+    fecha: date | None = None  # vacía: hoy
+    hecho: bool = True
+
+
+class HabitoSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nombre: str
+    dias: list[int]
+    inicio: date
+    recordar_a: time | None
+
+    @field_validator("dias", mode="before")
+    @classmethod
+    def _dias_de_texto(cls, valor):
+        # En la base van como "01234"; hacia fuera, como lista.
+        return [int(c) for c in valor] if isinstance(valor, str) else valor
+
+
+class DiaHabitoSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    fecha: date
+    estado: str  # hecho | hoy | fallado | futuro | no_toca | antes
+
+
+class HabitoResumenSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    habito: HabitoSalida
+    semana: list[DiaHabitoSalida]
+    racha: int
+    toca_hoy: bool
+    hecho_hoy: bool
+
+
+class HabitoDetalleSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    habito: HabitoSalida
+    racha: int
+    mejor_racha: int
+    cumplidos: int
+    programados: int
+    porcentaje: int
+    anio: int
+    mes: int
+    dias_del_mes: list[DiaHabitoSalida]

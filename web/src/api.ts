@@ -363,3 +363,79 @@ export function agendarNota(
     body: JSON.stringify(datos),
   })
 }
+
+// ---------- Hábitos ----------
+
+/**
+ * El estado de cada día lo calcula el backend, el mismo para la semana de la
+ * lista que para el calendario del detalle. Aquí solo se pinta.
+ */
+export type EstadoDia = 'hecho' | 'hoy' | 'fallado' | 'futuro' | 'no_toca' | 'antes'
+
+export type Habito = {
+  id: number
+  nombre: string
+  dias: number[] // 0 es lunes
+  inicio: string
+  recordar_a: string | null // "HH:MM:SS"
+}
+
+export type DiaHabito = { fecha: string; estado: EstadoDia }
+
+export type ResumenHabito = {
+  habito: Habito
+  semana: DiaHabito[]
+  racha: number
+  toca_hoy: boolean
+  hecho_hoy: boolean
+}
+
+export type DetalleHabito = {
+  habito: Habito
+  racha: number
+  mejor_racha: number
+  cumplidos: number
+  programados: number
+  porcentaje: number
+  anio: number
+  mes: number
+  dias_del_mes: DiaHabito[]
+}
+
+export type DatosHabito = { nombre: string; dias: number[]; recordar_a: string | null }
+
+export function listarHabitos(token: string) {
+  return pedir<ResumenHabito[]>(token, '/habitos')
+}
+
+export function crearHabito(token: string, datos: DatosHabito) {
+  return pedir<ResumenHabito>(token, '/habitos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos),
+  })
+}
+
+export function editarHabito(token: string, id: number, cambios: Partial<DatosHabito>) {
+  return pedir<ResumenHabito>(token, `/habitos/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cambios),
+  })
+}
+
+export async function borrarHabito(token: string, id: number) {
+  await pedirSinCuerpo(token, `/habitos/${id}`, { method: 'DELETE' })
+}
+
+export function marcarDiaHabito(token: string, id: number, fecha: string, hecho: boolean) {
+  return pedir<ResumenHabito>(token, `/habitos/${id}/dias`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fecha, hecho }),
+  })
+}
+
+export function detalleHabito(token: string, id: number, anio: number, mes: number) {
+  return pedir<DetalleHabito>(token, `/habitos/${id}?anio=${anio}&mes=${mes}`)
+}

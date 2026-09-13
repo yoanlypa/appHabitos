@@ -18,7 +18,7 @@ from telegram.ext import (
     filters,
 )
 
-from app.bot import alarma, avisos, copias, handlers, restaurar
+from app.bot import alarma, avisos, copias, habitos, handlers, restaurar
 from app.nucleo.config import TELEGRAM_BOT_TOKEN
 from app.nucleo.migraciones import migrar
 
@@ -52,6 +52,8 @@ def construir_app() -> Application:
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handlers.nota_de_voz))
     # Un CSV reenviado es una copia que restaurar.
     restaurar.registrar(app)
+    # /habitos con sus botones, y los recordatorios a la hora de cada uno.
+    habitos.registrar(app)
     # Lo último: cualquier texto que no sea un comando se anota como apunte.
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.anotar))
 

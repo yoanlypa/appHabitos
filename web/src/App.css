@@ -718,3 +718,213 @@ button.mini.hecha:hover {
   font-size: 0.8rem;
   opacity: 0.9;
 }
+
+/* ---------- Hábitos ---------- */
+
+/* La idea del diseño de referencia (nombre grande, racha al lado, siete
+   círculos) con los colores de la app: lo hecho va en el acento, igual que
+   el día elegido del calendario, para que parezca la misma app. */
+
+.habitos-cabecera,
+.detalle-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.habitos-cabecera h2 {
+  margin: 0;
+}
+
+.detalle-cabecera h2 {
+  margin: 0;
+  flex: 1;
+  text-align: center;
+  font-size: 1rem;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--texto);
+}
+
+.boton-redondo {
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 2.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--tarjeta);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.lista-habitos {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+}
+
+.habito-titulo {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--texto);
+  padding: 0;
+  text-align: left;
+}
+
+.habito-titulo .nombre {
+  font-size: 1.45rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.habito-titulo .racha {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  color: var(--apagado);
+}
+
+.semana-habito {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+}
+
+.circulo {
+  aspect-ratio: 1;
+  max-width: 2.6rem;
+  width: 100%;
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  background: var(--tarjeta);
+  color: var(--texto);
+}
+
+.circulo.hecho {
+  background: var(--acento);
+  color: #fff;
+}
+
+.circulo.hoy {
+  border-color: var(--acento);
+}
+
+.circulo.fallado {
+  color: var(--apagado);
+}
+
+.circulo.no_toca,
+.circulo.antes {
+  background: none;
+  color: var(--apagado);
+  opacity: 0.5;
+}
+
+.circulo:disabled {
+  cursor: default;
+}
+
+.habitos-vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+/* Detalle */
+
+.cifras {
+  margin: 1.25rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cifras div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+}
+
+.cifras dt {
+  grid-column: 1 / -1;
+  font-size: 0.8rem;
+  color: var(--apagado);
+}
+
+.cifras dd {
+  margin: 0;
+  font-size: 1.9rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.cifras small {
+  font-size: 0.78rem;
+  color: var(--apagado);
+  padding-bottom: 0.3rem;
+}
+
+/* El calendario es el de la Agenda; aquí solo cambia qué significa cada día. */
+.cal-dia.hecho {
+  background: var(--acento);
+  color: #fff;
+  border-radius: 50%;
+}
+
+.cal-dia.fallado {
+  color: var(--apagado);
+}
+
+.cal-dia.no_toca,
+.cal-dia.antes {
+  color: var(--apagado);
+  opacity: 0.45;
+}
+
+/* Formulario */
+
+.dias-habito {
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dias-habito legend {
+  font-size: 0.8rem;
+  color: var(--apagado);
+  padding: 0;
+}
+
+.dias-habito .atajos {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.4rem;
+}
+
+.enlace.peligro {
+  color: var(--gasto);
+  align-self: flex-start;
+}

@@ -18,6 +18,7 @@ import { Agenda } from './componentes/Agenda'
 import { Clientes } from './componentes/Clientes'
 import { Cobros } from './componentes/Cobros'
 import { Entrada } from './componentes/Entrada'
+import { Habitos } from './componentes/Habitos'
 import { Notas } from './componentes/Notas'
 import { Panel } from './componentes/Panel'
 import './App.css'
@@ -27,6 +28,7 @@ const CLAVE = 'parte-del-dia:token'
 const SECCIONES = [
   { id: 'hoy', nombre: 'Hoy', icono: '☰' },
   { id: 'notas', nombre: 'Notas', icono: '✎' },
+  { id: 'habitos', nombre: 'Hábitos', icono: '◎' },
   { id: 'agenda', nombre: 'Agenda', icono: '▤' },
   { id: 'cobros', nombre: 'Cobros', icono: '€' },
   { id: 'clientes', nombre: 'Clientes', icono: '☺' },
@@ -103,6 +105,7 @@ export default function App() {
             onAgendada={() => setSeccion('agenda')}
           />
         )}
+        {seccion === 'habitos' && <Habitos token={token} onTokenInvalido={invalido} />}
         {seccion === 'agenda' && <Agenda token={token} onTokenInvalido={invalido} />}
         {seccion === 'cobros' && <Cobros token={token} onTokenInvalido={invalido} />}
         {seccion === 'clientes' && <Clientes token={token} onTokenInvalido={invalido} />}
