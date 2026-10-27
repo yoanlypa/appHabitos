@@ -269,12 +269,17 @@ parte-del-dia/
     gasto. No vale un autocontraste normal: con tan poca letra deja el
     papel gris (se probó). Se genera al pedirlo, no se guarda.
   - **La hoja se endereza** (`nucleo/perspectiva.py`, OpenCV headless): se
-    buscan sus cuatro esquinas (Canny y, si no, lo claro por Otsu) y se
-    estira a un rectángulo, como un escáner. Si no salen cuatro esquinas
-    limpias (ticket arrugado) se usa el rectángulo girado que lo encierra;
-    si no se ve hoja, devuelve None y se cae al recorte simple. Nunca se
-    deforma la foto por una hoja inventada. Tras enderezar se mete un 2 %
-    hacia dentro: el contorno sale algo hinchado y dejaba un marco negro.
+    buscan sus cuatro esquinas y se estira a un rectángulo, como un
+    escáner. Dos intentos: el filo del papel contra la mesa (con la letra
+    borrada antes por cierre morfológico) y, si no, el contorno de lo
+    impreso. Lo segundo salió de una factura real de Leroy Merlin, papel
+    blanco sobre mesa blanca: el filo casi no se veía y un contorno de
+    sombras con cuatro esquinas la deformaba entera. Por eso un borde solo
+    vale si deja dentro toda la letra (`_contiene_lo_impreso`, con 15 px de
+    margen porque el filo contra mesa oscura sale como tinta pegada). Si no
+    se ve hoja, None y recorte simple: nunca se deforma por una hoja
+    inventada. Las fotos reales de prueba no están en el repo: llevan
+    nombre, dirección y teléfono.
 
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
@@ -290,7 +295,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-251 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+252 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

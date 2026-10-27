@@ -41,3 +41,26 @@ def test_sin_hoja_no_se_inventa_nada():
 def test_una_foto_ya_encuadrada_no_se_toca():
     papel = Image.new("L", (800, 1000), 230)
     assert enderezar(papel) is None
+
+
+def test_papel_blanco_sobre_mesa_blanca_se_endereza_por_lo_impreso():
+    """El caso de una factura real: el filo del papel casi no se ve, la letra sí.
+
+    Hoja de 235 sobre mesa de 225, girada 6 grados: el borde no basta y hay
+    que guiarse por el contenido. Antes salía la foto tal cual, torcida.
+    """
+    hoja = np.full((1100, 800), 235, np.uint8)
+    for y in range(60, 1040, 45):
+        cv2.line(hoja, (50, y), (750, y), 30, 6)  # renglones de borde a borde
+    mesa = np.full((1500, 1200), 225, np.uint8)
+    giro = cv2.getRotationMatrix2D((400, 550), 6, 1.0)
+    giro[:, 2] += (200, 200)
+    girada = cv2.warpAffine(hoja, giro, (1200, 1500), borderValue=225)
+    mesa[:] = girada
+    recta = enderezar(Image.fromarray(mesa))
+    assert recta is not None
+    # Los renglones quedan horizontales: cada uno es una franja oscura
+    # seguida, no una diagonal que cruza varias filas.
+    pixeles = np.array(recta)
+    filas_oscuras = (pixeles < 120).mean(axis=1)
+    assert filas_oscuras.max() > 0.8
