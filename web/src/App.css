@@ -278,7 +278,10 @@ code {
 
 footer {
   margin-top: 2rem;
-  text-align: center;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.25rem;
 }
 
 /* ---------- Marco y navegación ---------- */

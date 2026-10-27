@@ -47,6 +47,7 @@ def construir_app() -> Application:
     app.add_handler(CommandHandler("borrar", handlers.borrar))
     app.add_handler(CommandHandler("copia", handlers.copia))
     app.add_handler(CommandHandler("trimestre", handlers.trimestre))
+    app.add_handler(CommandHandler("facturas", handlers.facturas))
     app.add_handler(CallbackQueryHandler(handlers.elegir_cliente, pattern=r"^cli:"))
     # Notas de voz y audios: se transcriben y se anotan como el texto.
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handlers.nota_de_voz))

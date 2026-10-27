@@ -10,7 +10,7 @@ sacarla a un hilo.
 """
 from datetime import timedelta
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile, Message, Update
 from telegram.constants import ChatAction
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
@@ -37,7 +37,13 @@ from app.servicios.resumen import resumen_dia, resumen_mes
 from app.servicios.trimestres import resumen_trimestre, trimestre_de
 from app.servicios.voz import NadaQueAnotar, anotar_audio
 from app.nucleo.lectura_tickets import ErrorDeLectura, LecturaNoDisponible
-from app.servicios.facturas import FacturaNoValida, escanear_y_anotar
+from app.nucleo.pdf import ImagenNoLegible
+from app.servicios.facturas import (
+    FacturaNoValida,
+    escanear_y_anotar,
+    pdf_de_factura,
+    pdf_del_periodo,
+)
 
 
 async def start(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
@@ -418,4 +424,37 @@ async def foto_de_ticket(update: Update, contexto: ContextTypes.DEFAULT_TYPE) ->
         if apunte is None:
             await mensaje.reply_text(formato.ticket_sin_total())
             return
-        await mensaje.reply_text(formato.ticket_anotado(apunte, leido.datos))
+        # Con el PDF escaneado en la respuesta, como CamScanner: se guarda o se
+        # reenvía a la gestoría desde el propio chat. Si no se puede generar,
+        # el gasto ya está anotado y la foto guardada: se dice y no pasa nada.
+        try:
+            contenido, nombre = pdf_de_factura(db, update.effective_user.id, leido.factura.id)
+        except ImagenNoLegible:
+            await mensaje.reply_text(formato.ticket_anotado(apunte, leido.datos))
+            return
+        await mensaje.reply_document(
+            document=InputFile(contenido, filename=nombre),
+            caption=formato.ticket_anotado(apunte, leido.datos),
+        )
+
+
+async def facturas(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """/facturas: las del mes en curso en un PDF. /facturas pasado: las del mes anterior."""
+    hoy = hoy_local()
+    primero = hoy.replace(day=1)
+    if contexto.args and contexto.args[0].lower() in ("pasado", "anterior"):
+        hasta = primero - timedelta(days=1)
+        desde = hasta.replace(day=1)
+    else:
+        desde, hasta = primero, hoy
+
+    await update.message.chat.send_action(ChatAction.UPLOAD_DOCUMENT)
+    with sesion() as db:
+        contenido = pdf_del_periodo(db, update.effective_user.id, desde, hasta)
+    if contenido is None:
+        await update.message.reply_text(formato.sin_facturas(desde))
+        return
+    await update.message.reply_document(
+        document=InputFile(contenido, filename=f"facturas-{desde:%Y-%m}.pdf"),
+        caption=formato.facturas_del_mes(desde),
+    )

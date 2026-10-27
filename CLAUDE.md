@@ -261,6 +261,13 @@ parte-del-dia/
     no lleva las fotos.
   - La web reduce la foto a 1600 px en JPEG antes de subirla, y la imagen
     se abre con fetch + blob porque `/facturas/{id}/imagen` pide token.
+  - **PDF como CamScanner** (`nucleo/pdf.py`, Pillow): se recorta el papel
+    (umbral de Otsu sobre una copia pequeña), se lleva el papel a blanco y
+    la tinta a negro y va en A4. El bot contesta a la foto con ese PDF; el
+    🧾 de la web abre el PDF; `/facturas` (o `/facturas pasado`) y "Tickets
+    del mes en PDF" juntan los del mes, uno por página y por fecha del
+    gasto. No vale un autocontraste normal: con tan poca letra deja el
+    papel gris (se probó). Se genera al pedirlo, no se guarda.
 
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
@@ -276,7 +283,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-240 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
+248 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

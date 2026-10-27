@@ -25,6 +25,7 @@ from app.dominio.models import Apunte, Factura
 from app.dominio.tickets import DatosTicket, interpretar_lectura
 from app.nucleo import archivos
 from app.nucleo.lectura_tickets import leer_ticket
+from app.nucleo.pdf import imagenes_a_pdf
 from app.nucleo.tiempo import hoy_local
 
 
@@ -176,3 +177,41 @@ async def escanear_y_anotar(
         origen,
     )
     return leido, apunte
+
+
+def pdf_de_factura(db: Session, user_id: int, factura_id: int) -> tuple[bytes, str]:
+    """El ticket como PDF escaneado, con un nombre que diga qué es."""
+    factura = _suya(db, user_id, factura_id)
+    contenido = imagenes_a_pdf([archivos.ruta_absoluta(factura.ruta)])
+    return contenido, _nombre_pdf(factura)
+
+
+def pdf_del_periodo(db: Session, user_id: int, desde: date, hasta: date) -> bytes | None:
+    """Todas las facturas de los gastos entre dos fechas, una por página.
+
+    Por fecha del gasto y no de escaneo: es el orden en que las pide la
+    gestoría. Sin facturas devuelve None, que no es un error.
+    """
+    facturas = (
+        db.query(Factura)
+        .join(Apunte, Factura.apunte_id == Apunte.id)
+        .filter(
+            Factura.user_id == user_id,
+            Apunte.fecha >= desde,
+            Apunte.fecha <= hasta,
+        )
+        .order_by(Apunte.fecha, Apunte.id)
+        .all()
+    )
+    rutas = [archivos.ruta_absoluta(f.ruta) for f in facturas]
+    rutas = [r for r in rutas if r.exists()]
+    return imagenes_a_pdf(rutas) if rutas else None
+
+
+def _nombre_pdf(factura: Factura) -> str:
+    if factura.apunte is None:
+        return f"ticket-{factura.id}.pdf"
+    apunte = factura.apunte
+    concepto = "".join(c if c.isalnum() else "-" for c in apunte.concepto.lower())
+    concepto = "-".join(p for p in concepto.split("-") if p)[:40]
+    return f"{apunte.fecha.isoformat()}-{concepto or 'ticket'}.pdf"

@@ -475,17 +475,45 @@ export function confirmarGastoDeFactura(
   })
 }
 
-/**
- * La imagen pide el header Authorization, así que no vale un <img src>
- * directo: se baja con fetch y se abre como blob.
- */
-export async function abrirFactura(token: string, facturaId: number) {
-  const respuesta = await fetch(`${BASE}/facturas/${facturaId}/imagen`, {
+/** Abre un PDF que pide token: se baja con fetch y se abre como blob. */
+async function abrirPdf(token: string, ruta: string, nombre: string) {
+  // La pestaña se abre antes de esperar a la red: Safari en iPhone bloquea
+  // window.open si no ocurre justo al tocar el botón.
+  const ventana = window.open('', '_blank')
+  const respuesta = await fetch(`${BASE}${ruta}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
-  if (respuesta.status === 401) throw new TokenInvalido('El token no vale')
-  if (!respuesta.ok) throw new ErrorDeApi('No se ha podido abrir la factura')
+  if (respuesta.status === 401) {
+    ventana?.close()
+    throw new TokenInvalido('El token no vale')
+  }
+  if (!respuesta.ok) {
+    ventana?.close()
+    const cuerpo = await respuesta.json().catch(() => null)
+    throw new ErrorDeApi(cuerpo?.detail ?? 'No se ha podido abrir el PDF')
+  }
   const url = URL.createObjectURL(await respuesta.blob())
-  window.open(url, '_blank')
+  if (ventana) {
+    ventana.location.href = url
+  } else {
+    const enlace = document.createElement('a')
+    enlace.href = url
+    enlace.download = nombre
+    enlace.click()
+  }
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+/** El ticket escaneado en PDF, blanco y negro, como CamScanner. */
+export function abrirFactura(token: string, facturaId: number) {
+  return abrirPdf(token, `/facturas/${facturaId}/pdf`, `ticket-${facturaId}.pdf`)
+}
+
+/** Todos los tickets del periodo en un PDF, uno por página, para la gestoría. */
+export function abrirFacturasDelPeriodo(token: string, desde: string, hasta: string) {
+  return abrirPdf(
+    token,
+    `/facturas/pdf?desde=${desde}&hasta=${hasta}`,
+    `facturas-${desde}_${hasta}.pdf`,
+  )
 }

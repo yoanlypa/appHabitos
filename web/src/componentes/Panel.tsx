@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react'
 import {
   abrirFactura,
+  abrirFacturasDelPeriodo,
   asignarCliente,
   borrarApunte,
   crearApunte,
@@ -109,6 +110,12 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
     const apunteId = duda.apunte.id
     setDuda(null)
     await accion(() => asignarCliente(token, apunteId, clienteId))
+  }
+
+  function facturasDelMes() {
+    const hoy = new Date()
+    const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
+    void accion(() => abrirFacturasDelPeriodo(token, iso(primero), iso(hoy)))
   }
 
   function descargarElMes() {
@@ -256,7 +263,7 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
                   {a.factura_id && (
                     <button
                       className="mini factura"
-                      title="Ver la foto del ticket"
+                      title="Ver el ticket en PDF"
                       onClick={() => void accion(() => abrirFactura(token, a.factura_id!))}
                     >
                       🧾
@@ -300,6 +307,9 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
       <footer>
         <button className="enlace" onClick={descargarElMes}>
           Descargar el mes en CSV
+        </button>
+        <button className="enlace" onClick={facturasDelMes}>
+          Tickets del mes en PDF
         </button>
       </footer>
     </>

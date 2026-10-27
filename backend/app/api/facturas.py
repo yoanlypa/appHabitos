@@ -1,6 +1,8 @@
 """Router del escáner de tickets: adaptador fino sobre servicios/facturas.py."""
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from datetime import date
+
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.api.dependencias import get_current_user_id
@@ -13,8 +15,11 @@ from app.servicios.facturas import (
     GastoNoValido,
     anotar_gasto,
     escanear,
+    pdf_de_factura,
+    pdf_del_periodo,
     ruta_de,
 )
+from app.nucleo.pdf import ImagenNoLegible
 
 router = APIRouter(prefix="/facturas", tags=["facturas"])
 
@@ -79,3 +84,46 @@ def ver_imagen(
     if not ruta.exists():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "la imagen ya no está en el servidor")
     return FileResponse(ruta, media_type=mime)
+
+
+def _pdf(contenido: bytes, nombre: str) -> Response:
+    # inline: el móvil lo abre en su visor y desde ahí se guarda o se comparte.
+    return Response(
+        contenido,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{nombre}"'},
+    )
+
+
+@router.get("/pdf")
+def pdf_periodo(
+    desde: date,
+    hasta: date,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Todas las facturas del periodo en un solo PDF, para la gestoría."""
+    if hasta < desde:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "el rango está al revés")
+    try:
+        contenido = pdf_del_periodo(db, user_id, desde, hasta)
+    except ImagenNoLegible as exc:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
+    if contenido is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No hay tickets escaneados en esas fechas")
+    return _pdf(contenido, f"facturas-{desde.isoformat()}_{hasta.isoformat()}.pdf")
+
+
+@router.get("/{factura_id}/pdf")
+def pdf_factura(
+    factura_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    try:
+        contenido, nombre = pdf_de_factura(db, user_id, factura_id)
+    except FacturaNoEncontrada as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except ImagenNoLegible as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "la imagen ya no se puede abrir") from exc
+    return _pdf(contenido, nombre)

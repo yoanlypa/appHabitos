@@ -59,11 +59,13 @@ def ayuda() -> str:
         "  -45 gasolina                → gasto\n"
         "  Llamar al fontanero martes  → nota, sin dinero\n\n"
         "Cuando no puedas escribir, mándame una nota de voz: la escucho y\n"
-        "la anoto igual.\n\n"
+        "la anoto igual. Y si me mandas la foto de un ticket, lo anoto como\n"
+        "gasto y te devuelvo el PDF escaneado.\n\n"
         "Comandos:\n"
         "  /hoy — resumen del día\n"
         "  /mes — resumen del mes\n"
         "  /trimestre — lo que llevas este trimestre\n"
+        "  /facturas — los tickets del mes en un PDF ('/facturas pasado': el anterior)\n"
         "  /cobrado <número> — marca un trabajo como cobrado\n"
         "  /borrar <número> — borra un apunte mal escrito\n"
         "  /agenda — lo que toca hoy\n"
@@ -328,4 +330,21 @@ def ticket_sin_total() -> str:
         "No he sabido leer el total de esa foto, así que no he anotado nada.\n"
         "Prueba con más luz y el ticket entero en la foto, o escríbemelo: "
         "-23,40 ferretería"
+    )
+
+
+def _mes(fecha) -> str:
+    meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+             "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+    return f"{meses[fecha.month - 1]} de {fecha.year}"
+
+
+def facturas_del_mes(desde) -> str:
+    return f"🧾 Tickets escaneados de {_mes(desde)}, uno por página."
+
+
+def sin_facturas(desde) -> str:
+    return (
+        f"No hay tickets escaneados en {_mes(desde)}.\n"
+        "Mándame la foto de un ticket y lo anoto como gasto."
     )
