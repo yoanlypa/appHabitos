@@ -8,6 +8,8 @@ fastapi>=0.115,<1.0
 python-multipart>=0.0.9,<1.0
 # Para convertir las fotos de los tickets en PDF con aspecto de escaneado.
 pillow>=11.0,<13.0
+# Para enderezar la hoja (corrección de perspectiva), como CamScanner.
+opencv-python-headless>=4.10,<6.0
 uvicorn[standard]>=0.30,<1.0
 python-telegram-bot[job-queue]>=21.0,<23.0
 # Para transcribir las notas de voz. Ya viene con python-telegram-bot, pero

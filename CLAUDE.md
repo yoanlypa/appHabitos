@@ -268,6 +268,13 @@ parte-del-dia/
     del mes en PDF" juntan los del mes, uno por página y por fecha del
     gasto. No vale un autocontraste normal: con tan poca letra deja el
     papel gris (se probó). Se genera al pedirlo, no se guarda.
+  - **La hoja se endereza** (`nucleo/perspectiva.py`, OpenCV headless): se
+    buscan sus cuatro esquinas (Canny y, si no, lo claro por Otsu) y se
+    estira a un rectángulo, como un escáner. Si no salen cuatro esquinas
+    limpias (ticket arrugado) se usa el rectángulo girado que lo encierra;
+    si no se ve hoja, devuelve None y se cae al recorte simple. Nunca se
+    deforma la foto por una hoja inventada. Tras enderezar se mete un 2 %
+    hacia dentro: el contorno sale algo hinchado y dejaba un marco negro.
 
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
@@ -283,7 +290,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-248 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
+251 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

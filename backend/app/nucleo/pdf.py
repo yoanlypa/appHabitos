@@ -1,7 +1,7 @@
 """Convertir fotos de tickets en un PDF con aspecto de documento escaneado.
 
 Es lo que hacía CamScanner: la foto pasa a blanco y negro con el contraste
-estirado (el papel queda blanco y la tinta negra, sin la sombra amarillenta
+estirado y la hoja enderezada de frente (`perspectiva.py`) (el papel queda blanco y la tinta negra, sin la sombra amarillenta
 de la luz de la cocina), se le quita la mesa de alrededor y va centrada en una página A4. Así se imprime, se
 manda a la gestoría o se archiva como un documento, no como una foto.
 
@@ -11,6 +11,8 @@ import io
 from pathlib import Path
 
 from PIL import Image, ImageFilter, ImageOps
+
+from app.nucleo.perspectiva import enderezar
 
 # A4 a 150 ppp: de sobra para leer un ticket y el PDF no pesa megas.
 _A4 = (1240, 1754)
@@ -111,10 +113,13 @@ def _como_escaneado(ruta: Path) -> Image.Image:
     try:
         with Image.open(ruta) as original:
             # Las fotos del móvil guardan el giro aparte: sin esto salen tumbadas.
-            foto = ImageOps.exif_transpose(original).convert("L")
+            foto = ImageOps.exif_transpose(original).convert("RGB")
     except (OSError, ValueError) as exc:
         raise ImagenNoLegible(f"no se puede abrir {ruta.name}") from exc
-    foto = _recortar_papel(foto)
+    # Primero se intenta enderezar la hoja (esquinas → rectángulo, como un
+    # escáner). Si no se encuentra, al menos se le quita la mesa.
+    recta = enderezar(foto)
+    foto = recta if recta is not None else _recortar_papel(foto.convert("L"))
     foto = _niveles_de_documento(foto)
 
     pagina = Image.new("L", _A4, 255)
