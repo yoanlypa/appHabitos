@@ -11,6 +11,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.dominio.models import Apunte
+from app.nucleo import archivos
 from app.dominio.parsing import TextoNoInterpretable, interpretar_texto
 from app.nucleo.tiempo import hoy_local
 from app.servicios.clientes import clientes_mencionados
@@ -101,6 +102,11 @@ def borrar_apunte(db: Session, user_id: int, apunte_id: int) -> Apunte:
     para siempre.
     """
     apunte = _suyo(db, user_id, apunte_id)
+    # Un gasto escaneado se lleva su foto: dejarla sería una factura suelta
+    # que ya no justifica nada, y la fila apuntaría a un apunte que no existe.
+    if apunte.factura is not None:
+        archivos.borrar(apunte.factura.ruta)
+        db.delete(apunte.factura)
     db.delete(apunte)
     db.commit()
     return apunte

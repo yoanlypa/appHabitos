@@ -309,3 +309,23 @@ def resumen_trimestre(r) -> str:
             "Confírmalo con tu gestor antes de pagar nada.",
         ]
     )
+
+
+def ticket_anotado(apunte, datos) -> str:
+    """Lo que se entendió del ticket, para verlo al momento y corregir si hace falta."""
+    lineas = [
+        f"🧾 Gasto anotado (#{apunte.id}): {apunte.concepto}",
+        f"−{euros(apunte.importe)} · {dia_con_nombre(apunte.fecha)}",
+    ]
+    if datos.iva is not None:
+        lineas.append(f"IVA: {euros(datos.iva)}")
+    lineas.append(f"Si está mal: /borrar {apunte.id} y vuelve a mandarla.")
+    return "\n".join(lineas)
+
+
+def ticket_sin_total() -> str:
+    return (
+        "No he sabido leer el total de esa foto, así que no he anotado nada.\n"
+        "Prueba con más luz y el ticket entero en la foto, o escríbemelo: "
+        "-23,40 ferretería"
+    )

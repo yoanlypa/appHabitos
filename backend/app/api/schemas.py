@@ -28,6 +28,7 @@ class ApunteSalida(BaseModel):
     origen: str
     creado: datetime
     cliente_id: int | None = None
+    factura_id: int | None = None
 
 
 class ResumenSalida(BaseModel):
@@ -236,3 +237,20 @@ class HabitoDetalleSalida(BaseModel):
     anio: int
     mes: int
     dias_del_mes: list[DiaHabitoSalida]
+
+
+class TicketLeido(BaseModel):
+    """Lo leído en la foto, para rellenar el formulario. Cualquier campo puede faltar."""
+
+    factura_id: int
+    total: Importe | None
+    fecha: date | None
+    comercio: str | None
+    iva: Importe | None
+    concepto: str
+
+
+class GastoDeFactura(BaseModel):
+    concepto: str
+    importe: Decimal
+    fecha: date | None = None

@@ -49,3 +49,13 @@ CORS_ORIGENES = [
     for origen in os.getenv("CORS_ORIGENES", "http://localhost:5173").split(",")
     if origen.strip()
 ]
+
+# Lectura de tickets y facturas escaneados. Usa la misma OPENAI_API_KEY que
+# la voz: un modelo con visión lee el total, la fecha y el comercio de la
+# foto por menos de un céntimo, y acierta mucho más que un OCR clásico con
+# un ticket arrugado o fotografiado de lado.
+MODELO_TICKETS = os.getenv("MODELO_TICKETS", "gpt-4o-mini")
+# Dónde se guardan las imágenes. Vacío = junto a la base SQLite (en Railway,
+# dentro del volumen /data), que es justo donde tienen que estar para no
+# perderse en un redespliegue.
+RUTA_FACTURAS = os.getenv("RUTA_FACTURAS", "")

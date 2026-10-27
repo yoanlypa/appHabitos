@@ -50,6 +50,10 @@ def construir_app() -> Application:
     app.add_handler(CallbackQueryHandler(handlers.elegir_cliente, pattern=r"^cli:"))
     # Notas de voz y audios: se transcriben y se anotan como el texto.
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handlers.nota_de_voz))
+    # La foto de un ticket se lee y se anota como gasto.
+    app.add_handler(
+        MessageHandler(filters.PHOTO | filters.Document.IMAGE, handlers.foto_de_ticket)
+    )
     # Un CSV reenviado es una copia que restaurar.
     restaurar.registrar(app)
     # /habitos con sus botones, y los recordatorios a la hora de cada uno.

@@ -10,6 +10,7 @@ import tempfile
 _TEMPORAL = tempfile.mkdtemp(prefix="parte-tests-")
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEMPORAL}/pruebas.db".replace(os.sep, "/")
 os.environ.setdefault("TZ_LOCAL", "Europe/Madrid")
+os.environ["RUTA_FACTURAS"] = f"{_TEMPORAL}/facturas"
 
 import pytest  # noqa: E402
 
@@ -18,6 +19,7 @@ from app.dominio.models import (  # noqa: E402
     Apunte,
     Cita,
     Cliente,
+    Factura,
     Habito,
     HabitoHecho,
     TokenAcceso,
@@ -38,6 +40,6 @@ def db():
     """Una sesión limpia por test: lo que escriba uno no lo ve el siguiente."""
     with sesion() as s:
         yield s
-        for modelo in (HabitoHecho, Habito, Apunte, Cita, Cliente, Ajuste, TokenAcceso):
+        for modelo in (Factura, HabitoHecho, Habito, Apunte, Cita, Cliente, Ajuste, TokenAcceso):
             s.query(modelo).delete()
         s.commit()

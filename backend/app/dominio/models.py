@@ -66,6 +66,12 @@ class Apunte(Base):
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
 
     cliente = relationship("Cliente", back_populates="apuntes")
+    # La foto del ticket, si el gasto salió de escanearlo. Una por apunte.
+    factura = relationship("Factura", back_populates="apunte", uselist=False)
+
+    @property
+    def factura_id(self) -> int | None:
+        return self.factura.id if self.factura else None
 
 
 class Ajuste(Base):
@@ -179,3 +185,25 @@ class HabitoHecho(Base):
     fecha = Column(Date, nullable=False)
 
     habito = relationship("Habito", back_populates="hechos")
+
+
+class Factura(Base):
+    """La foto de un ticket o factura escaneado.
+
+    La imagen vive en disco (`nucleo/archivos.py`) y aquí solo su ruta
+    relativa. `apunte_id` va vacío entre que se escanea y se confirma el
+    gasto: leer la foto y guardarla son dos pasos, porque lo leído se
+    enseña antes de anotarlo.
+    """
+
+    __tablename__ = "facturas"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    apunte_id = Column(Integer, ForeignKey("apuntes.id"), nullable=True, unique=True)
+    ruta = Column(String, nullable=False)
+    mime = Column(String, nullable=False)
+    tamano = Column(Integer, nullable=False)
+    creado = Column(DateTime(timezone=True), server_default=func.now())
+
+    apunte = relationship("Apunte", back_populates="factura")

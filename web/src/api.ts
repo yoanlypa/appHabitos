@@ -17,6 +17,8 @@ export type Apunte = {
   origen: string
   creado: string
   cliente_id: number | null
+  // La foto del ticket, si el gasto salió de escanearlo.
+  factura_id: number | null
 }
 
 export type Resumen = {
@@ -438,4 +440,52 @@ export function marcarDiaHabito(token: string, id: number, fecha: string, hecho:
 
 export function detalleHabito(token: string, id: number, anio: number, mes: number) {
   return pedir<DetalleHabito>(token, `/habitos/${id}?anio=${anio}&mes=${mes}`)
+}
+
+/* ---------- Escáner de tickets ---------- */
+
+/** Lo que se leyó en la foto. Cualquier campo puede venir vacío: un hueco
+ *  se ve, un número inventado se cuela. */
+export type TicketLeido = {
+  factura_id: number
+  total: string | null
+  fecha: string | null
+  comercio: string | null
+  iva: string | null
+  concepto: string
+}
+
+/** Sube la foto y la lee. No anota nada: eso es `confirmarGastoDeFactura`. */
+export function escanearFactura(token: string, imagen: Blob) {
+  const datos = new FormData()
+  datos.append('imagen', imagen, 'ticket.jpg')
+  // Sin Content-Type a mano: el navegador pone el multipart con su boundary.
+  return pedir<TicketLeido>(token, '/facturas/escanear', { method: 'POST', body: datos })
+}
+
+export function confirmarGastoDeFactura(
+  token: string,
+  facturaId: number,
+  gasto: { concepto: string; importe: string; fecha: string | null },
+) {
+  return pedir<Apunte>(token, `/facturas/${facturaId}/gasto`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(gasto),
+  })
+}
+
+/**
+ * La imagen pide el header Authorization, así que no vale un <img src>
+ * directo: se baja con fetch y se abre como blob.
+ */
+export async function abrirFactura(token: string, facturaId: number) {
+  const respuesta = await fetch(`${BASE}/facturas/${facturaId}/imagen`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (respuesta.status === 401) throw new TokenInvalido('El token no vale')
+  if (!respuesta.ok) throw new ErrorDeApi('No se ha podido abrir la factura')
+  const url = URL.createObjectURL(await respuesta.blob())
+  window.open(url, '_blank')
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }

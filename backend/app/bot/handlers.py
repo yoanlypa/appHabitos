@@ -36,6 +36,8 @@ from app.servicios.notas import marcar_hecha as marcar_nota_hecha
 from app.servicios.resumen import resumen_dia, resumen_mes
 from app.servicios.trimestres import resumen_trimestre, trimestre_de
 from app.servicios.voz import NadaQueAnotar, anotar_audio
+from app.nucleo.lectura_tickets import ErrorDeLectura, LecturaNoDisponible
+from app.servicios.facturas import FacturaNoValida, escanear_y_anotar
 
 
 async def start(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
@@ -375,3 +377,45 @@ async def trimestre(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> Non
         hoy = hoy_local()
         r = resumen_trimestre(db, update.effective_user.id, hoy.year, trimestre_de(hoy))
         await update.message.reply_text(formato.resumen_trimestre(r))
+
+
+async def foto_de_ticket(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """Una foto de un ticket se lee y queda anotada como gasto, con la foto colgada.
+
+    El texto que acompañe a la foto, si lo hay, manda sobre el concepto leído:
+    quien escribe "material baño Ana" sabe mejor que el modelo para qué era.
+    """
+    mensaje = update.message
+    if mensaje.photo:
+        fichero_tg, mime = mensaje.photo[-1], "image/jpeg"  # la más grande
+    elif mensaje.document and (mensaje.document.mime_type or "").startswith("image/"):
+        fichero_tg, mime = mensaje.document, mensaje.document.mime_type
+    else:
+        return
+
+    await mensaje.chat.send_action(ChatAction.TYPING)
+    try:
+        fichero = await contexto.bot.get_file(fichero_tg.file_id)
+        datos = bytes(await fichero.download_as_bytearray())
+    except TelegramError as exc:
+        await mensaje.reply_text(f"No he podido descargar la foto: {exc}")
+        return
+
+    with sesion() as db:
+        try:
+            leido, apunte = await escanear_y_anotar(
+                db, update.effective_user.id, datos, mime, mensaje.caption, origen="bot"
+            )
+        except LecturaNoDisponible:
+            await mensaje.reply_text(
+                "Todavía no sé leer tickets: falta configurar OPENAI_API_KEY."
+            )
+            return
+        except (ErrorDeLectura, FacturaNoValida) as exc:
+            await mensaje.reply_text(f"No he podido leer esa foto: {exc}")
+            return
+
+        if apunte is None:
+            await mensaje.reply_text(formato.ticket_sin_total())
+            return
+        await mensaje.reply_text(formato.ticket_anotado(apunte, leido.datos))

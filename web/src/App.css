@@ -928,3 +928,25 @@ button.mini.hecha:hover {
   color: var(--gasto);
   align-self: flex-start;
 }
+
+/* ---------- Escáner de tickets ---------- */
+
+button.escanear {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  font-size: 1rem;
+}
+
+.ticket-vista {
+  width: 100%;
+  max-height: 14rem;
+  object-fit: contain;
+  border-radius: 0.5rem;
+  background: var(--borde);
+}
+
+button.mini.factura {
+  margin-left: 0.35rem;
+  vertical-align: middle;
+}

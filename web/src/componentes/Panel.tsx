@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from 'react'
 import {
+  abrirFactura,
   asignarCliente,
   borrarApunte,
   crearApunte,
@@ -24,6 +25,7 @@ import {
   type Resumen,
   type ResumenTrimestre,
 } from '../api'
+import { EscanerFactura } from './EscanerFactura'
 import { etiqueta, euros as importe, iso } from '../utiles'
 
 type Props = {
@@ -208,6 +210,14 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
         <code>pendiente Reforma baño 980</code> sin cobrar · <code>-45 gasolina</code> gasto ·
         lo que no lleve importe se guarda como nota
       </p>
+      <EscanerFactura
+        token={token}
+        onGuardado={() => setRecargas((n) => n + 1)}
+        onError={(e) => {
+          if (e instanceof TokenInvalido) return onTokenInvalido()
+          setError(e instanceof Error ? e.message : 'No se ha podido leer el ticket')
+        }}
+      />
 
       {duda && (
         <div className="duda">
@@ -241,7 +251,18 @@ export function Panel({ token, onTokenInvalido, conCabecera = true }: Props) {
           <ul>
             {apuntes.map((a) => (
               <li key={a.id} className={a.tipo}>
-                <span className="concepto">{a.concepto}</span>
+                <span className="concepto">
+                  {a.concepto}
+                  {a.factura_id && (
+                    <button
+                      className="mini factura"
+                      title="Ver la foto del ticket"
+                      onClick={() => void accion(() => abrirFactura(token, a.factura_id!))}
+                    >
+                      🧾
+                    </button>
+                  )}
+                </span>
                 {/* Una nota no lleva dinero: enseñar "0,00 €" sería ruido. */}
                 {a.tipo !== 'nota' && (
                   <span className={`importe ${a.tipo}`}>

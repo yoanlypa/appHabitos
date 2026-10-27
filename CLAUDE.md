@@ -239,6 +239,29 @@ parte-del-dia/
   caer en la regla de trabajo lo apuntaría como dinero que entra, y ese es el
   error que más caro sale.
 
+- **Los tickets se escanean y se anotan como gasto, con la foto colgada.**
+  Sustituye a pagar CamScanner: mandar la foto al bot o pulsar
+  "📷 Escanear ticket" en la web. Lee un modelo con visión de OpenAI
+  (`nucleo/lectura_tickets.py`, misma `OPENAI_API_KEY`, `MODELO_TICKETS`),
+  no un OCR clásico: con un ticket arrugado o de lado acierta mucho más, y
+  no hace falta recortar bordes. Decisiones:
+  - **Lo leído se filtra antes de creérselo** (`dominio/tickets.py`). El
+    modelo se equivoca sin avisar; un total <= 0 o >= 100.000, una fecha
+    futura o de hace más de dos años, o un IVA mayor que el total se dejan
+    vacíos. Un hueco se ve, un número absurdo se cuela.
+  - **En la web son dos pasos**: `POST /facturas/escanear` lee y guarda la
+    foto sin anotar nada; el formulario relleno se confirma con
+    `POST /facturas/{id}/gasto`. En el bot no hay formulario: anota directo
+    y responde con lo entendido (como la voz); el texto que acompaña a la
+    foto manda sobre el concepto leído. Sin total leído no anota nada.
+  - **La foto va en disco, no en la base** (`nucleo/archivos.py`), junto a
+    la SQLite — o sea, dentro del volumen `/data` sin configurar nada.
+    Borrar el gasto borra su foto; lo escaneado y nunca confirmado se barre
+    a las 24 h (`limpiar_huerfanas`, al escanear). La copia CSV del domingo
+    no lleva las fotos.
+  - La web reduce la foto a 1600 px en JPEG antes de subirla, y la imagen
+    se abre con fetch + blob porque `/facturas/{id}/imagen` pide token.
+
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
   usuario/contraseña. Falta que el bot lo genere con `/web`
@@ -253,7 +276,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-217 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
+240 tests, medio segundo. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
@@ -267,7 +290,9 @@ un fallo del transcriptor se cuente en vez de tragarse.
 para enterarse si cambia su formato, y `test_alarma.py` comprueba que la
 alarma calla cuando todo va bien. `test_habitos_reglas.py` fija las reglas
 que deciden si una racha anima o desanima, y `test_habitos_bot.py` que el
-botón del recordatorio nunca desmarca. Al añadir algo, el test que hace falta es el del caso
+botón del recordatorio nunca desmarca. `test_facturas.py` que una lectura
+absurda no llegue a las cuentas, que borrar un gasto se lleve su foto y que
+nadie vea la factura de otro. Al añadir algo, el test que hace falta es el del caso
 que se te ocurra que podría romperse en silencio.
 
 ## Convenciones de código
