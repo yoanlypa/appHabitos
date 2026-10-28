@@ -174,6 +174,15 @@ def _leer_fecha(palabras: list[str], hoy: date) -> tuple[date | None, list[str]]
     return None, palabras
 
 
+def leer_fecha(palabras: list[str], hoy: date) -> tuple[date | None, list[str]]:
+    """La fecha del principio y lo que queda, mirando al futuro (para citas).
+
+    Pública para que otras reglas (la fecha de un ticket) reutilicen cómo se
+    escriben las fechas sin copiar las expresiones regulares.
+    """
+    return _leer_fecha(palabras, hoy)
+
+
 def _hora_de(palabra: str, admite_numero_pelado: bool = False) -> time | None:
     encaje = _RE_HORA.match(palabra)
     if not encaje:

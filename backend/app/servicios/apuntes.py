@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.dominio.models import Apunte
 from app.nucleo import archivos
 from app.dominio.parsing import TextoNoInterpretable, interpretar_texto
+from app.dominio.tickets import fecha_escrita
 from app.nucleo.tiempo import hoy_local
 from app.servicios.clientes import clientes_mencionados
 
@@ -153,6 +154,23 @@ def actualizar_apunte(
     db.commit()
     db.refresh(apunte)
     return apunte
+
+
+class FechaNoValida(ValueError):
+    """No se ha entendido la fecha, o es del futuro."""
+
+
+def cambiar_fecha(db: Session, user_id: int, apunte_id: int, texto: str) -> Apunte:
+    """Mueve un apunte a otro día: /fecha 34 15/10.
+
+    Para el ticket cuya fecha no se pudo leer y quedó en hoy. Se entiende
+    como la fecha de un ticket (del pasado): "15/10" sin año es el último 15
+    de octubre. Un apunte no se mueve al futuro.
+    """
+    fecha, _ = fecha_escrita(texto, hoy_local())
+    if fecha is None:
+        raise FechaNoValida(f"no entiendo «{texto}» como una fecha pasada")
+    return actualizar_apunte(db, user_id, apunte_id, fecha=fecha)
 
 
 def marcar_cobrado(db: Session, user_id: int, apunte_id: int) -> Apunte:

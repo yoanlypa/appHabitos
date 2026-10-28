@@ -304,3 +304,78 @@ class TestVales:
         monkeypatch.setattr(facturas, "leer_ticket", falso)
         await facturas.escanear(db, USUARIO, _foto(), "image/jpeg")
         assert listar_notas(db, USUARIO) == []
+
+
+class TestFechaDelTicket:
+    """El gasto va al día del ticket, no al día en que se sube."""
+
+    @pytest.fixture
+    def leido(self, monkeypatch):
+        respuesta = {"total": 20, "fecha": "2026-10-08", "comercio": "Leroy Merlin"}
+
+        async def falso(_i, _m):
+            return dict(respuesta)
+
+        monkeypatch.setattr(facturas, "leer_ticket", falso)
+        return respuesta
+
+    @pytest.mark.asyncio
+    async def test_va_al_dia_del_ticket(self, db, leido):
+        t, apunte = await facturas.escanear_y_anotar(db, USUARIO, _foto(), "image/jpeg", None, "bot")
+        assert apunte.fecha == date(2026, 10, 8)
+        assert not t.fecha_supuesta
+
+    @pytest.mark.asyncio
+    async def test_la_fecha_escrita_con_la_foto_manda(self, db, leido, monkeypatch):
+        monkeypatch.setattr(facturas, "hoy_local", lambda: date(2026, 10, 28))
+        _, apunte = await facturas.escanear_y_anotar(
+            db, USUARIO, _foto(), "image/jpeg", "3/10 material baño", "bot"
+        )
+        assert apunte.fecha == date(2026, 10, 3)
+        assert apunte.concepto == "material baño"  # la fecha no se queda en el concepto
+
+    @pytest.mark.asyncio
+    async def test_sin_fecha_leida_se_pone_hoy_y_se_avisa(self, db, leido):
+        leido["fecha"] = None
+        t, apunte = await facturas.escanear_y_anotar(db, USUARIO, _foto(), "image/jpeg", None, "bot")
+        assert t.fecha_supuesta
+        from app.bot import formato
+
+        assert f"/fecha {apunte.id}" in formato.ticket_anotado(apunte, t.datos, t.fecha_supuesta)
+
+    def test_un_ticket_de_hace_tres_anos_vale(self):
+        assert interpretar_lectura({"fecha": "2023-11-02"}, HOY).fecha == date(2023, 11, 2)
+        assert interpretar_lectura({"fecha": "2019-11-02"}, HOY).fecha is None
+
+
+class TestFechaEscrita:
+    """Al revés que una cita, la fecha de un ticket siempre es pasada."""
+
+    @pytest.mark.parametrize(
+        "texto,esperado",
+        [
+            ("15/10 material", (date(2026, 10, 15), "material")),
+            ("15/12 navidad", (date(2025, 12, 15), "navidad")),  # sin año: el último
+            ("ayer gasolina", (date(2026, 10, 26), "gasolina")),
+            ("3 de octubre comida", (date(2026, 10, 3), "comida")),
+            ("mañana algo", (None, "mañana algo")),
+            ("lunes algo", (None, "lunes algo")),
+            ("01/11/2026 futuro", (None, "01/11/2026 futuro")),  # año escrito y futuro
+            ("material sin fecha", (None, "material sin fecha")),
+        ],
+    )
+    def test_casos(self, texto, esperado):
+        from app.dominio.tickets import fecha_escrita
+
+        assert fecha_escrita(texto, HOY) == esperado
+
+
+def test_cambiar_la_fecha_de_un_apunte(db):
+    from app.servicios.apuntes import FechaNoValida, cambiar_fecha
+
+    f = facturas.guardar_factura(db, USUARIO, _foto(), "image/jpeg")
+    apunte = facturas.anotar_gasto(db, USUARIO, f.id, "x", Decimal("5"), None, "bot")
+    movido = cambiar_fecha(db, USUARIO, apunte.id, "1/1/2026")
+    assert movido.fecha == date(2026, 1, 1)
+    with pytest.raises(FechaNoValida):
+        cambiar_fecha(db, USUARIO, apunte.id, "mañana")

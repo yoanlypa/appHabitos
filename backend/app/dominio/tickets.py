@@ -8,8 +8,9 @@ hueco se ve, un 2340 donde iba 23,40 se cuela.
 - El total tiene que ser positivo y razonable para un ticket (< 100.000 €).
 - Admite "23,40", "23.40", "1.234,50" y "23,40 €", porque el modelo a veces
   copia el formato del ticket en vez de hacer caso.
-- Una fecha en el futuro o de hace más de dos años no es la del ticket: es
-  una lectura mala (un 2062 por un 2026). Se descarta y se usa hoy.
+- Una fecha en el futuro o de hace más de cinco años no es la del ticket:
+  es una lectura mala (un 2062 por un 2026). Se descarta y quien llama usa
+  hoy, pero avisando.
 - El IVA no puede ser mayor que el total, ni la base imponible tampoco.
 - Las líneas sin descripción se descartan; las demás se guardan aunque les
   falte algún número, que la descripción sola ya dice qué se compró.
@@ -21,8 +22,13 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
+from app.dominio.parsing_citas import leer_fecha
+
 TOTAL_MAXIMO = Decimal("100000")
-_ANTIGUEDAD_MAXIMA = timedelta(days=730)
+# Cinco años: Hacienda puede pedir los justificantes de los últimos cuatro, y
+# Yoa tiene tickets viejos por subir. Más allá, es casi seguro una mala
+# lectura (un 2016 por un 2026).
+_ANTIGUEDAD_MAXIMA = timedelta(days=5 * 366)
 
 
 @dataclass
@@ -84,6 +90,41 @@ def _fecha(valor, hoy: date) -> date | None:
     if leida > hoy or hoy - leida > _ANTIGUEDAD_MAXIMA:
         return None
     return leida
+
+
+def fecha_escrita(texto: str | None, hoy: date) -> tuple[date | None, str]:
+    """La fecha que alguien escribe junto a un ticket, y el resto del texto.
+
+    "15/10 material baño" → (15 de octubre, "material baño"). Un ticket es del
+    pasado, al revés que una cita: "15/10" sin año es el último 15 de
+    octubre, no el próximo. "hoy" y "ayer" también valen. Una fecha futura no
+    se acepta; entonces el texto se devuelve entero, sin comerse nada.
+    """
+    palabras = (texto or "").split()
+    if not palabras:
+        return None, ""
+    if palabras[0].lower() == "ayer":
+        return hoy - timedelta(days=1), " ".join(palabras[1:])
+    fecha, resto = leer_fecha(palabras, hoy)
+    if fecha is None:
+        return None, " ".join(palabras)
+    if fecha > hoy:
+        # leer_fecha piensa en citas y pasa al año que viene lo ya pasado. Eso
+        # se deshace solo si era un día y mes en números sin año ("15/12"):
+        # "mañana", "lunes" o un año escrito en el futuro no son un ticket.
+        consumido = " ".join(palabras[: len(palabras) - len(resto)])
+        sin_anio = consumido[:1].isdigit() and not re.search(
+            r"\d{4}|\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}", consumido
+        )
+        if not sin_anio:
+            return None, " ".join(palabras)
+        try:
+            fecha = fecha.replace(year=fecha.year - 1)
+        except ValueError:  # 29 de febrero
+            return None, " ".join(palabras)
+    if hoy - fecha > _ANTIGUEDAD_MAXIMA:
+        return None, " ".join(palabras)
+    return fecha, " ".join(resto)
 
 
 def _texto(valor, largo: int) -> str | None:

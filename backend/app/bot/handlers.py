@@ -26,7 +26,13 @@ from app.nucleo.transcripcion import (
 )
 from app.nucleo.tiempo import hoy_local
 from app.servicios.agenda import citas_del_dia, crear_cita
-from app.servicios.apuntes import ApunteNoEncontrado, borrar_apunte, marcar_cobrado
+from app.servicios.apuntes import (
+    ApunteNoEncontrado,
+    FechaNoValida,
+    borrar_apunte,
+    cambiar_fecha,
+    marcar_cobrado,
+)
 from app.servicios.apuntes import anotar as anotar_apunte
 from app.servicios.auth import generar_token
 from app.servicios.avisos import activar_avisos, avisos_activos
@@ -356,6 +362,26 @@ async def deben(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
 
+async def fecha(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """/fecha 34 15/10: el ticket que quedó en hoy porque no se leyó su fecha."""
+    if len(contexto.args) < 2 or not contexto.args[0].lstrip("#").isdigit():
+        await update.message.reply_text("Dime cuál y qué día: /fecha 12 15/10")
+        return
+    apunte_id = int(contexto.args[0].lstrip("#"))
+    with sesion() as db:
+        try:
+            apunte = cambiar_fecha(db, update.effective_user.id, apunte_id, " ".join(contexto.args[1:]))
+        except ApunteNoEncontrado:
+            await update.message.reply_text(f"No tengo ningún apunte con el número {apunte_id}.")
+            return
+        except FechaNoValida:
+            await update.message.reply_text(
+                "No entiendo esa fecha. Escríbela así: 15/10, 15/10/2025, ayer o 3 de octubre."
+            )
+            return
+        await update.message.reply_text(formato.fecha_cambiada(apunte))
+
+
 async def borrar(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
     """Para el 1200 que iba a ser 120: /borrar 34."""
     if not contexto.args or not contexto.args[0].lstrip("#").isdigit():
@@ -430,11 +456,11 @@ async def foto_de_ticket(update: Update, contexto: ContextTypes.DEFAULT_TYPE) ->
         try:
             contenido, nombre = pdf_de_factura(db, update.effective_user.id, leido.factura.id)
         except ImagenNoLegible:
-            await mensaje.reply_text(formato.ticket_anotado(apunte, leido.datos))
+            await mensaje.reply_text(formato.ticket_anotado(apunte, leido.datos, leido.fecha_supuesta))
             return
         await mensaje.reply_document(
             document=InputFile(contenido, filename=nombre),
-            caption=formato.ticket_anotado(apunte, leido.datos),
+            caption=formato.ticket_anotado(apunte, leido.datos, leido.fecha_supuesta),
         )
 
 

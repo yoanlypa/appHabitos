@@ -23,7 +23,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.dominio.models import Apunte, Factura
-from app.dominio.tickets import DatosTicket, interpretar_lectura, texto_de_vale
+from app.dominio.tickets import DatosTicket, fecha_escrita, interpretar_lectura, texto_de_vale
 from app.nucleo import archivos
 from app.nucleo.lectura_tickets import leer_ticket
 from app.nucleo.pdf import PaginaDeDatos, imagenes_a_pdf
@@ -47,6 +47,9 @@ class GastoNoValido(ValueError):
 class TicketEscaneado:
     factura: Factura
     datos: DatosTicket
+    # Si no se leyó la fecha (ni se escribió con la foto) y se puso la de
+    # hoy. Hay que decirlo: un gasto en el día que no es descuadra el mes.
+    fecha_supuesta: bool = False
 
 
 def guardar_factura(db: Session, user_id: int, imagen: bytes, mime: str) -> Factura:
@@ -218,13 +221,19 @@ async def escanear_y_anotar(
     if leido.datos.total is None:
         borrar_factura(db, user_id, leido.factura.id)
         return leido, None
+    # El texto de la foto puede empezar por la fecha ("15/10 material baño"):
+    # manda sobre la leída, que quien la escribe tiene el ticket delante. Es
+    # lo útil al subir tickets viejos borrosos.
+    fecha_escrita_, concepto = fecha_escrita(concepto, hoy_local())
+    fecha = fecha_escrita_ or leido.datos.fecha
+    leido.fecha_supuesta = fecha is None
     apunte = anotar_gasto(
         db,
         user_id,
         leido.factura.id,
-        (concepto or "").strip() or leido.datos.concepto_sugerido,
+        concepto.strip() or leido.datos.concepto_sugerido,
         leido.datos.total,
-        leido.datos.fecha,
+        fecha,
         origen,
     )
     return leido, apunte

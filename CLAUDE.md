@@ -273,6 +273,21 @@ parte-del-dia/
     las gasolineras, vistas en un ticket real: el total es lo suministrado
     (74,66), no lo entregado (100,00), y un "cheque devolución" es el cambio,
     no un abono.
+  - **El gasto va al día del ticket, no al día en que se sube.** Ya era así
+    (la fecha leída va a `anotar_gasto`), pero había dos agujeros: si la IA
+    no leía la fecha se ponía hoy sin decir nada, y los tickets de más de dos
+    años se descartaban como mala lectura. Ahora el margen es de cinco años
+    (lo que Hacienda puede pedir, y Yoa tiene tickets viejos por subir), el
+    bot avisa cuando ha tenido que poner hoy (`fecha_supuesta`) y propone
+    `/fecha <número> 15/10`, y el texto de la foto puede empezar por la
+    fecha ("15/10 material baño"), que manda sobre la leída. Esa fecha se
+    lee con `dominio/tickets.fecha_escrita()`, que reutiliza cómo se
+    escriben las fechas de las citas pero al revés: un ticket es del
+    pasado, así que "15/12" sin año es el último 15 de diciembre, y
+    "mañana", "lunes" o un año futuro escrito no valen. Las instrucciones
+    piden la fecha de la COMPRA: el ticket de Ballenoil empieza con un
+    "Válido hasta 22/11/2026" del cupón. Un apunte de otro día no sale en
+    la lista "Hoy" de la web, sino en Finanzas, en su día.
   - **Los vales del ticket van al buzón como notas pendientes** (cheques de
     devolución, cupones, vales de descuento). Visto en un ticket real de
     Ballenoil: un cheque de 25,34 € por pagar con un billete de 100 y un
@@ -322,7 +337,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-268 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+281 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

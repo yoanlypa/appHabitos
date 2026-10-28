@@ -70,6 +70,7 @@ def ayuda() -> str:
         "  /facturas — los tickets del mes en un PDF ('/facturas pasado': el anterior)\n"
         "  /cobrado <número> — marca un trabajo como cobrado\n"
         "  /borrar <número> — borra un apunte mal escrito\n"
+        "  /fecha <número> 15/10 — cambia el día de un apunte\n"
         "  /agenda — lo que toca hoy\n"
         "  /manana — lo que toca mañana\n"
         "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
@@ -315,12 +316,17 @@ def resumen_trimestre(r) -> str:
     )
 
 
-def ticket_anotado(apunte, datos) -> str:
+def ticket_anotado(apunte, datos, fecha_supuesta: bool = False) -> str:
     """Lo que se entendió del ticket, para verlo al momento y corregir si hace falta."""
     lineas = [
         f"🧾 Gasto anotado (#{apunte.id}): {apunte.concepto}",
         f"−{euros(apunte.importe)} · {dia_con_nombre(apunte.fecha)}",
     ]
+    if fecha_supuesta:
+        lineas.append(
+            f"⚠️ No he podido leer la fecha del ticket y lo he puesto hoy. "
+            f"Si es de otro día: /fecha {apunte.id} 15/10"
+        )
     if datos.iva is not None:
         lineas.append(f"IVA: {euros(datos.iva)}")
     vales = datos.detalle.get("vales") or []
@@ -357,3 +363,7 @@ def sin_facturas(desde) -> str:
         f"No hay tickets escaneados en {_mes(desde)}.\n"
         "Mándame la foto de un ticket y lo anoto como gasto."
     )
+
+
+def fecha_cambiada(apunte) -> str:
+    return f"📅 Movido al {dia_con_nombre(apunte.fecha)} (#{apunte.id}): {apunte.concepto}"

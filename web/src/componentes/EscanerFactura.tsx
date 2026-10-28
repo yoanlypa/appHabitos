@@ -139,9 +139,17 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
               />
             </label>
             <label>
-              Fecha
-              <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+              Fecha del ticket
+              <input
+                type="date"
+                value={fecha}
+                max={iso(new Date())}
+                onChange={(e) => setFecha(e.target.value)}
+              />
             </label>
+            {!leido.fecha && (
+              <p className="error">No he leído la fecha: he puesto hoy. Cámbiala si es de otro día.</p>
+            )}
             {leido.iva && (
               <p className="ayuda">IVA leído: {leido.iva.replace('.', ',')} €</p>
             )}
