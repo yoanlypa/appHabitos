@@ -273,6 +273,16 @@ parte-del-dia/
     las gasolineras, vistas en un ticket real: el total es lo suministrado
     (74,66), no lo entregado (100,00), y un "cheque devolución" es el cambio,
     no un abono.
+  - **Los vales del ticket van al buzón como notas pendientes** (cheques de
+    devolución, cupones, vales de descuento). Visto en un ticket real de
+    Ballenoil: un cheque de 25,34 € por pagar con un billete de 100 y un
+    cupón de lavado gratis, que en el bolsillo se pierden o caducan. La IA
+    los devuelve en `vales`, `dominio/tickets.py` descarta los caducados y
+    `texto_de_vale()` escribe la nota en una línea (qué, cuánto, dónde,
+    código sin espacios para teclearlo, caducidad). Se crean al confirmar el
+    gasto (`_anotar_vales` en `servicios/facturas.py`), no al escanear, para
+    que lo abandonado no deje notas sueltas. Son notas: no suman en nada, se
+    marcan ✓ al gastarlas, y el bot las enumera en su respuesta.
   - **PDF como CamScanner** (`nucleo/pdf.py`): la hoja enderezada, en color,
     con las sombras y el amarillo de la luz quitados (se divide cada canal
     por su fondo estimado, como el filtro "mágico" de esas apps) y en A4.
@@ -312,7 +322,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-264 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+268 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

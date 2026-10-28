@@ -14,6 +14,7 @@ hueco se ve, un 2340 donde iba 23,40 se cuela.
 - Las líneas sin descripción se descartan; las demás se guardan aunque les
   falte algún número, que la descripción sola ya dice qué se compró.
 - Las esquinas solo valen si son cuatro puntos dentro de la foto.
+- Los vales (cheques de devolución, cupones) caducados no se guardan.
 """
 import re
 from dataclasses import dataclass, field
@@ -181,6 +182,66 @@ def _esquinas(valor) -> list | None:
     return puntos
 
 
+_TIPOS_VALE = {"cheque": "Cheque", "cupon": "Cupón", "vale": "Vale"}
+
+
+def _vales(valor, hoy: date) -> list[dict]:
+    """Lo que el ticket da para gastar después: cheques, cupones, vales.
+
+    Un vale caducado no se guarda: apuntarlo como pendiente sería recordar
+    algo que ya no se puede usar.
+    """
+    if not isinstance(valor, list):
+        return []
+    vales = []
+    for bruto in valor[:5]:
+        if not isinstance(bruto, dict) or bruto.get("tipo") not in _TIPOS_VALE:
+            continue
+        caduca = None
+        if isinstance(bruto.get("caduca"), str):
+            try:
+                caduca = date.fromisoformat(bruto["caduca"].strip()[:10])
+            except ValueError:
+                caduca = None
+        if caduca is not None and caduca < hoy:
+            continue
+        importe = _importe(bruto.get("importe"))
+        if importe is not None and not Decimal("0") < importe < TOTAL_MAXIMO:
+            importe = None
+        codigo = _texto(bruto.get("codigo"), 40)
+        vales.append(
+            {
+                "tipo": bruto["tipo"],
+                "descripcion": _texto(bruto.get("descripcion"), 80),
+                "importe": f"{importe:.2f}" if importe is not None else None,
+                "codigo": re.sub(r"\s", "", codigo) if codigo else None,
+                "caduca": caduca.isoformat() if caduca else None,
+            }
+        )
+    return vales
+
+
+def texto_de_vale(vale: dict, comercio: str | None) -> str:
+    """La nota que queda en el buzón: qué es, cuánto, dónde, código y hasta cuándo.
+
+    Todo en una línea, porque así se lee en el buzón y en /notas, y se
+    enseña en la caja del súper sin abrir nada más.
+    """
+    descripcion = vale.get("descripcion") or _TIPOS_VALE.get(vale.get("tipo"), "Vale")
+    partes = [f"🎟 {descripcion}"]
+    if vale.get("importe"):
+        entero, _, centimos = vale["importe"].partition(".")
+        partes[0] += f" {entero},{centimos} €"
+    if comercio:
+        partes.append(comercio)
+    if vale.get("codigo"):
+        partes.append(f"cód. {vale['codigo']}")
+    if vale.get("caduca"):
+        a, m, d = vale["caduca"].split("-")
+        partes.append(f"caduca {d}/{m}/{a}")
+    return " · ".join(partes)
+
+
 def interpretar_lectura(datos: dict, hoy: date) -> DatosTicket:
     total = _importe(datos.get("total"))
     if total is not None and not (Decimal("0") < total < TOTAL_MAXIMO):
@@ -213,6 +274,7 @@ def interpretar_lectura(datos: dict, hoy: date) -> DatosTicket:
         "descuento": f"{descuento:.2f}" if descuento else None,
         "forma_pago": _texto(datos.get("forma_pago"), 40),
         "documento": documento if documento in ("gasto", "devolucion") else None,
+        "vales": _vales(datos.get("vales"), hoy),
     }
 
     return DatosTicket(

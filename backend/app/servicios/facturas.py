@@ -23,11 +23,12 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.dominio.models import Apunte, Factura
-from app.dominio.tickets import DatosTicket, interpretar_lectura
+from app.dominio.tickets import DatosTicket, interpretar_lectura, texto_de_vale
 from app.nucleo import archivos
 from app.nucleo.lectura_tickets import leer_ticket
 from app.nucleo.pdf import PaginaDeDatos, imagenes_a_pdf
 from app.nucleo.tiempo import hoy_local
+from app.servicios.apuntes import crear_nota
 
 
 class FacturaNoEncontrada(LookupError):
@@ -158,7 +159,23 @@ def anotar_gasto(
     factura.apunte_id = apunte.id
     db.commit()
     db.refresh(apunte)
+    _anotar_vales(db, user_id, factura, origen)
     return apunte
+
+
+def _anotar_vales(db: Session, user_id: int, factura: Factura, origen: str) -> list[Apunte]:
+    """Cada cheque, cupón o vale del ticket va al buzón como nota pendiente.
+
+    Un cheque de devolución de 25 € en un ticket de gasolinera es dinero, y
+    en el bolsillo se pierde o caduca sin acordarse. Como nota sale en el
+    buzón y en /notas, y se marca ✓ al gastarlo. Se hace al confirmar el
+    gasto y no al escanear: lo escaneado y abandonado no deja notas sueltas.
+    """
+    d = datos_leidos(factura)
+    return [
+        crear_nota(db, user_id, texto_de_vale(vale, d.get("comercio")), origen)
+        for vale in d.get("vales") or []
+    ]
 
 
 def ruta_de(db: Session, user_id: int, factura_id: int):
@@ -225,9 +242,12 @@ def pdf_de_factura(db: Session, user_id: int, factura_id: int) -> tuple[bytes, s
 
 
 def _euros(texto: str | None) -> str:
+    """"1234.5" → "1.234,50 €". Respeta los 3 decimales del precio de la gasolina."""
     if not texto:
         return ""
-    entero, _, decimales = f"{Decimal(texto):.2f}".partition(".")
+    numero = Decimal(texto)
+    formato = ".3f" if numero != numero.quantize(Decimal("0.01")) else ".2f"
+    entero, _, decimales = f"{numero:{formato}}".partition(".")
     signo = "-" if entero.startswith("-") else ""
     entero = entero.lstrip("-")
     miles = ".".join(entero[max(0, i - 3):i] for i in range(len(entero), 0, -3)[::-1])
@@ -259,6 +279,8 @@ def _pagina_de_datos(factura: Factura) -> PaginaDeDatos | None:
     ]
     if d.get("documento") == "devolucion":
         filas.append(("Tipo", "Devolución / abono"))
+    for vale in d.get("vales") or []:
+        filas.append(("Pendiente de usar", texto_de_vale(vale, None).removeprefix("🎟 ")))
     lineas = d.get("lineas") or []
     tabla = [
         [l["descripcion"], (l.get("cantidad") or "").replace(".", ","),

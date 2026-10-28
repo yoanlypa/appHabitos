@@ -249,3 +249,58 @@ def test_el_precio_de_la_gasolina_conserva_los_tres_decimales():
     assert interpretar_lectura(
         {"lineas": [{"descripcion": "x", "precio_unitario": 5.6}]}, HOY
     ).detalle["lineas"][0]["precio_unitario"] == "5.60"
+
+
+class TestVales:
+    """Los cheques y cupones del ticket acaban como notas pendientes."""
+
+    LEIDO = {
+        "total": 74.66, "comercio": "Ballenoil",
+        "vales": [
+            {"tipo": "cheque", "descripcion": "Cheque devolución", "importe": "25,34",
+             "codigo": "9926 8349 94302", "caduca": "2029-10-23"},
+            {"tipo": "cupon", "descripcion": "Cupón lavado gratis", "codigo": "1573193622",
+             "caduca": "2026-11-22"},
+            {"tipo": "cupon", "descripcion": "Caducado", "caduca": "2020-01-01"},
+            {"tipo": "regalo", "descripcion": "tipo raro"},
+        ],
+    }
+
+    def test_se_limpian_y_los_caducados_fuera(self):
+        vales = interpretar_lectura(self.LEIDO, HOY).detalle["vales"]
+        assert [v["descripcion"] for v in vales] == ["Cheque devolución", "Cupón lavado gratis"]
+        assert vales[0]["codigo"] == "9926834994302"  # sin espacios, para teclearlo
+
+    def test_el_texto_de_la_nota(self):
+        from app.dominio.tickets import texto_de_vale
+
+        vale = interpretar_lectura(self.LEIDO, HOY).detalle["vales"][0]
+        assert texto_de_vale(vale, "Ballenoil") == (
+            "🎟 Cheque devolución 25,34 € · Ballenoil · cód. 9926834994302 · caduca 23/10/2029"
+        )
+
+    @pytest.mark.asyncio
+    async def test_al_anotar_el_gasto_van_al_buzon_y_no_suman(self, db, monkeypatch):
+        from app.servicios.notas import listar_notas
+
+        async def falso(_i, _m):
+            return dict(self.LEIDO)
+
+        monkeypatch.setattr(facturas, "leer_ticket", falso)
+        _, apunte = await facturas.escanear_y_anotar(db, USUARIO, _foto(), "image/jpeg", None, "bot")
+        notas = [n.concepto for n in listar_notas(db, USUARIO)]
+        assert len(notas) == 2
+        assert all(n.startswith("🎟") for n in notas)
+        # Una nota no es dinero: el gasto del día sigue siendo solo la gasolina.
+        assert resumen_dia(db, USUARIO, apunte.fecha).gastos == Decimal("74.66")
+
+    @pytest.mark.asyncio
+    async def test_escanear_sin_confirmar_no_deja_notas(self, db, monkeypatch):
+        from app.servicios.notas import listar_notas
+
+        async def falso(_i, _m):
+            return dict(self.LEIDO)
+
+        monkeypatch.setattr(facturas, "leer_ticket", falso)
+        await facturas.escanear(db, USUARIO, _foto(), "image/jpeg")
+        assert listar_notas(db, USUARIO) == []

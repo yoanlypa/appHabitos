@@ -161,8 +161,12 @@ def _pagina_de_datos(datos: PaginaDeDatos) -> Image.Image:
     y += 80
     for etiqueta, valor in datos.filas:
         dibujo.text((x, y), etiqueta, font=_fuente(24), fill=gris)
-        dibujo.text((x + 300, y), _cortar(dibujo, valor, _fuente(26), ancho_util - 300), font=_fuente(26), fill=texto)
-        y += 42
+        # Lo largo (una dirección, un vale con su código) baja de línea en vez
+        # de cortarse: un código de cheque a medias no sirve de nada.
+        for renglon in _partir(dibujo, valor, _fuente(26), ancho_util - 300):
+            dibujo.text((x + 300, y), renglon, font=_fuente(26), fill=texto)
+            y += 36
+        y += 6
 
     if datos.cabecera and datos.tabla:
         y += 30
@@ -193,6 +197,23 @@ def _pagina_de_datos(datos: PaginaDeDatos) -> Image.Image:
             dibujo.text((x + ancho_util - ancho_valor, y), valor, font=fuente, fill=texto)
             y += 54 if ultimo else 42
     return pagina
+
+
+def _partir(dibujo, texto: str, fuente, ancho: int, maximo: int = 3) -> list[str]:
+    """El texto en renglones que caben en el ancho, cortando por palabras."""
+    renglones, actual = [], ""
+    for palabra in texto.split():
+        prueba = f"{actual} {palabra}".strip()
+        if dibujo.textlength(prueba, font=fuente) <= ancho or not actual:
+            actual = prueba
+        else:
+            renglones.append(actual)
+            actual = palabra
+    if actual:
+        renglones.append(actual)
+    if len(renglones) > maximo:
+        renglones = renglones[: maximo - 1] + [_cortar(dibujo, " ".join(renglones[maximo - 1 :]), fuente, ancho)]
+    return [_cortar(dibujo, r, fuente, ancho) for r in renglones]
 
 
 def _cortar(dibujo, texto: str, fuente, ancho: int) -> str:

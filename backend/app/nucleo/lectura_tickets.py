@@ -41,6 +41,11 @@ _INSTRUCCIONES = (
     'billete grande es el CAMBIO, no una devolución: eso es "gasto".\n'
     '- "concepto": de 2 a 5 palabras sobre qué se compró (ej. "tacos de '
     'expansión", "gasolina").\n'
+    '- "vales": lista de lo que el ticket da para usar más tarde: cheques de '
+    'devolución o de cambio, cupones (p. ej. lavado gratis), vales de descuento '
+    'o saldo. Cada uno {"tipo": "cheque"|"cupon"|"vale", "descripcion" (corta), '
+    '"importe" (euros o null), "codigo" (o null), "caduca" (YYYY-MM-DD o null)}. '
+    'Lista vacía si no hay.\n'
     '- "esquinas": las 4 esquinas del papel del ticket en la foto, como '
     "[[x, y], ...] con x e y entre 0 y 1 (fracción del ancho y del alto de la "
     "imagen, 0,0 arriba a la izquierda), en orden: arriba-izquierda, "

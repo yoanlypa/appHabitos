@@ -7,6 +7,8 @@ calcularon los servicios. Los importes se escriben a la española
 from datetime import timedelta
 from decimal import Decimal
 
+from app.dominio.tickets import texto_de_vale
+
 from app.dominio.models import Apunte
 from app.nucleo.tiempo import hoy_local
 from app.servicios.resumen import ResumenPeriodo
@@ -321,6 +323,13 @@ def ticket_anotado(apunte, datos) -> str:
     ]
     if datos.iva is not None:
         lineas.append(f"IVA: {euros(datos.iva)}")
+    vales = datos.detalle.get("vales") or []
+    if vales:
+        lineas.append("")
+        lineas.append("📌 Apuntado en tus notas para que no se te olvide:")
+        lineas.extend(f"  {texto_de_vale(v, None)}" for v in vales)
+        lineas.append("Márcalo con /hecha cuando lo uses.")
+        lineas.append("")
     lineas.append(f"Si está mal: /borrar {apunte.id} y vuelve a mandarla.")
     return "\n".join(lineas)
 
