@@ -953,3 +953,73 @@ button.mini.factura {
   margin-left: 0.35rem;
   vertical-align: middle;
 }
+
+/* ---------- Finanzas ---------- */
+
+.selector-mes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin: 0.75rem 0;
+  text-transform: capitalize;
+}
+
+.selector-mes button.mini {
+  font-size: 1.2rem;
+  padding: 0.2rem 0.8rem;
+}
+
+.filtros {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  padding-bottom: 0.2rem;
+}
+
+.filtros button {
+  flex: 0 0 auto;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  background: var(--tarjeta);
+  color: var(--apagado);
+  border: 1px solid var(--borde);
+}
+
+.filtros button.activa {
+  background: var(--acento);
+  color: #fff;
+  border-color: var(--acento);
+}
+
+.filtros small {
+  opacity: 0.75;
+  margin-left: 0.2rem;
+}
+
+.finanzas .dia h3 {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--apagado);
+}
+
+/* En el móvil no caben concepto, importe, cliente y botón en una fila: el
+   concepto ocupa la primera línea entera y el resto baja a la segunda. */
+.apuntes li.pendiente-fila {
+  flex-wrap: wrap;
+}
+.apuntes li.pendiente-fila .concepto {
+  flex: 1 1 100%;
+}
+.apuntes li.pendiente-fila .mini-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.finanzas footer button::first-letter {
+  text-transform: uppercase;
+}

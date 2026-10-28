@@ -295,7 +295,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-252 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+254 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
@@ -408,6 +408,13 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   bot a propósito: quien apunta desde el móvil no aprende dos formas de
   escribir. El CSV se descarga con fetch y no con un `<a href>`, porque la
   ruta exige el header `Authorization`.
+- `web/componentes/Finanzas.tsx` es la pestaña **Finanzas** de la barra
+  (sustituye a Cobros, que va dentro como "Por cobrar": siete botones abajo
+  no caben en el móvil). Mes a mes, con el resumen de `/resumen/mes`, los
+  trabajos y gastos de `GET /apuntes/rango` (`servicios/apuntes.movimientos`,
+  sin notas, extremos incluidos) agrupados por día, filtros Todo / Trabajos /
+  Gastos / Tickets, el 🧾 para el PDF de cada ticket, y el PDF y el CSV del
+  mes elegido. No suma nada en el navegador: los totales los da el backend.
 - Para que el front pueda llamar a la API hizo falta `GET /apuntes`
   (`listar_apuntes()`) y CORS, con los orígenes en `CORS_ORIGENES`
   (por defecto el Vite de local). Verificado que **todas** las respuestas

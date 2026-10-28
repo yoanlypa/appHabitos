@@ -83,6 +83,25 @@ def listar_apuntes(
     return consulta.order_by(Apunte.id.desc()).all()
 
 
+def movimientos(db: Session, user_id: int, desde: date, hasta: date) -> list[Apunte]:
+    """Trabajos y gastos entre dos fechas, incluidas, el más reciente primero.
+
+    Para la pantalla de Finanzas. Sin notas, igual que la lista del día:
+    aquí se mira el dinero, y una nota no lleva.
+    """
+    return (
+        db.query(Apunte)
+        .filter(
+            Apunte.user_id == user_id,
+            Apunte.fecha >= desde,
+            Apunte.fecha <= hasta,
+            Apunte.tipo != "nota",
+        )
+        .order_by(Apunte.fecha.desc(), Apunte.id.desc())
+        .all()
+    )
+
+
 def _suyo(db: Session, user_id: int, apunte_id: int) -> Apunte:
     apunte = (
         db.query(Apunte)

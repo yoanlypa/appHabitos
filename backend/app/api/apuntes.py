@@ -15,6 +15,7 @@ from app.servicios.apuntes import (
     borrar_apunte,
     listar_apuntes,
     marcar_cobrado,
+    movimientos,
 )
 
 router = APIRouter(prefix="/apuntes", tags=["apuntes"])
@@ -27,6 +28,19 @@ def listar(
     db: Session = Depends(get_db),
 ):
     return listar_apuntes(db, user_id, fecha)
+
+
+@router.get("/rango", response_model=list[ApunteSalida])
+def rango(
+    desde: date,
+    hasta: date,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Trabajos y gastos de un periodo, para Finanzas."""
+    if hasta < desde:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "el rango está al revés")
+    return movimientos(db, user_id, desde, hasta)
 
 
 @router.post("", response_model=ApunteCreado, status_code=status.HTTP_201_CREATED)

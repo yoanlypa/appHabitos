@@ -103,6 +103,11 @@ export function crearApunte(token: string, texto: string) {
   })
 }
 
+/** Trabajos y gastos entre dos fechas (incluidas), el más reciente primero. */
+export function movimientos(token: string, desde: string, hasta: string) {
+  return pedir<Apunte[]>(token, `/apuntes/rango?desde=${desde}&hasta=${hasta}`)
+}
+
 export function marcarCobrado(token: string, id: number) {
   return pedir<Apunte>(token, `/apuntes/${id}/cobrado`, { method: 'POST' })
 }
