@@ -4,7 +4,7 @@ Ya está desplegado. Las URLs:
 
 | | |
 |---|---|
-| Web | https://apphabitos.up.railway.app |
+| Web | https://outstanding-wonder-production-f3ca.up.railway.app |
 | API | https://apphabitos-production-66a4.up.railway.app |
 | Bot | [@apphabitos_bot](https://t.me/apphabitos_bot) |
 
