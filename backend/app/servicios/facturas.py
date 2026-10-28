@@ -15,6 +15,7 @@ lo que entendió, igual que con las notas de voz: si está mal, se /borra.
 Lo escaneado y nunca confirmado se queda huérfano; `limpiar_huerfanas()` lo
 borra pasado un día (se llama al escanear) para que no se acumulen fotos que nadie va a usar.
 """
+import io
 import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -26,6 +27,8 @@ from app.dominio.models import Apunte, Factura
 from app.dominio.tickets import DatosTicket, fecha_escrita, interpretar_lectura, texto_de_vale
 from app.nucleo import archivos
 from app.nucleo.lectura_tickets import leer_ticket
+from app.nucleo.paginas_pdf import PdfNoLegible, unir_en_una
+from app.nucleo.paginas_pdf import paginas as paginas_pdf
 from app.nucleo.pdf import PaginaDeDatos, imagenes_a_pdf
 from app.nucleo.tiempo import hoy_local
 from app.servicios.apuntes import crear_nota
@@ -58,7 +61,7 @@ def guardar_factura(db: Session, user_id: int, imagen: bytes, mime: str) -> Fact
     if len(imagen) > archivos.TAMANO_MAXIMO:
         raise FacturaNoValida("la imagen es demasiado grande (máximo 15 MB)")
     if mime not in archivos.EXTENSIONES:
-        raise FacturaNoValida("solo se admiten fotos JPG, PNG, WEBP o HEIC")
+        raise FacturaNoValida("solo se admiten fotos (JPG, PNG, WEBP, HEIC) o PDF")
     factura = Factura(
         user_id=user_id, ruta=archivos.guardar(imagen, mime), mime=mime, tamano=len(imagen)
     )
@@ -66,6 +69,24 @@ def guardar_factura(db: Session, user_id: int, imagen: bytes, mime: str) -> Fact
     db.commit()
     db.refresh(factura)
     return factura
+
+
+def _imagen_para_leer(contenido: bytes, mime: str) -> tuple[bytes, str]:
+    """Lo que se le enseña a la IA: la foto tal cual, o las páginas del PDF.
+
+    Una factura en PDF (la de la luz, la de un proveedor por email) se pinta
+    página a página y se une en una sola imagen, porque el total o la fecha
+    pueden estar en la segunda.
+    """
+    if mime != "application/pdf":
+        return contenido, mime
+    try:
+        hoja = unir_en_una(paginas_pdf(contenido))
+    except PdfNoLegible as exc:
+        raise FacturaNoValida(str(exc)) from exc
+    salida = io.BytesIO()
+    hoja.save(salida, format="JPEG", quality=85)
+    return salida.getvalue(), "image/jpeg"
 
 
 async def escanear(db: Session, user_id: int, imagen: bytes, mime: str) -> TicketEscaneado:
@@ -80,11 +101,13 @@ async def escanear(db: Session, user_id: int, imagen: bytes, mime: str) -> Ticke
     limpiar_huerfanas(db)
     factura = guardar_factura(db, user_id, imagen, mime)
     try:
-        leido = await leer_ticket(imagen, mime)
+        leido = await leer_ticket(*_imagen_para_leer(imagen, mime))
     except Exception:
         borrar_factura(db, user_id, factura.id)
         raise
     datos = interpretar_lectura(leido, hoy_local())
+    if mime == "application/pdf":
+        datos.esquinas = None  # un PDF ya viene recto: no hay papel que enderezar
     # Se guarda todo lo leído, no solo lo que va al gasto: el CIF, las líneas
     # y la base imponible son lo que pide la gestoría, y volver a leer la foto
     # costaría otra llamada.
@@ -397,8 +420,12 @@ async def releer_fechas(db: Session, user_id: int, tanda: int = 25) -> Relectura
     ]
     corregidas, sin_fecha = [], 0
     for factura in candidatas[:tanda]:
-        imagen = archivos.ruta_absoluta(factura.ruta).read_bytes()
-        datos = interpretar_lectura(await leer_ticket(imagen, factura.mime), hoy_local())
+        contenido = archivos.ruta_absoluta(factura.ruta).read_bytes()
+        try:
+            para_leer = _imagen_para_leer(contenido, factura.mime)
+        except FacturaNoValida:
+            continue
+        datos = interpretar_lectura(await leer_ticket(*para_leer), hoy_local())
         # Se guarda lo leído aunque no haya fecha: así no se vuelve a pedir.
         nuevos = _como_json(datos)
         nuevos.setdefault("fecha", None)

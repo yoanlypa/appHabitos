@@ -423,6 +423,12 @@ async def foto_de_ticket(update: Update, contexto: ContextTypes.DEFAULT_TYPE) ->
         fichero_tg, mime = mensaje.photo[-1], "image/jpeg"  # la más grande
     elif mensaje.document and (mensaje.document.mime_type or "").startswith("image/"):
         fichero_tg, mime = mensaje.document, mensaje.document.mime_type
+    elif mensaje.document and (
+        mensaje.document.mime_type == "application/pdf"
+        or (mensaje.document.file_name or "").lower().endswith(".pdf")
+    ):
+        # La factura que llega por email: se lee igual que una foto.
+        fichero_tg, mime = mensaje.document, "application/pdf"
     else:
         return
 
@@ -445,7 +451,7 @@ async def foto_de_ticket(update: Update, contexto: ContextTypes.DEFAULT_TYPE) ->
             )
             return
         except (ErrorDeLectura, FacturaNoValida) as exc:
-            await mensaje.reply_text(f"No he podido leer esa foto: {exc}")
+            await mensaje.reply_text(f"No he podido leer ese ticket: {exc}")
             return
 
         if apunte is None:

@@ -16,6 +16,8 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
+from app.nucleo.paginas_pdf import PdfNoLegible
+from app.nucleo.paginas_pdf import paginas as paginas_pdf
 from app.nucleo.perspectiva import enderezar
 
 # A4 a 150 ppp: de sobra para leer un ticket y el PDF no pesa megas.
@@ -94,13 +96,31 @@ def _como_escaneado(ruta: Path, esquinas: list | None = None) -> Image.Image:
     if recta is None:
         caja = _caja_papel(foto.convert("L"))
         recta = foto if caja is None else foto.crop(caja)
-    hoja = _filtro_documento(recta)
+    return _en_a4(_filtro_documento(recta))
 
+
+def _en_a4(hoja: Image.Image) -> Image.Image:
     pagina = Image.new("RGB", _A4, "white")
     hueco = (_A4[0] - 2 * _MARGEN, _A4[1] - 2 * _MARGEN)
+    hoja = hoja.copy()
     hoja.thumbnail(hueco, Image.LANCZOS)
     pagina.paste(hoja, ((_A4[0] - hoja.width) // 2, _MARGEN))
     return pagina
+
+
+def _paginas_de(ruta: Path, esquinas: list | None) -> list[Image.Image]:
+    """Las páginas A4 de un justificante: una foto escaneada o un PDF tal cual.
+
+    Un PDF (la factura que llega por email) ya es un documento limpio y recto:
+    enderezarlo o pasarle el filtro de sombras solo lo estropearía, así que
+    sus páginas van como están.
+    """
+    if ruta.suffix.lower() == ".pdf":
+        try:
+            return [_en_a4(p) for p in paginas_pdf(ruta.read_bytes())]
+        except PdfNoLegible as exc:
+            raise ImagenNoLegible(str(exc)) from exc
+    return [_como_escaneado(ruta, esquinas)]
 
 
 def _filtro_documento(foto: Image.Image) -> Image.Image:
@@ -242,7 +262,7 @@ def imagenes_a_pdf(
     datos = datos or [None] * len(rutas)
     paginas = []
     for ruta, esquina, pagina_datos in zip(rutas, esquinas, datos):
-        paginas.append(_como_escaneado(ruta, esquina))
+        paginas.extend(_paginas_de(ruta, esquina))
         if pagina_datos is not None:
             paginas.append(_pagina_de_datos(pagina_datos))
     salida = io.BytesIO()

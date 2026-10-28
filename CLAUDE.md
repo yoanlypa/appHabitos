@@ -299,6 +299,15 @@ parte-del-dia/
     piden la fecha de la COMPRA: el ticket de Ballenoil empieza con un
     "Válido hasta 22/11/2026" del cupón. Un apunte de otro día no sale en
     la lista "Hoy" de la web, sino en Finanzas, en su día.
+  - **También se leen facturas en PDF** (las que llegan por email). El bot
+    atiende `filters.Document.PDF` y la web tiene "📄 Subir PDF". Se guarda
+    el PDF original; para leerlo, `nucleo/paginas_pdf.py` (pypdfium2, que
+    trae el motor de Chrome dentro y no necesita nada en el servidor) pinta
+    hasta 4 páginas y las une en una imagen, porque el total o la fecha
+    pueden estar en la segunda. En el PDF de salida sus páginas van tal
+    cual, sin enderezar ni filtro de sombras: ya es un documento limpio, y
+    las esquinas que diga la IA se descartan. Un PDF roto o con contraseña
+    da `FacturaNoValida` antes de pagar ninguna lectura.
   - **Los vales del ticket van al buzón como notas pendientes** (cheques de
     devolución, cupones, vales de descuento). Visto en un ticket real de
     Ballenoil: un cheque de 25,34 € por pagar con un billete de 100 y un
@@ -348,7 +357,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-300 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+302 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

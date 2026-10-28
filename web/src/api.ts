@@ -491,7 +491,7 @@ export type TicketLeido = {
 /** Sube la foto y la lee. No anota nada: eso es `confirmarGastoDeFactura`. */
 export function escanearFactura(token: string, imagen: Blob) {
   const datos = new FormData()
-  datos.append('imagen', imagen, 'ticket.jpg')
+  datos.append('imagen', imagen, imagen.type === 'application/pdf' ? 'factura.pdf' : 'ticket.jpg')
   // Sin Content-Type a mano: el navegador pone el multipart con su boundary.
   return pedir<TicketLeido>(token, '/facturas/escanear', { method: 'POST', body: datos })
 }

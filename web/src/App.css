@@ -1075,3 +1075,17 @@ button.mini.factura {
 button.enlace.borrar-enlace {
   color: var(--gasto);
 }
+
+.escaner-botones {
+  display: flex;
+  gap: 0.5rem;
+}
+.escaner-botones button.escanear {
+  flex: 2;
+}
+.escaner-botones button.escanear.secundario {
+  flex: 1;
+  background: var(--tarjeta);
+  color: var(--texto);
+  border: 1px solid var(--borde);
+}

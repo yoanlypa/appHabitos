@@ -438,3 +438,49 @@ async def test_releer_pone_en_su_dia_lo_que_quedo_en_hoy(db, monkeypatch):
     leidas.clear()
     otra = await facturas.releer_fechas(db, USUARIO)
     assert leidas == [] and not otra.corregidas
+
+
+def _pdf(paginas: int = 2) -> bytes:
+    """Una factura en PDF como las que llegan por email (aquí, páginas lisas)."""
+    import io as _io
+    from PIL import Image as _Image
+
+    hojas = [_Image.new("RGB", (620, 877), (255, 255, 255)) for _ in range(paginas)]
+    salida = _io.BytesIO()
+    hojas[0].save(salida, format="PDF", save_all=True, append_images=hojas[1:])
+    return salida.getvalue()
+
+
+class TestFacturaEnPdf:
+    """Un PDF pasa por lo mismo que una foto: se lee, se anota y vuelve en PDF."""
+
+    @pytest.mark.asyncio
+    async def test_se_lee_y_se_anota(self, db, monkeypatch):
+        vistas = []
+
+        async def falso(imagen, mime):
+            vistas.append(mime)
+            return {"total": "56,20", "fecha": "12/10/2026", "comercio": "Endesa",
+                    "esquinas": [[0, 0], [1, 0], [1, 1], [0, 1]]}
+
+        monkeypatch.setattr(facturas, "leer_ticket", falso)
+        leido, apunte = await facturas.escanear_y_anotar(db, USUARIO, _pdf(2), "application/pdf", None, "bot")
+        # A la IA le llega una imagen (las dos páginas unidas), no el PDF.
+        assert vistas == ["image/jpeg"]
+        assert (apunte.importe, apunte.fecha) == (Decimal("56.20"), date(2026, 10, 12))
+        assert leido.factura.ruta.endswith(".pdf")  # se guarda el PDF original
+        assert leido.factura.esquinas is None  # un PDF no se endereza
+
+        pdf, _ = facturas.pdf_de_factura(db, USUARIO, leido.factura.id)
+        # Las dos páginas del original y la ficha de datos.
+        assert pdf.count(b"/Type /Page") - pdf.count(b"/Type /Pages") == 3
+
+    @pytest.mark.asyncio
+    async def test_un_pdf_roto_no_deja_rastro(self, db, monkeypatch):
+        async def falso(_i, _m):
+            raise AssertionError("no debería llegar a leerse")
+
+        monkeypatch.setattr(facturas, "leer_ticket", falso)
+        with pytest.raises(facturas.FacturaNoValida):
+            await facturas.escanear(db, USUARIO, b"%PDF-1.4 basura", "application/pdf")
+        assert db.query(Factura).count() == 0

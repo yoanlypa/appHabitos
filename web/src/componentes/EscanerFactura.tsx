@@ -1,6 +1,9 @@
 /**
  * Escanear un ticket y anotarlo como gasto.
  *
+ * También acepta un PDF (la factura que llega por email): va tal cual, sin
+ * reducir, y el backend lo pinta para leerlo.
+ *
  * Tres pasos: foto → lectura → formulario ya relleno → guardar. Lo leído se
  * enseña antes de anotarlo a propósito: si el modelo leyó 234,00 donde ponía
  * 23,40, se ve aquí y no al cuadrar el mes.
@@ -39,6 +42,7 @@ async function reducir(fichero: File): Promise<Blob> {
 
 export function EscanerFactura({ token, onGuardado, onError }: Props) {
   const entrada = useRef<HTMLInputElement>(null)
+  const entradaPdf = useRef<HTMLInputElement>(null)
   const [leyendo, setLeyendo] = useState(false)
   const [vista, setVista] = useState<string | null>(null)
   const [leido, setLeido] = useState<TicketLeido | null>(null)
@@ -59,9 +63,11 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
     if (!fichero) return
     setLeyendo(true)
     try {
-      const imagen = await reducir(fichero)
+      // Un PDF (la factura del email) va tal cual: ya es un documento limpio.
+      const esPdf = fichero.type === 'application/pdf' || fichero.name.toLowerCase().endsWith('.pdf')
+      const imagen = esPdf ? new Blob([fichero], { type: 'application/pdf' }) : await reducir(fichero)
       const resultado = await escanearFactura(token, imagen)
-      setVista(URL.createObjectURL(imagen))
+      setVista(esPdf ? null : URL.createObjectURL(imagen))
       setLeido(resultado)
       setConcepto(resultado.concepto)
       setImporte(resultado.total ? resultado.total.replace('.', ',') : '')
@@ -106,20 +112,41 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
         hidden
         onChange={(e) => void elegida(e)}
       />
-      <button
-        type="button"
-        className="escanear"
-        disabled={leyendo}
-        onClick={() => entrada.current?.click()}
-      >
-        {leyendo ? 'Leyendo el ticket…' : '📷 Escanear ticket'}
-      </button>
+      <input
+        ref={entradaPdf}
+        type="file"
+        accept="application/pdf,.pdf"
+        hidden
+        onChange={(e) => void elegida(e)}
+      />
+      <div className="escaner-botones">
+        <button
+          type="button"
+          className="escanear"
+          disabled={leyendo}
+          onClick={() => entrada.current?.click()}
+        >
+          {leyendo ? 'Leyendo…' : '📷 Escanear ticket'}
+        </button>
+        <button
+          type="button"
+          className="escanear secundario"
+          disabled={leyendo}
+          onClick={() => entradaPdf.current?.click()}
+        >
+          📄 Subir PDF
+        </button>
+      </div>
 
       {leido && (
         <div className="modal-fondo" role="dialog" aria-modal="true" aria-label="Gasto escaneado">
           <form className="modal" onSubmit={guardar}>
             <h3>Gasto del ticket</h3>
-            {vista && <img className="ticket-vista" src={vista} alt="Foto del ticket" />}
+            {vista ? (
+              <img className="ticket-vista" src={vista} alt="Foto del ticket" />
+            ) : (
+              <p className="ayuda">📄 Factura en PDF leída.</p>
+            )}
             {!leido.total && (
               <p className="error">No he leído el total con seguridad: escríbelo tú.</p>
             )}
