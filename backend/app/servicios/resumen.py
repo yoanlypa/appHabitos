@@ -43,6 +43,20 @@ def resumen_dia(db: Session, user_id: int, fecha: date | None = None) -> Resumen
     return _resumir(apuntes)
 
 
+def resumen_rango(db: Session, user_id: int, desde: date, hasta: date) -> ResumenPeriodo:
+    """Totales entre dos fechas, las dos incluidas: el año, el mes pasado, lo que sea.
+
+    Para los periodos de Finanzas. Usa la misma suma que el día y el mes, así
+    que el total de un año es exactamente la suma de sus meses.
+    """
+    apuntes = (
+        db.query(Apunte)
+        .filter(Apunte.user_id == user_id, Apunte.fecha >= desde, Apunte.fecha <= hasta)
+        .all()
+    )
+    return _resumir(apuntes)
+
+
 def resumen_mes(db: Session, user_id: int, anio: int, mes: int) -> ResumenPeriodo:
     desde = date(anio, mes, 1)
     hasta = date(anio + 1, 1, 1) if mes == 12 else date(anio, mes + 1, 1)

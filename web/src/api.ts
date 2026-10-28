@@ -117,6 +117,11 @@ export function resumenDia(token: string, fecha?: string) {
   return pedir<Resumen>(token, `/resumen/dia${query}`)
 }
 
+/** Totales entre dos fechas incluidas (año, mes pasado, personalizado...). */
+export function resumenRango(token: string, desde: string, hasta: string) {
+  return pedir<Resumen>(token, `/resumen/rango?desde=${desde}&hasta=${hasta}`)
+}
+
 export function resumenMes(token: string, anio: number, mes: number) {
   return pedir<Resumen>(token, `/resumen/mes?anio=${anio}&mes=${mes}`)
 }

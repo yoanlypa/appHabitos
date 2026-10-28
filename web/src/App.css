@@ -1023,3 +1023,29 @@ button.mini.factura {
 .finanzas footer button::first-letter {
   text-transform: uppercase;
 }
+
+.filtros.periodos {
+  margin-top: 0.75rem;
+}
+
+.rango-propio {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.rango-propio label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--apagado);
+}
+
+/* Seis periodos no caben en una fila del móvil: en dos se ven todos sin
+   tener que deslizar, que es como se pierde que existe "Año anterior". */
+.filtros.periodos {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}

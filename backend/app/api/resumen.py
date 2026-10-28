@@ -8,7 +8,7 @@ from app.api.dependencias import get_current_user_id
 from app.api.schemas import ResumenSalida, TrimestreSalida
 from app.nucleo.db import get_db
 from app.nucleo.tiempo import hoy_local
-from app.servicios.resumen import ResumenPeriodo, resumen_dia, resumen_mes
+from app.servicios.resumen import ResumenPeriodo, resumen_dia, resumen_mes, resumen_rango
 from app.servicios.trimestres import resumen_trimestre, trimestre_de
 
 router = APIRouter(prefix="/resumen", tags=["resumen"])
@@ -35,6 +35,19 @@ def mes(
     db: Session = Depends(get_db),
 ):
     return _a_salida(resumen_mes(db, user_id, anio, mes))
+
+
+@router.get("/rango", response_model=ResumenSalida)
+def rango(
+    desde: date,
+    hasta: date,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Totales de un periodo cualquiera (las dos fechas incluidas)."""
+    if hasta < desde:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "el rango está al revés")
+    return _a_salida(resumen_rango(db, user_id, desde, hasta))
 
 
 @router.get("/trimestre", response_model=TrimestreSalida)

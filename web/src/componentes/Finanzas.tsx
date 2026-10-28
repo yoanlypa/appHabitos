@@ -1,7 +1,8 @@
 /**
- * Finanzas: todo el dinero del mes en una pantalla.
+ * Finanzas: todo el dinero de un periodo en una pantalla.
  *
- * Arriba el resumen (cobrado, pendiente, gastos, neto) que da el backend —
+ * El periodo se elige arriba: hoy, este mes, el anterior, este año, el
+ * anterior o unas fechas a mano. Debajo, el resumen (cobrado, pendiente, gastos, neto) que da el backend —
  * aquí no se suma nada, que los importes van en céntimos allí. Debajo, los
  * movimientos del mes con filtros: trabajos, gastos, tickets escaneados y lo
  * pendiente de cobro. Los tickets llevan 🧾 para abrir su PDF.
@@ -16,13 +17,63 @@ import {
   descargarCsv,
   marcarCobrado,
   movimientos,
-  resumenMes,
+  resumenRango,
   TokenInvalido,
   type Apunte,
   type Resumen,
 } from '../api'
 import { Cobros } from './Cobros'
 import { euros, fechaCorta, iso, MESES } from '../utiles'
+
+const PERIODOS = [
+  { id: 'hoy', nombre: 'Hoy' },
+  { id: 'mes', nombre: 'Este mes' },
+  { id: 'mes_anterior', nombre: 'Mes anterior' },
+  { id: 'anio', nombre: 'Este año' },
+  { id: 'anio_anterior', nombre: 'Año anterior' },
+  { id: 'personalizado', nombre: 'Fechas…' },
+] as const
+type Periodo = (typeof PERIODOS)[number]['id']
+
+/** Las fechas de cada periodo, desde y hasta incluidas, en hora local. */
+function rangoDe(periodo: Periodo, hoy: Date): [string, string] {
+  const a = hoy.getFullYear()
+  const m = hoy.getMonth()
+  switch (periodo) {
+    case 'hoy':
+      return [iso(hoy), iso(hoy)]
+    case 'mes':
+      return [iso(new Date(a, m, 1)), iso(hoy)]
+    case 'mes_anterior':
+      return [iso(new Date(a, m - 1, 1)), iso(new Date(a, m, 0))]
+    case 'anio':
+      return [iso(new Date(a, 0, 1)), iso(hoy)]
+    case 'anio_anterior':
+      return [iso(new Date(a - 1, 0, 1)), iso(new Date(a - 1, 11, 31))]
+    default:
+      return [iso(new Date(a, m, 1)), iso(hoy)]
+  }
+}
+
+/** Cómo se nombra el periodo en los botones de descarga y en los vacíos. */
+function titulo(periodo: Periodo, desde: string, hasta: string, hoy: Date) {
+  const a = hoy.getFullYear()
+  const m = hoy.getMonth()
+  switch (periodo) {
+    case 'hoy':
+      return 'hoy'
+    case 'mes':
+      return MESES[m]
+    case 'mes_anterior':
+      return MESES[(m + 11) % 12]
+    case 'anio':
+      return String(a)
+    case 'anio_anterior':
+      return String(a - 1)
+    default:
+      return desde === hasta ? fechaCorta(desde) : `${fechaCorta(desde)} – ${fechaCorta(hasta)}`
+  }
+}
 
 type Props = {
   token: string
@@ -46,8 +97,9 @@ function pasa(a: Apunte, filtro: Filtro) {
 export function Finanzas({ token, onTokenInvalido }: Props) {
   const hoy = new Date()
   const [vista, setVista] = useState<'movimientos' | 'cobrar'>('movimientos')
-  const [anio, setAnio] = useState(hoy.getFullYear())
-  const [mes, setMes] = useState(hoy.getMonth() + 1)
+  const [periodo, setPeriodo] = useState<Periodo>('mes')
+  // Las fechas a mano: empiezan en el mes en curso, que es lo más pedido.
+  const [propias, setPropias] = useState<[string, string]>(() => rangoDe('mes', new Date()))
   const [filtro, setFiltro] = useState<Filtro>('todo')
   const [lista, setLista] = useState<Apunte[]>([])
   const [resumen, setResumen] = useState<Resumen | null>(null)
@@ -55,9 +107,9 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
 
-  const desde = iso(new Date(anio, mes - 1, 1))
-  const hasta = iso(new Date(anio, mes, 0))
-  const esEsteMes = anio === hoy.getFullYear() && mes === hoy.getMonth() + 1
+  const [desde, hasta] = periodo === 'personalizado' ? propias : rangoDe(periodo, hoy)
+  const rangoValido = desde <= hasta
+  const nombre = titulo(periodo, desde, hasta, hoy)
 
   function fallo(e: unknown) {
     if (e instanceof TokenInvalido) return onTokenInvalido()
@@ -65,9 +117,9 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
   }
 
   useEffect(() => {
-    if (vista !== 'movimientos') return
+    if (vista !== 'movimientos' || !rangoValido) return
     let cancelado = false
-    Promise.all([movimientos(token, desde, hasta), resumenMes(token, anio, mes)])
+    Promise.all([movimientos(token, desde, hasta), resumenRango(token, desde, hasta)])
       .then(([apuntes, totales]) => {
         if (cancelado) return
         setLista(apuntes)
@@ -83,7 +135,7 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
     return () => {
       cancelado = true
     }
-  }, [token, vista, anio, mes, desde, hasta, recargas, onTokenInvalido])
+  }, [token, vista, desde, hasta, rangoValido, recargas, onTokenInvalido])
 
   const visibles = useMemo(() => lista.filter((a) => pasa(a, filtro)), [lista, filtro])
   const cuantos = useMemo(
@@ -101,11 +153,9 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
     return grupos
   }, [visibles])
 
-  function moverMes(paso: number) {
-    const d = new Date(anio, mes - 1 + paso, 1)
+  function elegir(nuevo: Periodo) {
+    setPeriodo(nuevo)
     setCargando(true)
-    setAnio(d.getFullYear())
-    setMes(d.getMonth() + 1)
   }
 
   async function accion(hacer: () => Promise<unknown>) {
@@ -136,22 +186,47 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
 
       {vista === 'movimientos' && (
         <>
-          <div className="selector-mes">
-            <button className="mini" onClick={() => moverMes(-1)} aria-label="Mes anterior">
-              ‹
-            </button>
-            <strong>
-              {MESES[mes - 1]} {anio}
-            </strong>
-            <button
-              className="mini"
-              onClick={() => moverMes(1)}
-              disabled={esEsteMes}
-              aria-label="Mes siguiente"
-            >
-              ›
-            </button>
+          <div className="filtros periodos">
+            {PERIODOS.map((p) => (
+              <button
+                key={p.id}
+                className={periodo === p.id ? 'activa' : ''}
+                onClick={() => elegir(p.id)}
+              >
+                {p.nombre}
+              </button>
+            ))}
           </div>
+
+          {periodo === 'personalizado' && (
+            <div className="rango-propio">
+              <label>
+                Desde
+                <input
+                  type="date"
+                  value={propias[0]}
+                  max={iso(hoy)}
+                  onChange={(e) => {
+                    setPropias([e.target.value, propias[1]])
+                    setCargando(true)
+                  }}
+                />
+              </label>
+              <label>
+                Hasta
+                <input
+                  type="date"
+                  value={propias[1]}
+                  max={iso(hoy)}
+                  onChange={(e) => {
+                    setPropias([propias[0], e.target.value])
+                    setCargando(true)
+                  }}
+                />
+              </label>
+            </div>
+          )}
+          {!rangoValido && <p className="error">La fecha «desde» va después de «hasta».</p>}
 
           {resumen && (
             <section className="totales">
@@ -191,18 +266,21 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
           {error && <p className="error">{error}</p>}
 
           <section className="apuntes">
-            {cargando ? (
+            {!rangoValido ? null : cargando ? (
               <p className="vacio">Cargando…</p>
             ) : porDia.length === 0 ? (
               <p className="vacio">
                 {filtro === 'tickets'
-                  ? 'No hay tickets este mes. Mándale una foto al bot o usa «Escanear ticket» en Hoy.'
-                  : 'Nada anotado este mes.'}
+                  ? `No hay tickets en ${nombre}. Mándale una foto al bot o usa «Escanear ticket» en Hoy.`
+                  : `Nada anotado en ${nombre}.`}
               </p>
             ) : (
               porDia.map(([fecha, apuntes]) => (
                 <div key={fecha} className="dia">
-                  <h3>{fechaCorta(fecha)}</h3>
+                  <h3>
+                    {fechaCorta(fecha)}
+                    {fecha.slice(0, 4) !== String(hoy.getFullYear()) && ` ${fecha.slice(0, 4)}`}
+                  </h3>
                   <ul>
                     {apuntes.map((a) => (
                       <li key={a.id} className={a.tipo}>
@@ -243,13 +321,13 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
               className="enlace"
               onClick={() => void accion(() => abrirFacturasDelPeriodo(token, desde, hasta))}
             >
-              Tickets de {MESES[mes - 1]} en PDF
+              Tickets de {nombre} en PDF
             </button>
             <button
               className="enlace"
               onClick={() => void accion(() => descargarCsv(token, desde, hasta))}
             >
-              {MESES[mes - 1]} en CSV
+              CSV de {nombre}
             </button>
           </footer>
         </>

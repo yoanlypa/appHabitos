@@ -48,3 +48,19 @@ def test_rango_al_reves_y_sin_token(cliente, db):
     cab = {"Authorization": f"Bearer {generar_token(db, USUARIO)}"}
     assert cliente.get("/apuntes/rango?desde=2026-10-31&hasta=2026-10-01", headers=cab).status_code == 422
     assert cliente.get("/apuntes/rango?desde=2026-10-01&hasta=2026-10-31").status_code == 401
+
+
+def test_el_total_del_ano_es_la_suma_de_sus_meses(cliente, db):
+    """Un periodo largo no puede contar distinto que sus trozos."""
+    _apunte(db, date(2026, 1, 1), "trabajo", "100")
+    _apunte(db, date(2026, 6, 15), "gasto", "30")
+    _apunte(db, date(2026, 12, 31), "trabajo", "50")
+    _apunte(db, date(2025, 12, 31), "trabajo", "999")  # año anterior: fuera
+    cab = {"Authorization": f"Bearer {generar_token(db, USUARIO)}"}
+    anio = cliente.get("/resumen/rango?desde=2026-01-01&hasta=2026-12-31", headers=cab).json()
+    assert anio == {"cobrado": "150.00", "pendiente": "0.00", "gastos": "30.00", "neto": "120.00"}
+    meses = [
+        cliente.get(f"/resumen/mes?anio=2026&mes={m}", headers=cab).json()["neto"] for m in range(1, 13)
+    ]
+    assert sum(Decimal(n) for n in meses) == Decimal(anio["neto"])
+    assert cliente.get("/resumen/rango?desde=2026-02-01&hasta=2026-01-01", headers=cab).status_code == 422
