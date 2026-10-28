@@ -379,3 +379,62 @@ def test_cambiar_la_fecha_de_un_apunte(db):
     assert movido.fecha == date(2026, 1, 1)
     with pytest.raises(FechaNoValida):
         cambiar_fecha(db, USUARIO, apunte.id, "mañana")
+
+
+class TestFechasEspanolas:
+    """La causa de que casi todos los tickets cayeran en "hoy"."""
+
+    @pytest.mark.parametrize(
+        "leida,dia,hora",
+        [
+            ("2026-10-24", date(2026, 10, 24), None),
+            ("24/10/2026", date(2026, 10, 24), None),
+            ("24/10/2026 19:26:28", date(2026, 10, 24), "19:26"),
+            ("24-10-26", date(2026, 10, 24), None),
+            ("24.10.2026", date(2026, 10, 24), None),
+            ("Fecha: 24/10/2026", date(2026, 10, 24), None),
+            ("31/02/2026", None, None),  # no existe
+        ],
+    )
+    def test_formatos(self, leida, dia, hora):
+        d = interpretar_lectura({"fecha": leida}, HOY)
+        assert d.fecha == dia
+        assert d.detalle.get("hora") == hora
+
+    def test_el_dia_va_primero(self):
+        """03/10 es 3 de octubre, no 10 de marzo."""
+        assert interpretar_lectura({"fecha": "03/10/2026"}, HOY).fecha == date(2026, 10, 3)
+
+
+@pytest.mark.asyncio
+async def test_releer_pone_en_su_dia_lo_que_quedo_en_hoy(db, monkeypatch):
+    # Dos tickets subidos con la versión que no entendía "24/10/2026": sin fecha.
+    con_fecha = facturas.guardar_factura(db, USUARIO, _foto(), "image/jpeg")
+    a1 = facturas.anotar_gasto(db, USUARIO, con_fecha.id, "gasolina", Decimal("74.66"), HOY, "bot")
+    ilegible = facturas.guardar_factura(db, USUARIO, _foto(), "image/jpeg")
+    a2 = facturas.anotar_gasto(db, USUARIO, ilegible.id, "x", Decimal("5"), HOY, "bot")
+    # Uno ya bien leído: no se toca ni se paga otra lectura.
+    bien = facturas.guardar_factura(db, USUARIO, _foto(), "image/jpeg")
+    bien.datos = '{"fecha": "2026-10-08"}'
+    db.commit()
+    facturas.anotar_gasto(db, USUARIO, bien.id, "tacos", Decimal("8.08"), date(2026, 10, 8), "bot")
+
+    leidas = []
+
+    async def falso(imagen, mime):
+        leidas.append(1)
+        return {"total": 1, "fecha": "24/10/2026" if len(leidas) == 1 else None}
+
+    monkeypatch.setattr(facturas, "leer_ticket", falso)
+    resultado = await facturas.releer_fechas(db, USUARIO)
+    assert len(leidas) == 2  # el bien leído no se relee
+    assert [c.apunte.id for c in resultado.corregidas] == [a1.id]
+    db.refresh(a1)
+    db.refresh(a2)
+    assert a1.fecha == date(2026, 10, 24)
+    assert a2.fecha == HOY and resultado.sin_fecha == 1  # sin fecha: se queda como estaba
+
+    # Segunda vez: nada que hacer, ni siquiera el que no tenía fecha.
+    leidas.clear()
+    otra = await facturas.releer_fechas(db, USUARIO)
+    assert leidas == [] and not otra.corregidas

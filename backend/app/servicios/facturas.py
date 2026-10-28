@@ -353,3 +353,65 @@ def _nombre_pdf(factura: Factura) -> str:
     concepto = "".join(c if c.isalnum() else "-" for c in apunte.concepto.lower())
     concepto = "-".join(p for p in concepto.split("-") if p)[:40]
     return f"{apunte.fecha.isoformat()}-{concepto or 'ticket'}.pdf"
+
+
+@dataclass
+class FechaCorregida:
+    apunte: Apunte
+    antes: date
+
+
+@dataclass
+class Relectura:
+    corregidas: list
+    sin_fecha: int  # releídos en los que tampoco se encontró la fecha
+    quedan: int  # pendientes para otra tanda
+
+
+def _sin_fecha_leida(factura: Factura) -> bool:
+    """Sin la clave "fecha": nunca se leyó bien. Con fecha null: ya se releyó
+    y tampoco salía, y no tiene sentido pagar otra vez por lo mismo."""
+    return "fecha" not in datos_leidos(factura)
+
+
+async def releer_fechas(db: Session, user_id: int, tanda: int = 25) -> Relectura:
+    """Vuelve a leer los tickets cuya fecha no se entendió y los pone en su día.
+
+    Existe por un fallo real: la fecha "24/10/2026" (como la escriben los
+    tickets) se descartaba por no venir como "2026-10-24", y casi todo lo
+    subido cayó en el día en que se subió. Las fotos están guardadas, así que
+    se pueden releer: unas décimas de céntimo por ticket.
+
+    Solo toca los que no tienen fecha leída, y solo cambia el día si ahora la
+    encuentra: si no, el apunte se queda como estaba. No vuelve a crear las
+    notas de los vales, que si ya se crearon saldrían repetidas. Va por
+    tandas para que una lista larga no deje el bot colgado minutos.
+    """
+    candidatas = [
+        f
+        for f in db.query(Factura)
+        .filter(Factura.user_id == user_id, Factura.apunte_id.isnot(None))
+        .order_by(Factura.id)
+        .all()
+        if _sin_fecha_leida(f) and archivos.ruta_absoluta(f.ruta).exists()
+    ]
+    corregidas, sin_fecha = [], 0
+    for factura in candidatas[:tanda]:
+        imagen = archivos.ruta_absoluta(factura.ruta).read_bytes()
+        datos = interpretar_lectura(await leer_ticket(imagen, factura.mime), hoy_local())
+        # Se guarda lo leído aunque no haya fecha: así no se vuelve a pedir.
+        nuevos = _como_json(datos)
+        nuevos.setdefault("fecha", None)
+        factura.datos = json.dumps(nuevos, ensure_ascii=False)
+        if datos.esquinas and not factura.esquinas:
+            factura.esquinas = json.dumps(datos.esquinas)
+        apunte = factura.apunte
+        if datos.fecha is None:
+            sin_fecha += 1
+        elif datos.fecha != apunte.fecha:
+            corregidas.append(FechaCorregida(apunte=apunte, antes=apunte.fecha))
+            apunte.fecha = datos.fecha
+        db.commit()
+    return Relectura(
+        corregidas=corregidas, sin_fecha=sin_fecha, quedan=max(0, len(candidatas) - tanda)
+    )

@@ -71,6 +71,7 @@ def ayuda() -> str:
         "  /cobrado <número> — marca un trabajo como cobrado\n"
         "  /borrar <número> — borra un apunte mal escrito\n"
         "  /fecha <número> 15/10 — cambia el día de un apunte\n"
+        "  /releer — pone en su día los tickets que quedaron en el día equivocado\n"
         "  /agenda — lo que toca hoy\n"
         "  /manana — lo que toca mañana\n"
         "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
@@ -367,3 +368,23 @@ def sin_facturas(desde) -> str:
 
 def fecha_cambiada(apunte) -> str:
     return f"📅 Movido al {dia_con_nombre(apunte.fecha)} (#{apunte.id}): {apunte.concepto}"
+
+
+def relectura(resultado) -> str:
+    if not resultado.corregidas and not resultado.sin_fecha:
+        return "Todos tus tickets ya tienen su fecha. No había nada que corregir."
+    lineas = []
+    if resultado.corregidas:
+        lineas.append(f"📅 He puesto en su día {len(resultado.corregidas)} tickets:")
+        for c in resultado.corregidas[:30]:
+            lineas.append(
+                f"  #{c.apunte.id} {c.apunte.concepto}: {c.antes:%d/%m} → {c.apunte.fecha:%d/%m/%Y}"
+            )
+    if resultado.sin_fecha:
+        lineas.append(
+            f"⚠️ En {resultado.sin_fecha} no he encontrado la fecha ni releyéndolos. "
+            "Cámbiala a mano: /fecha <número> 15/10"
+        )
+    if resultado.quedan:
+        lineas.append(f"Quedan {resultado.quedan} por revisar: manda /releer otra vez.")
+    return "\n".join(lineas)

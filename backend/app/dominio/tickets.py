@@ -80,14 +80,47 @@ def _importe(valor, decimales: int = 2) -> Decimal | None:
     return importe.quantize(Decimal(10) ** -decimales, rounding=ROUND_HALF_UP)
 
 
-def _fecha(valor, hoy: date) -> date | None:
+_RE_FECHA_ISO = re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})")
+# Día primero, como se escribe en España: 24/10/2026, 24-10-26, 24.10.2026
+_RE_FECHA_ES = re.compile(r"(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})")
+_RE_HORA = re.compile(r"\b(\d{1,2}):(\d{2})(?::\d{2})?\b")
+
+
+def _fecha_y_hora(valor) -> tuple[date | None, str | None]:
+    """La fecha y la hora de un texto, venga como venga.
+
+    Se pide al modelo "YYYY-MM-DD", pero a menudo copia el formato del ticket
+    ("24/10/2026 19:26:28"). Antes eso se descartaba y el gasto caía en el
+    día en que se subió: casi todos los tickets de Yoa acabaron en "hoy".
+    """
     if not isinstance(valor, str):
-        return None
-    try:
-        leida = date.fromisoformat(valor.strip()[:10])
-    except ValueError:
-        return None
-    if leida > hoy or hoy - leida > _ANTIGUEDAD_MAXIMA:
+        return None, None
+    texto = valor.strip()
+    fecha = None
+    if encaje := _RE_FECHA_ISO.search(texto):
+        anio, mes, dia = (int(g) for g in encaje.groups())
+    elif encaje := _RE_FECHA_ES.search(texto):
+        dia, mes, anio = (int(g) for g in encaje.groups())
+        if anio < 100:
+            anio += 2000
+    else:
+        encaje = None
+    if encaje:
+        try:
+            fecha = date(anio, mes, dia)
+        except ValueError:
+            fecha = None
+    hora = None
+    if encaje_hora := _RE_HORA.search(texto[encaje.end():] if encaje else texto):
+        h, m = int(encaje_hora.group(1)), int(encaje_hora.group(2))
+        if h < 24 and m < 60:
+            hora = f"{h:02d}:{m:02d}"
+    return fecha, hora
+
+
+def _fecha(valor, hoy: date) -> date | None:
+    leida, _ = _fecha_y_hora(valor)
+    if leida is None or leida > hoy or hoy - leida > _ANTIGUEDAD_MAXIMA:
         return None
     return leida
 
@@ -298,9 +331,10 @@ def interpretar_lectura(datos: dict, hoy: date) -> DatosTicket:
     descuento = _importe(datos.get("descuento"))
     if descuento is not None:
         descuento = abs(descuento)
-    hora = _texto(datos.get("hora"), 5)
-    if hora and not re.fullmatch(r"\d{1,2}:\d{2}", hora):
-        hora = None
+    # La hora puede venir sola ("19:26:28") o pegada a la fecha.
+    _, hora = _fecha_y_hora(datos.get("hora"))
+    if hora is None:
+        _, hora = _fecha_y_hora(datos.get("fecha"))
     documento = datos.get("documento")
 
     detalle = {

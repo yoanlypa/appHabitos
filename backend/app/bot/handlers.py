@@ -49,6 +49,7 @@ from app.servicios.facturas import (
     escanear_y_anotar,
     pdf_de_factura,
     pdf_del_periodo,
+    releer_fechas,
 )
 
 
@@ -484,3 +485,21 @@ async def facturas(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
         document=InputFile(contenido, filename=f"facturas-{desde:%Y-%m}.pdf"),
         caption=formato.facturas_del_mes(desde),
     )
+
+
+async def releer(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """/releer: los tickets que quedaron en el día en que se subieron, a su fecha."""
+    await update.message.reply_text("Releyendo tus tickets sin fecha… dame un momento.")
+    await update.message.chat.send_action(ChatAction.TYPING)
+    with sesion() as db:
+        try:
+            resultado = await releer_fechas(db, update.effective_user.id)
+        except LecturaNoDisponible:
+            await update.message.reply_text("No sé leer tickets: falta configurar OPENAI_API_KEY.")
+            return
+        except ErrorDeLectura as exc:
+            await update.message.reply_text(
+                f"Se ha cortado a mitad: {exc}\nLo ya corregido se queda. Prueba /releer más tarde."
+            )
+            return
+        await update.message.reply_text(formato.relectura(resultado))

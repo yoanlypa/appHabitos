@@ -273,6 +273,17 @@ parte-del-dia/
     las gasolineras, vistas en un ticket real: el total es lo suministrado
     (74,66), no lo entregado (100,00), y un "cheque devolución" es el cambio,
     no un abono.
+  - **La fecha se entiende escrita a la española.** Se pedía "YYYY-MM-DD"
+    y solo se aceptaba eso, pero el modelo copia a menudo el formato del
+    ticket ("24/10/2026 19:26:28"): se descartaba y casi todos los tickets
+    de Yoa cayeron en el día en que se subieron. `_fecha_y_hora()` en
+    `dominio/tickets.py` acepta ISO y día/mes/año con `/ - .`, año de dos
+    cifras y la hora pegada. El día va primero: 03/10 es 3 de octubre.
+    Para lo ya subido está `/releer` (`servicios/facturas.releer_fechas`):
+    relee la foto guardada de los tickets sin fecha leída, los mueve a su día
+    si ahora la encuentra, guarda lo leído (con `"fecha": null` si tampoco
+    sale, para no pagar otra vez) y no repite las notas de los vales. Por
+    tandas de 25 para no colgar el bot.
   - **El gasto va al día del ticket, no al día en que se sube.** Ya era así
     (la fecha leída va a `anotar_gasto`), pero había dos agujeros: si la IA
     no leía la fecha se ponía hoy sin decir nada, y los tickets de más de dos
@@ -337,7 +348,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-282 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+291 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
