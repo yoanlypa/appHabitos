@@ -1049,3 +1049,29 @@ button.mini.factura {
   flex-wrap: wrap;
   overflow-x: visible;
 }
+
+/* ---------- Editar movimientos ---------- */
+
+.apuntes li.tocable {
+  cursor: pointer;
+}
+.apuntes li.tocable:active {
+  background: var(--borde);
+}
+
+.anadir {
+  margin: 0.25rem 0 0.75rem;
+}
+.anadir button.escanear {
+  margin-top: 0;
+}
+
+.modal .botones-derecha {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+button.enlace.borrar-enlace {
+  color: var(--gasto);
+}

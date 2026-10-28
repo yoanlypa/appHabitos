@@ -50,6 +50,17 @@ class ApunteCambios(BaseModel):
     importe: Decimal | None = None
     pendiente: bool | None = None
     fecha: date | None = None
+    tipo: str | None = None  # "trabajo" | "gasto"
+
+
+class MovimientoEntrada(BaseModel):
+    """Un trabajo o gasto con los campos ya separados (formulario de Finanzas)."""
+
+    tipo: str
+    concepto: str
+    importe: Decimal
+    fecha: date | None = None
+    pendiente: bool = False
 
 
 class TrimestreSalida(BaseModel):

@@ -64,3 +64,51 @@ def test_el_total_del_ano_es_la_suma_de_sus_meses(cliente, db):
     ]
     assert sum(Decimal(n) for n in meses) == Decimal(anio["neto"])
     assert cliente.get("/resumen/rango?desde=2026-02-01&hasta=2026-01-01", headers=cab).status_code == 422
+
+
+class TestEditarMovimientos:
+    """Añadir, corregir y borrar desde Finanzas, sin colar nada absurdo."""
+
+    def _cab(self, db):
+        return {"Authorization": f"Bearer {generar_token(db, USUARIO)}"}
+
+    def test_crear_con_fecha_y_concepto_con_numeros(self, cliente, db):
+        r = cliente.post("/apuntes/movimiento", headers=self._cab(db), json={
+            "tipo": "trabajo", "concepto": "Cambiar 2 grifos Ana", "importe": "90",
+            "fecha": "2026-10-03", "pendiente": True,
+        })
+        assert r.status_code == 201
+        a = r.json()
+        # El "2" se queda en el concepto: aquí no hay parser que lo confunda.
+        assert (a["concepto"], a["importe"], a["fecha"], a["pendiente"]) == (
+            "Cambiar 2 grifos Ana", "90.00", "2026-10-03", True)
+
+    def test_un_gasto_nunca_queda_pendiente_de_cobro(self, cliente, db):
+        r = cliente.post("/apuntes/movimiento", headers=self._cab(db), json={
+            "tipo": "gasto", "concepto": "Gasolina", "importe": "40", "pendiente": True})
+        assert r.json()["pendiente"] is False
+
+    @pytest.mark.parametrize("cuerpo", [
+        {"tipo": "nota", "concepto": "x", "importe": "1"},
+        {"tipo": "gasto", "concepto": "  ", "importe": "1"},
+        {"tipo": "gasto", "concepto": "x", "importe": "0"},
+        {"tipo": "gasto", "concepto": "x", "importe": "1", "fecha": "2099-01-01"},
+    ])
+    def test_lo_absurdo_da_422(self, cliente, db, cuerpo):
+        assert cliente.post("/apuntes/movimiento", headers=self._cab(db), json=cuerpo).status_code == 422
+
+    def test_cambiar_de_trabajo_a_gasto_quita_el_pendiente(self, cliente, db):
+        cab = self._cab(db)
+        a = cliente.post("/apuntes/movimiento", headers=cab, json={
+            "tipo": "trabajo", "concepto": "Taladro", "importe": "89", "pendiente": True}).json()
+        r = cliente.patch(f"/apuntes/{a['id']}", headers=cab, json={"tipo": "gasto", "importe": "79.90"})
+        assert r.status_code == 200
+        assert (r.json()["tipo"], r.json()["pendiente"], r.json()["importe"]) == ("gasto", False, "79.90")
+        assert cliente.patch(f"/apuntes/{a['id']}", headers=cab, json={"importe": "-5"}).status_code == 422
+
+    def test_borrar(self, cliente, db):
+        cab = self._cab(db)
+        a = cliente.post("/apuntes/movimiento", headers=cab, json={
+            "tipo": "gasto", "concepto": "x", "importe": "1"}).json()
+        assert cliente.delete(f"/apuntes/{a['id']}", headers=cab).status_code == 204
+        assert cliente.delete(f"/apuntes/{a['id']}", headers=cab).status_code == 404

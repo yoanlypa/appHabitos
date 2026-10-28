@@ -132,6 +132,58 @@ def borrar_apunte(db: Session, user_id: int, apunte_id: int) -> Apunte:
     return apunte
 
 
+class MovimientoNoValido(ValueError):
+    """Lo que se quiere guardar no es un trabajo o gasto que tenga sentido."""
+
+
+_TIPOS_DE_DINERO = ("trabajo", "gasto")
+
+
+def _validar(tipo: str | None, concepto: str | None, importe: Decimal | None, fecha: date | None):
+    if tipo is not None and tipo not in _TIPOS_DE_DINERO:
+        raise MovimientoNoValido("el tipo tiene que ser trabajo o gasto")
+    if concepto is not None and not concepto.strip():
+        raise MovimientoNoValido("falta el concepto")
+    if importe is not None and importe <= 0:
+        raise MovimientoNoValido("el importe tiene que ser mayor que cero")
+    if fecha is not None and fecha > hoy_local():
+        # Un gasto o un cobro de mañana todavía no ha pasado: eso es una cita.
+        raise MovimientoNoValido("la fecha no puede ser futura")
+
+
+def crear_movimiento(
+    db: Session,
+    user_id: int,
+    tipo: str,
+    concepto: str,
+    importe: Decimal,
+    fecha: date | None,
+    pendiente: bool,
+    origen: str,
+) -> Apunte:
+    """Un trabajo o un gasto con sus datos ya separados, desde un formulario.
+
+    La caja de texto ("Cambio grifo Ana 120") sigue siendo lo rápido; esto es
+    para cuando hace falta otra fecha, o el concepto lleva números que el
+    parser tomaría por el importe ("Cambiar 2 grifos").
+    """
+    _validar(tipo, concepto, importe, fecha)
+    apunte = Apunte(
+        user_id=user_id,
+        fecha=fecha or hoy_local(),
+        tipo=tipo,
+        concepto=concepto.strip(),
+        importe=importe,
+        # Un gasto no se queda "pendiente de cobro": eso solo lo es un trabajo.
+        pendiente=pendiente and tipo == "trabajo",
+        origen=origen,
+    )
+    db.add(apunte)
+    db.commit()
+    db.refresh(apunte)
+    return apunte
+
+
 def actualizar_apunte(
     db: Session,
     user_id: int,
@@ -140,15 +192,24 @@ def actualizar_apunte(
     importe: Decimal | None = None,
     pendiente: bool | None = None,
     fecha: date | None = None,
+    tipo: str | None = None,
 ) -> Apunte:
     """Corrige un apunte ya escrito. Sólo cambia lo que se le pase."""
     apunte = _suyo(db, user_id, apunte_id)
+    if apunte.tipo not in _TIPOS_DE_DINERO and (tipo is not None or importe is not None):
+        # Una nota no tiene importe ni se convierte en dinero desde aquí.
+        raise MovimientoNoValido("una nota no lleva importe")
+    _validar(tipo, concepto, importe, fecha)
+    if tipo is not None:
+        apunte.tipo = tipo
+        if tipo == "gasto":
+            apunte.pendiente = False
     if concepto is not None:
         apunte.concepto = concepto.strip()
     if importe is not None:
         apunte.importe = importe
     if pendiente is not None:
-        apunte.pendiente = pendiente
+        apunte.pendiente = pendiente and apunte.tipo == "trabajo"
     if fecha is not None:
         apunte.fecha = fecha
     db.commit()

@@ -14,15 +14,21 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   abrirFactura,
   abrirFacturasDelPeriodo,
+  borrarApunte,
+  crearMovimiento,
+  editarApunte,
   descargarCsv,
   marcarCobrado,
   movimientos,
   resumenRango,
   TokenInvalido,
   type Apunte,
+  type DatosMovimiento,
   type Resumen,
 } from '../api'
 import { Cobros } from './Cobros'
+import { EscanerFactura } from './EscanerFactura'
+import { FormMovimiento } from './FormMovimiento'
 import { euros, fechaCorta, iso, MESES } from '../utiles'
 
 const PERIODOS = [
@@ -106,6 +112,8 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
   const [recargas, setRecargas] = useState(0)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
+  // undefined: cerrado · null: añadir uno nuevo · Apunte: editar ese
+  const [editando, setEditando] = useState<Apunte | null | undefined>(undefined)
 
   const [desde, hasta] = periodo === 'personalizado' ? propias : rangoDe(periodo, hoy)
   const rangoValido = desde <= hasta
@@ -156,6 +164,30 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
   function elegir(nuevo: Periodo) {
     setPeriodo(nuevo)
     setCargando(true)
+  }
+
+  /** Guarda lo del formulario: crea uno nuevo o manda solo lo que cambió. */
+  async function guardar(datos: DatosMovimiento) {
+    if (editando) {
+      const cambios: Partial<DatosMovimiento> = {}
+      for (const clave of Object.keys(datos) as (keyof DatosMovimiento)[]) {
+        const antes = clave === 'importe' ? Number(editando.importe) : editando[clave]
+        const ahora = clave === 'importe' ? Number(datos.importe) : datos[clave]
+        if (antes !== ahora) Object.assign(cambios, { [clave]: datos[clave] })
+      }
+      if (Object.keys(cambios).length) await editarApunte(token, editando.id, cambios)
+    } else {
+      await crearMovimiento(token, datos)
+    }
+    setEditando(undefined)
+    setRecargas((n) => n + 1)
+  }
+
+  async function borrar() {
+    if (!editando) return
+    await borrarApunte(token, editando.id)
+    setEditando(undefined)
+    setRecargas((n) => n + 1)
   }
 
   async function accion(hacer: () => Promise<unknown>) {
@@ -265,6 +297,30 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
 
           {error && <p className="error">{error}</p>}
 
+          <div className="anadir">
+            {filtro === 'tickets' ? (
+              <EscanerFactura
+                token={token}
+                onGuardado={() => setRecargas((n) => n + 1)}
+                onError={fallo}
+              />
+            ) : (
+              <button type="button" className="escanear" onClick={() => setEditando(null)}>
+                + Añadir {filtro === 'gasto' ? 'gasto' : filtro === 'trabajo' ? 'trabajo' : 'trabajo o gasto'}
+              </button>
+            )}
+          </div>
+
+          {editando !== undefined && (
+            <FormMovimiento
+              apunte={editando}
+              tipoInicial={filtro === 'gasto' ? 'gasto' : 'trabajo'}
+              onGuardar={guardar}
+              onBorrar={editando ? borrar : undefined}
+              onCerrar={() => setEditando(undefined)}
+            />
+          )}
+
           <section className="apuntes">
             {!rangoValido ? null : cargando ? (
               <p className="vacio">Cargando…</p>
@@ -283,14 +339,22 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
                   </h3>
                   <ul>
                     {apuntes.map((a) => (
-                      <li key={a.id} className={a.tipo}>
+                      <li
+                        key={a.id}
+                        className={`${a.tipo} tocable`}
+                        onClick={() => setEditando(a)}
+                        title="Tocar para editar o borrar"
+                      >
                         <span className="concepto">
                           {a.concepto}
                           {a.factura_id && (
                             <button
                               className="mini factura"
                               title="Ver el ticket en PDF"
-                              onClick={() => void accion(() => abrirFactura(token, a.factura_id!))}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                void accion(() => abrirFactura(token, a.factura_id!))
+                              }}
                             >
                               🧾
                             </button>
@@ -303,7 +367,10 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
                         {a.pendiente && (
                           <button
                             className="cobrar"
-                            onClick={() => void accion(() => marcarCobrado(token, a.id))}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void accion(() => marcarCobrado(token, a.id))
+                            }}
                           >
                             Cobrar
                           </button>

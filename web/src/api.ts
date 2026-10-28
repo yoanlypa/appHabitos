@@ -284,6 +284,23 @@ export async function borrarCita(token: string, id: number) {
   await pedirSinCuerpo(token, `/citas/${id}`, { method: 'DELETE' })
 }
 
+export type DatosMovimiento = {
+  tipo: 'trabajo' | 'gasto'
+  concepto: string
+  importe: string
+  fecha: string
+  pendiente: boolean
+}
+
+/** Un trabajo o gasto desde el formulario de Finanzas, con su fecha. */
+export function crearMovimiento(token: string, datos: DatosMovimiento) {
+  return pedir<Apunte>(token, '/apuntes/movimiento', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos),
+  })
+}
+
 export async function borrarApunte(token: string, id: number) {
   await pedirSinCuerpo(token, `/apuntes/${id}`, { method: 'DELETE' })
 }
@@ -291,7 +308,13 @@ export async function borrarApunte(token: string, id: number) {
 export function editarApunte(
   token: string,
   id: number,
-  cambios: { concepto?: string; importe?: string; pendiente?: boolean; fecha?: string },
+  cambios: {
+    concepto?: string
+    importe?: string
+    pendiente?: boolean
+    fecha?: string
+    tipo?: 'trabajo' | 'gasto'
+  },
 ) {
   return pedir<Apunte>(token, `/apuntes/${id}`, {
     method: 'PATCH',

@@ -348,7 +348,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-291 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+300 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
@@ -472,6 +472,18 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   Filtros Todo / Trabajos / Gastos / Tickets, el 🧾 para el PDF de cada
   ticket, y el PDF y el CSV del periodo elegido. No suma nada en el
   navegador: los totales los da el backend.
+  **Todo se añade, edita y borra desde ahí** (`componentes/FormMovimiento.tsx`):
+  tocar una fila abre el formulario con tipo, concepto, importe, fecha y
+  pendiente; "+ Añadir" usa el mismo formulario, y en el filtro Tickets el
+  botón es el escáner. Borrar va dentro del formulario y con confirmación,
+  no en cada fila: en una lista larga se toca sin querer al hacer scroll; si
+  hay ticket, avisa de que se va la foto. El alta con campos separados es
+  `POST /apuntes/movimiento` (`servicios/apuntes.crear_movimiento`): sirve
+  para otra fecha o para conceptos con números ("Cambiar 2 grifos") que el
+  parser de la caja de texto tomaría por el importe. `PATCH /apuntes/{id}`
+  admite cambiar el `tipo`. Las dos pasan por `_validar`: solo trabajo o
+  gasto, concepto no vacío, importe > 0, fecha no futura, y un gasto nunca
+  queda "pendiente de cobro".
 - Para que el front pueda llamar a la API hizo falta `GET /apuntes`
   (`listar_apuntes()`) y CORS, con los orígenes en `CORS_ORIGENES`
   (por defecto el Vite de local). Verificado que **todas** las respuestas

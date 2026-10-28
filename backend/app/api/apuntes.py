@@ -5,12 +5,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencias import get_current_user_id
-from app.api.schemas import ApunteCambios, ApunteCreado, ApunteEntrada, ApunteSalida
+from app.api.schemas import (
+    ApunteCambios,
+    ApunteCreado,
+    ApunteEntrada,
+    ApunteSalida,
+    MovimientoEntrada,
+)
 from app.dominio.parsing import TextoNoInterpretable
 from app.nucleo.db import get_db
 from app.servicios.apuntes import (
     ApunteNoEncontrado,
+    MovimientoNoValido,
     actualizar_apunte,
+    crear_movimiento,
     anotar,
     borrar_apunte,
     listar_apuntes,
@@ -66,6 +74,19 @@ def crear(
     return ApunteCreado(apunte=creado.apunte, candidatos=creado.candidatos)
 
 
+@router.post("/movimiento", response_model=ApunteSalida, status_code=status.HTTP_201_CREATED)
+def nuevo_movimiento(
+    entrada: MovimientoEntrada,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Un trabajo o gasto desde el formulario, con su fecha."""
+    try:
+        return crear_movimiento(db, user_id, **entrada.model_dump(), origen="web")
+    except MovimientoNoValido as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
+
 @router.post("/{apunte_id}/cobrado", response_model=ApunteSalida)
 def cobrar(
     apunte_id: int,
@@ -85,13 +106,15 @@ def editar(
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
-    """Corrige un apunte: el importe mal escrito, el concepto, la fecha."""
+    """Corrige un apunte: el importe mal escrito, el concepto, la fecha, el tipo."""
     try:
         return actualizar_apunte(
             db, user_id, apunte_id, **cambios.model_dump(exclude_unset=True)
         )
     except ApunteNoEncontrado as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except MovimientoNoValido as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
 
 @router.delete("/{apunte_id}", status_code=status.HTTP_204_NO_CONTENT)
