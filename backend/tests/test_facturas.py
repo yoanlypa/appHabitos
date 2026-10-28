@@ -172,3 +172,65 @@ class TestPorHttp:
         f = facturas.guardar_factura(db, USUARIO, JPG, "image/jpeg")
         r = cliente.post(f"/facturas/{f.id}/gasto", headers=cabeceras, json={"concepto": "x", "importe": "0"})
         assert r.status_code == 422
+
+
+class TestTicketCompleto:
+    """Todo lo que pone el ticket se guarda, y lo absurdo se queda fuera."""
+
+    LEIDO = {
+        "total": "8,08", "fecha": "2026-10-08", "hora": "16:33", "comercio": "Leroy Merlin",
+        "razon_social": "LEROY MERLIN MALAGA S.L.U.", "cif": "B84818442", "numero": "036-0010-243003",
+        "lineas": [
+            {"descripcion": "4 TACOS 6X55", "cantidad": 1, "precio_unitario": 5.61, "importe": 4.19},
+            {"descripcion": "", "cantidad": 1, "importe": 3},  # sin descripción: fuera
+            "basura",
+        ],
+        "base_imponible": 6.68, "iva": 1.40, "tipos_iva": [{"tipo": 21, "cuota": 1.4}, {"tipo": 99}],
+        "forma_pago": "Tarjeta", "documento": "regalo",
+        "esquinas": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]],
+    }
+
+    def test_se_limpia_lo_leido(self):
+        d = interpretar_lectura(self.LEIDO, HOY)
+        assert d.detalle["cif"] == "B84818442"
+        assert d.detalle["lineas"] == [
+            {"descripcion": "4 TACOS 6X55", "cantidad": "1", "precio_unitario": "5.61", "importe": "4.19"}
+        ]
+        assert d.detalle["tipos_iva"] == [{"tipo": "21", "base": None, "cuota": "1.40"}]
+        assert "documento" not in d.detalle  # ni gasto ni devolución: no se inventa
+        assert d.esquinas == [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]]
+
+    @pytest.mark.parametrize(
+        "esquinas", [None, [[0, 0]] * 3, [[0, 0], [1, 0], [1, 1], [5, 5]], "x", [[0, "a"]] * 4]
+    )
+    def test_esquinas_raras_no_valen(self, esquinas):
+        assert interpretar_lectura({"esquinas": esquinas}, HOY).esquinas is None
+
+    def test_una_base_mayor_que_el_total_no_vale(self):
+        assert "base_imponible" not in interpretar_lectura({"total": 5, "base_imponible": 50}, HOY).detalle
+
+    @pytest.mark.asyncio
+    async def test_se_guarda_y_sale_en_la_segunda_pagina_del_pdf(self, db, monkeypatch):
+        async def falso(_i, _m):
+            return dict(self.LEIDO)
+
+        monkeypatch.setattr(facturas, "leer_ticket", falso)
+        leido, apunte = await facturas.escanear_y_anotar(db, USUARIO, _foto(), "image/jpeg", None, "bot")
+        guardado = facturas.datos_leidos(leido.factura)
+        assert guardado["cif"] == "B84818442" and guardado["total"] == "8.08"
+        pdf, _ = facturas.pdf_de_factura(db, USUARIO, leido.factura.id)
+        assert pdf.count(b"/Type /Page") - pdf.count(b"/Type /Pages") == 2  # foto + datos
+
+    def test_sin_datos_leidos_el_pdf_es_solo_la_foto(self, db):
+        f = facturas.guardar_factura(db, USUARIO, _foto(), "image/jpeg")
+        pdf, _ = facturas.pdf_de_factura(db, USUARIO, f.id)
+        assert pdf.count(b"/Type /Page") - pdf.count(b"/Type /Pages") == 1
+
+
+def _foto() -> bytes:
+    import io as _io
+    from PIL import Image as _Image
+
+    salida = _io.BytesIO()
+    _Image.new("RGB", (300, 500), (230, 225, 200)).save(salida, format="JPEG")
+    return salida.getvalue()

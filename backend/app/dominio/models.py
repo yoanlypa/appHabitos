@@ -205,5 +205,11 @@ class Factura(Base):
     mime = Column(String, nullable=False)
     tamano = Column(Integer, nullable=False)
     creado = Column(DateTime(timezone=True), server_default=func.now())
+    # Todo lo que se leyó del ticket (líneas, CIF, número, base, forma de
+    # pago...), como JSON. Texto y no un tipo JSON del motor, para que SQLite
+    # y Postgres lo guarden igual.
+    datos = Column(Text, nullable=True)
+    # Las esquinas del papel que vio el modelo, para enderezar el PDF.
+    esquinas = Column(Text, nullable=True)
 
     apunte = relationship("Apunte", back_populates="factura")

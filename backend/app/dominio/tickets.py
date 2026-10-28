@@ -10,10 +10,13 @@ hueco se ve, un 2340 donde iba 23,40 se cuela.
   copia el formato del ticket en vez de hacer caso.
 - Una fecha en el futuro o de hace más de dos años no es la del ticket: es
   una lectura mala (un 2062 por un 2026). Se descarta y se usa hoy.
-- El IVA no puede ser mayor que el total.
+- El IVA no puede ser mayor que el total, ni la base imponible tampoco.
+- Las líneas sin descripción se descartan; las demás se guardan aunque les
+  falte algún número, que la descripción sola ya dice qué se compró.
+- Las esquinas solo valen si son cuatro puntos dentro de la foto.
 """
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
@@ -28,6 +31,12 @@ class DatosTicket:
     comercio: str | None
     iva: Decimal | None
     concepto: str | None
+    # Todo lo demás que pone el ticket, ya limpio y listo para guardar como
+    # JSON: líneas, CIF, número, base imponible, forma de pago...
+    detalle: dict = field(default_factory=dict)
+    # Las cuatro esquinas del papel que vio el modelo, en fracciones (0 a 1).
+    # Solo una pista para enderezar: `nucleo/perspectiva.py` la comprueba.
+    esquinas: list | None = None
 
     @property
     def concepto_sugerido(self) -> str:
@@ -83,6 +92,83 @@ def _texto(valor, largo: int) -> str | None:
     return limpio[:largo] or None
 
 
+def _cantidad(valor) -> Decimal | None:
+    """Unidades de una línea: positivas y razonables, con hasta 3 decimales (kg, l)."""
+    numero = _importe(valor)
+    if numero is None:
+        try:
+            numero = Decimal(str(valor).replace(",", ".")).quantize(Decimal("0.001"))
+        except (InvalidOperation, ValueError):
+            return None
+    return numero if Decimal("0") < numero < Decimal("100000") else None
+
+
+def _numero_texto(valor) -> str | None:
+    importe = _importe(valor)
+    return f"{importe:.2f}" if importe is not None else None
+
+
+def _lineas(valor) -> list[dict]:
+    """Las líneas de producto. Una línea sin descripción no sirve para nada."""
+    if not isinstance(valor, list):
+        return []
+    lineas = []
+    for bruta in valor[:200]:  # un ticket de 200 líneas ya es un supermercado entero
+        if not isinstance(bruta, dict):
+            continue
+        descripcion = _texto(bruta.get("descripcion"), 120)
+        if not descripcion:
+            continue
+        cantidad = _cantidad(bruta.get("cantidad"))
+        lineas.append(
+            {
+                "descripcion": descripcion,
+                "cantidad": f"{cantidad.normalize():f}" if cantidad is not None else None,
+                "precio_unitario": _numero_texto(bruta.get("precio_unitario")),
+                "importe": _numero_texto(bruta.get("importe")),
+            }
+        )
+    return lineas
+
+
+def _tipos_iva(valor) -> list[dict]:
+    if not isinstance(valor, list):
+        return []
+    tipos = []
+    for bruto in valor[:6]:
+        if not isinstance(bruto, dict):
+            continue
+        tipo = _importe(bruto.get("tipo"))
+        if tipo is None or not Decimal("0") <= tipo <= Decimal("30"):
+            continue
+        tipos.append(
+            {
+                "tipo": f"{tipo.normalize():f}",
+                "base": _numero_texto(bruto.get("base")),
+                "cuota": _numero_texto(bruto.get("cuota")),
+            }
+        )
+    return tipos
+
+
+def _esquinas(valor) -> list | None:
+    """Cuatro puntos [x, y] entre 0 y 1, o nada."""
+    if not isinstance(valor, list) or len(valor) != 4:
+        return None
+    puntos = []
+    for punto in valor:
+        if not isinstance(punto, (list, tuple)) or len(punto) != 2:
+            return None
+        try:
+            x, y = float(punto[0]), float(punto[1])
+        except (TypeError, ValueError):
+            return None
+        if not (-0.05 <= x <= 1.05 and -0.05 <= y <= 1.05):
+            return None
+        puntos.append([round(min(max(x, 0.0), 1.0), 4), round(min(max(y, 0.0), 1.0), 4)])
+    return puntos
+
+
 def interpretar_lectura(datos: dict, hoy: date) -> DatosTicket:
     total = _importe(datos.get("total"))
     if total is not None and not (Decimal("0") < total < TOTAL_MAXIMO):
@@ -92,10 +178,37 @@ def interpretar_lectura(datos: dict, hoy: date) -> DatosTicket:
     if iva is not None and (iva < 0 or (total is not None and iva >= total)):
         iva = None
 
+    base = _importe(datos.get("base_imponible"))
+    if base is not None and (base <= 0 or (total is not None and base > total)):
+        base = None
+    descuento = _importe(datos.get("descuento"))
+    if descuento is not None:
+        descuento = abs(descuento)
+    hora = _texto(datos.get("hora"), 5)
+    if hora and not re.fullmatch(r"\d{1,2}:\d{2}", hora):
+        hora = None
+    documento = datos.get("documento")
+
+    detalle = {
+        "razon_social": _texto(datos.get("razon_social"), 120),
+        "cif": _texto(datos.get("cif"), 20),
+        "direccion": _texto(datos.get("direccion"), 160),
+        "numero": _texto(datos.get("numero"), 60),
+        "hora": hora,
+        "lineas": _lineas(datos.get("lineas")),
+        "base_imponible": f"{base:.2f}" if base is not None else None,
+        "tipos_iva": _tipos_iva(datos.get("tipos_iva")),
+        "descuento": f"{descuento:.2f}" if descuento else None,
+        "forma_pago": _texto(datos.get("forma_pago"), 40),
+        "documento": documento if documento in ("gasto", "devolucion") else None,
+    }
+
     return DatosTicket(
         total=total,
         fecha=_fecha(datos.get("fecha"), hoy),
         comercio=_texto(datos.get("comercio"), 60),
         iva=iva,
         concepto=_texto(datos.get("concepto"), 60),
+        detalle={clave: valor for clave, valor in detalle.items() if valor not in (None, [], "")},
+        esquinas=_esquinas(datos.get("esquinas")),
     )

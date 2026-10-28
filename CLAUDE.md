@@ -261,18 +261,28 @@ parte-del-dia/
     no lleva las fotos.
   - La web reduce la foto a 1600 px en JPEG antes de subirla, y la imagen
     se abre con fetch + blob porque `/facturas/{id}/imagen` pide token.
-  - **PDF como CamScanner** (`nucleo/pdf.py`, Pillow): se recorta el papel
-    (umbral de Otsu sobre una copia pequeña), se lleva el papel a blanco y
-    la tinta a negro y va en A4. El bot contesta a la foto con ese PDF; el
-    🧾 de la web abre el PDF; `/facturas` (o `/facturas pasado`) y "Tickets
-    del mes en PDF" juntan los del mes, uno por página y por fecha del
-    gasto. No vale un autocontraste normal: con tan poca letra deja el
-    papel gris (se probó). Se genera al pedirlo, no se guarda.
+  - **Se guarda todo lo que pone el ticket** (`Factura.datos`, JSON en
+    texto): razón social, CIF, dirección, número, hora, líneas (descripción,
+    cantidad, precio, importe), base imponible, tipos de IVA, descuento,
+    forma de pago y si es gasto o devolución. Sale en la misma llamada que el
+    total: lo que cuesta es mirar la foto, no la respuesta. Lo filtra
+    `dominio/tickets.py` igual que el total (líneas sin descripción fuera,
+    base mayor que el total fuera, tipo de IVA > 30 % fuera).
+  - **PDF como CamScanner** (`nucleo/pdf.py`): la hoja enderezada, en color,
+    con las sombras y el amarillo de la luz quitados (se divide cada canal
+    por su fondo estimado, como el filtro "mágico" de esas apps) y en A4.
+    Antes era blanco y negro con niveles: rompía la letra fina y dejaba los
+    logos en manchas, y Yoa lo vio "quedando mal" en Telegram. El PDF de un
+    ticket lleva una segunda página, "Datos del ticket", con lo leído pasado
+    a limpio; el del mes (`/facturas`, "Tickets del mes en PDF") solo las
+    fotos. La ficha usa DejaVu Sans, que va en `nucleo/fuentes/` porque
+    Railway no trae fuentes y la de Pillow no tiene tildes ni €.
   - **La hoja se endereza** (`nucleo/perspectiva.py`, OpenCV headless): se
     buscan sus cuatro esquinas y se estira a un rectángulo, como un
-    escáner. Dos intentos: el filo del papel contra la mesa (con la letra
-    borrada antes por cierre morfológico) y, si no, el contorno de lo
-    impreso. Lo segundo salió de una factura real de Leroy Merlin, papel
+    escáner. Tres intentos: el filo del papel contra la mesa (con la letra
+    borrada antes por cierre morfológico), las esquinas que dio la IA al
+    leer el ticket (`Factura.esquinas`, sin coste extra) y el contorno de lo
+    impreso. Las de la IA no se creen sin más: pasan los mismos filtros. Lo segundo salió de una factura real de Leroy Merlin, papel
     blanco sobre mesa blanca: el filo casi no se veía y un contorno de
     sombras con cuatro esquinas la deformaba entera. Por eso un borde solo
     vale si deja dentro toda la letra (`_contiene_lo_impreso`, con 15 px de
@@ -295,7 +305,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-254 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+260 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

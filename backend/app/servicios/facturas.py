@@ -15,6 +15,7 @@ lo que entendió, igual que con las notas de voz: si está mal, se /borra.
 Lo escaneado y nunca confirmado se queda huérfano; `limpiar_huerfanas()` lo
 borra pasado un día (se llama al escanear) para que no se acumulen fotos que nadie va a usar.
 """
+import json
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -25,7 +26,7 @@ from app.dominio.models import Apunte, Factura
 from app.dominio.tickets import DatosTicket, interpretar_lectura
 from app.nucleo import archivos
 from app.nucleo.lectura_tickets import leer_ticket
-from app.nucleo.pdf import imagenes_a_pdf
+from app.nucleo.pdf import PaginaDeDatos, imagenes_a_pdf
 from app.nucleo.tiempo import hoy_local
 
 
@@ -79,7 +80,40 @@ async def escanear(db: Session, user_id: int, imagen: bytes, mime: str) -> Ticke
     except Exception:
         borrar_factura(db, user_id, factura.id)
         raise
-    return TicketEscaneado(factura=factura, datos=interpretar_lectura(leido, hoy_local()))
+    datos = interpretar_lectura(leido, hoy_local())
+    # Se guarda todo lo leído, no solo lo que va al gasto: el CIF, las líneas
+    # y la base imponible son lo que pide la gestoría, y volver a leer la foto
+    # costaría otra llamada.
+    factura.datos = json.dumps(_como_json(datos), ensure_ascii=False)
+    factura.esquinas = json.dumps(datos.esquinas) if datos.esquinas else None
+    db.commit()
+    return TicketEscaneado(factura=factura, datos=datos)
+
+
+def _como_json(datos: DatosTicket) -> dict:
+    principal = {
+        "comercio": datos.comercio,
+        "concepto": datos.concepto,
+        "fecha": datos.fecha.isoformat() if datos.fecha else None,
+        "total": f"{datos.total:.2f}" if datos.total is not None else None,
+        "iva": f"{datos.iva:.2f}" if datos.iva is not None else None,
+    }
+    return {**{k: v for k, v in principal.items() if v is not None}, **datos.detalle}
+
+
+def datos_leidos(factura: Factura) -> dict:
+    """Lo que se leyó del ticket, o vacío para lo escaneado antes de guardarlo."""
+    try:
+        return json.loads(factura.datos) if factura.datos else {}
+    except ValueError:
+        return {}
+
+
+def _esquinas_de(factura: Factura) -> list | None:
+    try:
+        return json.loads(factura.esquinas) if factura.esquinas else None
+    except ValueError:
+        return None
 
 
 def _suya(db: Session, user_id: int, factura_id: int) -> Factura:
@@ -182,8 +216,75 @@ async def escanear_y_anotar(
 def pdf_de_factura(db: Session, user_id: int, factura_id: int) -> tuple[bytes, str]:
     """El ticket como PDF escaneado, con un nombre que diga qué es."""
     factura = _suya(db, user_id, factura_id)
-    contenido = imagenes_a_pdf([archivos.ruta_absoluta(factura.ruta)])
+    contenido = imagenes_a_pdf(
+        [archivos.ruta_absoluta(factura.ruta)],
+        esquinas=[_esquinas_de(factura)],
+        datos=[_pagina_de_datos(factura)],
+    )
     return contenido, _nombre_pdf(factura)
+
+
+def _euros(texto: str | None) -> str:
+    if not texto:
+        return ""
+    entero, _, decimales = f"{Decimal(texto):.2f}".partition(".")
+    signo = "-" if entero.startswith("-") else ""
+    entero = entero.lstrip("-")
+    miles = ".".join(entero[max(0, i - 3):i] for i in range(len(entero), 0, -3)[::-1])
+    return f"{signo}{miles},{decimales} €"
+
+
+def _pagina_de_datos(factura: Factura) -> PaginaDeDatos | None:
+    """La ficha del ticket pasada a limpio, detrás de la foto.
+
+    Sin datos leídos (lo escaneado antes de que se guardaran) no hay página:
+    una ficha vacía no aporta nada.
+    """
+    d = datos_leidos(factura)
+    if not d:
+        return None
+    apunte = factura.apunte
+    fecha = d.get("fecha") or (apunte.fecha.isoformat() if apunte else None)
+    if fecha:
+        a, m, dia = fecha.split("-")
+        fecha = f"{dia}/{m}/{a}" + (f"  {d['hora']}" if d.get("hora") else "")
+    filas = [
+        ("Comercio", d.get("razon_social") or d.get("comercio")),
+        ("CIF", d.get("cif")),
+        ("Dirección", d.get("direccion")),
+        ("Nº factura/ticket", d.get("numero")),
+        ("Fecha", fecha),
+        ("Forma de pago", d.get("forma_pago")),
+        ("Anotado como", apunte.concepto if apunte else None),
+    ]
+    if d.get("documento") == "devolucion":
+        filas.append(("Tipo", "Devolución / abono"))
+    lineas = d.get("lineas") or []
+    tabla = [
+        [l["descripcion"], (l.get("cantidad") or "").replace(".", ","),
+         _euros(l.get("precio_unitario")), _euros(l.get("importe"))]
+        for l in lineas
+    ]
+    pie = []
+    if d.get("descuento"):
+        pie.append(("Descuentos", "-" + _euros(d["descuento"])))
+    if d.get("base_imponible"):
+        pie.append(("Base imponible", _euros(d["base_imponible"])))
+    for tipo in d.get("tipos_iva") or []:
+        if tipo.get("cuota"):
+            pie.append((f"IVA {tipo['tipo'].replace('.', ',')} %", _euros(tipo["cuota"])))
+    if d.get("iva") and not d.get("tipos_iva"):
+        pie.append(("IVA", _euros(d["iva"])))
+    total = d.get("total") or (f"{apunte.importe:.2f}" if apunte else None)
+    if total:
+        pie.append(("TOTAL", _euros(total)))
+    return PaginaDeDatos(
+        titulo="Datos del ticket",
+        filas=[(e, v) for e, v in filas if v],
+        cabecera=["Descripción", "Cant.", "Precio", "Importe"] if tabla else None,
+        tabla=tabla or None,
+        pie=pie or None,
+    )
 
 
 def pdf_del_periodo(db: Session, user_id: int, desde: date, hasta: date) -> bytes | None:
@@ -203,9 +304,15 @@ def pdf_del_periodo(db: Session, user_id: int, desde: date, hasta: date) -> byte
         .order_by(Apunte.fecha, Apunte.id)
         .all()
     )
-    rutas = [archivos.ruta_absoluta(f.ruta) for f in facturas]
-    rutas = [r for r in rutas if r.exists()]
-    return imagenes_a_pdf(rutas) if rutas else None
+    # Solo las fotos, sin la ficha de cada una: para la gestoría importa el
+    # documento, y doblar las páginas del mes no aporta.
+    presentes = [f for f in facturas if archivos.ruta_absoluta(f.ruta).exists()]
+    if not presentes:
+        return None
+    return imagenes_a_pdf(
+        [archivos.ruta_absoluta(f.ruta) for f in presentes],
+        esquinas=[_esquinas_de(f) for f in presentes],
+    )
 
 
 def _nombre_pdf(factura: Factura) -> str:

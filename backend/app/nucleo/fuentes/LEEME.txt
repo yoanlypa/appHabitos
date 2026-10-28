@@ -1,0 +1,4 @@
+DejaVu Sans (normal y negrita), para la página de datos de los PDF de tickets.
+Van dentro del proyecto porque el contenedor de Railway no trae fuentes, y la
+que incluye Pillow no tiene tildes, eñes ni el símbolo del euro.
+Licencia libre (Bitstream Vera / DejaVu): https://dejavu-fonts.github.io/License.html

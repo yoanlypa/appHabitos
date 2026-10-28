@@ -18,17 +18,31 @@ _URL = "https://api.openai.com/v1/chat/completions"
 
 _INSTRUCCIONES = (
     "Eres un lector de tickets y facturas españoles. Mira la imagen y "
-    "responde SOLO un objeto JSON con estas claves:\n"
-    '- "total": importe TOTAL pagado, IVA incluido, como número con punto '
-    "decimal (ej. 23.40). Si hay varios totales, el final que se pagó.\n"
-    '- "fecha": fecha del ticket en formato YYYY-MM-DD.\n'
-    '- "comercio": nombre de la tienda o empresa que emite el ticket, corto.\n'
-    '- "iva": cuota total de IVA en euros como número, si aparece.\n'
-    '- "concepto": de 2 a 5 palabras sobre qué se compró (ej. "tornillería y '
-    'silicona", "gasolina").\n'
-    "Usa null en cualquier clave que no se lea con seguridad. No inventes: un "
-    "null es mejor que un número dudoso. Si la imagen no es un ticket ni una "
-    'factura, responde {"total": null}.'
+    "responde SOLO un objeto JSON con estas claves (null en lo que no se lea "
+    "con seguridad: un null es mejor que un dato inventado):\n"
+    '- "total": importe TOTAL pagado, IVA incluido, número con punto decimal.\n'
+    '- "fecha": fecha del ticket, YYYY-MM-DD. "hora": HH:MM.\n'
+    '- "comercio": nombre corto de la tienda. "razon_social": nombre legal '
+    'completo (p. ej. "LEROY MERLIN MALAGA S.L.U."). "cif": CIF/NIF del '
+    'emisor. "direccion": dirección del emisor.\n'
+    '- "numero": número de factura o de ticket.\n'
+    '- "lineas": lista de lo comprado, cada una {"descripcion", "cantidad", '
+    '"precio_unitario", "importe"} con números con punto decimal.\n'
+    '- "base_imponible": total sin IVA. "iva": cuota total de IVA en euros. '
+    '"tipos_iva": lista de {"tipo", "base", "cuota"} (tipo en %, p. ej. 21).\n'
+    '- "descuento": total de descuentos en euros, positivo.\n'
+    '- "forma_pago": tarjeta, efectivo, bizum...\n'
+    '- "documento": "gasto" si es una compra que paga el cliente del ticket, '
+    '"devolucion" si es un abono o devolución (importes negativos o la palabra '
+    'abono/devolución).\n'
+    '- "concepto": de 2 a 5 palabras sobre qué se compró (ej. "tacos de '
+    'expansión", "gasolina").\n'
+    '- "esquinas": las 4 esquinas del papel del ticket en la foto, como '
+    "[[x, y], ...] con x e y entre 0 y 1 (fracción del ancho y del alto de la "
+    "imagen, 0,0 arriba a la izquierda), en orden: arriba-izquierda, "
+    "arriba-derecha, abajo-derecha, abajo-izquierda. Si una esquina se sale "
+    "de la foto, pon el punto en el borde de la imagen.\n"
+    'Si la imagen no es un ticket ni una factura, responde {"total": null}.'
 )
 
 
@@ -57,11 +71,14 @@ async def leer_ticket(imagen: bytes, mime: str) -> dict:
         "model": MODELO_TICKETS,
         "response_format": {"type": "json_object"},
         "temperature": 0,
+        # Con las líneas de producto la respuesta crece; el tope evita que un
+        # ticket de supermercado larguísimo dispare el coste.
+        "max_tokens": 2500,
         "messages": [
             {"role": "system", "content": _INSTRUCCIONES},
             {
                 "role": "user",
-                "content": [{"type": "image_url", "image_url": {"url": url_datos}}],
+                "content": [{"type": "image_url", "image_url": {"url": url_datos, "detail": "high"}}],
             },
         ],
     }

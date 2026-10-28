@@ -126,12 +126,45 @@ def _por_el_contenido(gris: np.ndarray, puntos: np.ndarray | None) -> np.ndarray
     return esquinas
 
 
-def _esquinas(gris: np.ndarray) -> np.ndarray | None:
-    """Las cuatro esquinas de la hoja en la imagen pequeña, o None."""
+def _sugeridas_validas(
+    sugeridas: list | None, gris: np.ndarray, impresos: np.ndarray | None
+) -> np.ndarray | None:
+    """Las esquinas que dijo la IA al leer el ticket, si son creíbles.
+
+    Llegan como fracciones (0 a 1) del ancho y el alto. Un modelo de visión
+    sitúa la hoja bastante bien pero no al píxel, así que pasan los mismos
+    filtros que lo detectado: tamaño de hoja, forma convexa y toda la letra
+    dentro. Si no, se ignoran.
+    """
+    if not sugeridas or len(sugeridas) != 4:
+        return None
+    try:
+        puntos = np.array(sugeridas, dtype="float32").reshape(4, 2)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(puntos).all() or (puntos < -0.02).any() or (puntos > 1.02).any():
+        return None
+    alto, ancho = gris.shape
+    puntos = _ordenar(puntos.clip(0, 1) * np.array([ancho - 1, alto - 1], dtype="float32"))
+    area = cv2.contourArea(puntos)
+    if not _AREA_MINIMA * ancho * alto < area or not cv2.isContourConvex(puntos.reshape(-1, 1, 2)):
+        return None
+    return puntos if _contiene_lo_impreso(puntos, impresos) else None
+
+
+def _esquinas(gris: np.ndarray, sugeridas: list | None = None) -> np.ndarray | None:
+    """Las cuatro esquinas de la hoja en la imagen pequeña, o None.
+
+    Por orden de confianza: el filo del papel si se ve, lo que dijo la IA,
+    y el contorno de lo impreso.
+    """
     impresos = _puntos_impresos(gris)
     por_bordes = _por_los_bordes(gris)
     if por_bordes is not None and _contiene_lo_impreso(por_bordes, impresos):
         return por_bordes
+    de_la_ia = _sugeridas_validas(sugeridas, gris, impresos)
+    if de_la_ia is not None:
+        return de_la_ia
     return _por_el_contenido(gris, impresos)
 
 
@@ -153,16 +186,21 @@ def _contiene_lo_impreso(esquinas: np.ndarray, puntos: np.ndarray | None) -> boo
     return fuera / len(muestra) < 0.02
 
 
-def enderezar(foto: Image.Image) -> Image.Image | None:
-    """La hoja recta y recortada (en gris), o None si no se encuentra."""
-    gris = np.array(foto.convert("L"))
+def enderezar(foto: Image.Image, sugeridas: list | None = None) -> Image.Image | None:
+    """La hoja recta y recortada, en color, o None si no se encuentra.
+
+    `sugeridas` son las esquinas que vio la IA al leer el ticket (fracciones
+    de 0 a 1), que ayudan cuando el filo del papel no se distingue.
+    """
+    color = np.array(foto.convert("RGB"))
+    gris = cv2.cvtColor(color, cv2.COLOR_RGB2GRAY)
     escala = _LADO_TRABAJO / max(gris.shape)
     if escala < 1:
         peque = cv2.resize(gris, None, fx=escala, fy=escala, interpolation=cv2.INTER_AREA)
     else:
         peque, escala = gris, 1.0
 
-    esquinas = _esquinas(peque)
+    esquinas = _esquinas(peque, sugeridas)
     if esquinas is None:
         return None
     esquinas /= escala
@@ -177,7 +215,7 @@ def enderezar(foto: Image.Image) -> Image.Image | None:
     )
     matriz = cv2.getPerspectiveTransform(esquinas, destino)
     recta = cv2.warpPerspective(
-        gris, matriz, (ancho, alto), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE
+        color, matriz, (ancho, alto), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE
     )
     # Los bordes se detectan algo hinchados (se dilatan para cerrar el
     # contorno), así que se recorta un poco hacia dentro: mejor perder un
