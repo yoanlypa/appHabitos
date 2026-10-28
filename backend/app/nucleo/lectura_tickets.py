@@ -20,7 +20,10 @@ _INSTRUCCIONES = (
     "Eres un lector de tickets y facturas españoles. Mira la imagen y "
     "responde SOLO un objeto JSON con estas claves (null en lo que no se lea "
     "con seguridad: un null es mejor que un dato inventado):\n"
-    '- "total": importe TOTAL pagado, IVA incluido, número con punto decimal.\n'
+    '- "total": lo que de verdad costó la compra, IVA incluido, número con punto '
+    'decimal. OJO en gasolineras y pagos en efectivo: si pone "total cobrado" o '
+    '"entregado" y luego "total suministrado", "cambio" o "a devolver", el '
+    'total es lo SUMINISTRADO/consumido, no lo entregado.\n'
     '- "fecha": fecha del ticket, YYYY-MM-DD. "hora": HH:MM.\n'
     '- "comercio": nombre corto de la tienda. "razon_social": nombre legal '
     'completo (p. ej. "LEROY MERLIN MALAGA S.L.U."). "cif": CIF/NIF del '
@@ -32,9 +35,10 @@ _INSTRUCCIONES = (
     '"tipos_iva": lista de {"tipo", "base", "cuota"} (tipo en %, p. ej. 21).\n'
     '- "descuento": total de descuentos en euros, positivo.\n'
     '- "forma_pago": tarjeta, efectivo, bizum...\n'
-    '- "documento": "gasto" si es una compra que paga el cliente del ticket, '
-    '"devolucion" si es un abono o devolución (importes negativos o la palabra '
-    'abono/devolución).\n'
+    '- "documento": "gasto" si es una compra; "devolucion" solo si es un abono '
+    'de una compra anterior (importes negativos, "abono", "factura '
+    'rectificativa"). Un "cheque devolución" o "a devolver" por pagar con un '
+    'billete grande es el CAMBIO, no una devolución: eso es "gasto".\n'
     '- "concepto": de 2 a 5 palabras sobre qué se compró (ej. "tacos de '
     'expansión", "gasolina").\n'
     '- "esquinas": las 4 esquinas del papel del ticket en la foto, como '

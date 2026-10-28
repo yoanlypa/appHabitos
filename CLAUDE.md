@@ -267,7 +267,12 @@ parte-del-dia/
     forma de pago y si es gasto o devolución. Sale en la misma llamada que el
     total: lo que cuesta es mirar la foto, no la respuesta. Lo filtra
     `dominio/tickets.py` igual que el total (líneas sin descripción fuera,
-    base mayor que el total fuera, tipo de IVA > 30 % fuera).
+    base mayor que el total fuera, tipo de IVA > 30 % fuera). El precio
+    unitario conserva 3 decimales (gasolina a 1,637 €/l: con 1,64 litros ×
+    precio no da el importe). Las instrucciones avisan de las dos trampas de
+    las gasolineras, vistas en un ticket real: el total es lo suministrado
+    (74,66), no lo entregado (100,00), y un "cheque devolución" es el cambio,
+    no un abono.
   - **PDF como CamScanner** (`nucleo/pdf.py`): la hoja enderezada, en color,
     con las sombras y el amarillo de la luz quitados (se divide cada canal
     por su fondo estimado, como el filtro "mágico" de esas apps) y en A4.
@@ -279,16 +284,18 @@ parte-del-dia/
     Railway no trae fuentes y la de Pillow no tiene tildes ni €.
   - **La hoja se endereza** (`nucleo/perspectiva.py`, OpenCV headless): se
     buscan sus cuatro esquinas y se estira a un rectángulo, como un
-    escáner. Tres intentos: el filo del papel contra la mesa (con la letra
-    borrada antes por cierre morfológico), las esquinas que dio la IA al
-    leer el ticket (`Factura.esquinas`, sin coste extra) y el contorno de lo
-    impreso. Las de la IA no se creen sin más: pasan los mismos filtros. Lo segundo salió de una factura real de Leroy Merlin, papel
-    blanco sobre mesa blanca: el filo casi no se veía y un contorno de
-    sombras con cuatro esquinas la deformaba entera. Por eso un borde solo
-    vale si deja dentro toda la letra (`_contiene_lo_impreso`, con 15 px de
-    margen porque el filo contra mesa oscura sale como tinta pegada). Si no
-    se ve hoja, None y recorte simple: nunca se deforma por una hoja
-    inventada. Las fotos reales de prueba no están en el repo: llevan
+    escáner. Si la IA dio esquinas al leer el ticket (`Factura.esquinas`,
+    sin coste extra) y son creíbles (convexas, ≥ 8 % de la foto, ≥ 60 % de
+    la letra dentro), mandan ellas: es la única que sabe qué papel es el
+    ticket cuando hay otro al lado; si el filo detectado coincide con ellas
+    (solape > 75 %) se usa el filo, que es más preciso. Sin la IA: el filo
+    del papel contra la mesa (con la letra borrada antes por cierre
+    morfológico) si tiene dentro ≥ 80 % de lo impreso, y si no el contorno de
+    lo impreso. Los dos números salen de fotos reales: una factura de Leroy
+    Merlin sobre mesa blanca, donde un contorno de sombras la cortaba (74 %),
+    y un ticket de Ballenoil junto a otro papel arrugado (84 %). Antes se
+    exigía el 100 % y el segundo caso metía los dos papeles. Si no se ve
+    hoja, None y recorte simple: nunca se deforma por una hoja inventada. Las fotos reales de prueba no están en el repo: llevan
     nombre, dirección y teléfono.
 
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
@@ -305,7 +312,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-260 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+264 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

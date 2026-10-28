@@ -129,12 +129,12 @@ def _por_el_contenido(gris: np.ndarray, puntos: np.ndarray | None) -> np.ndarray
 def _sugeridas_validas(
     sugeridas: list | None, gris: np.ndarray, impresos: np.ndarray | None
 ) -> np.ndarray | None:
-    """Las esquinas que dijo la IA al leer el ticket, si son creíbles.
+    """Las esquinas que dio la IA al leer el ticket, si son creíbles.
 
-    Llegan como fracciones (0 a 1) del ancho y el alto. Un modelo de visión
-    sitúa la hoja bastante bien pero no al píxel, así que pasan los mismos
-    filtros que lo detectado: tamaño de hoja, forma convexa y toda la letra
-    dentro. Si no, se ignoran.
+    Llegan como fracciones (0 a 1) del ancho y el alto. La IA sabe qué es el
+    ticket aunque haya otro papel al lado (pasó con uno de gasolinera junto a
+    otro arrugado), pero no sitúa al píxel: tiene que ser un cuadrilátero
+    convexo de tamaño de hoja con la mayor parte de la letra dentro.
     """
     if not sugeridas or len(sugeridas) != 4:
         return None
@@ -146,44 +146,58 @@ def _sugeridas_validas(
         return None
     alto, ancho = gris.shape
     puntos = _ordenar(puntos.clip(0, 1) * np.array([ancho - 1, alto - 1], dtype="float32"))
-    area = cv2.contourArea(puntos)
-    if not _AREA_MINIMA * ancho * alto < area or not cv2.isContourConvex(puntos.reshape(-1, 1, 2)):
+    if cv2.contourArea(puntos) < 0.08 * ancho * alto:  # un ticket estrecho ocupa poco
         return None
-    return puntos if _contiene_lo_impreso(puntos, impresos) else None
+    if not cv2.isContourConvex(puntos.reshape(-1, 1, 2)):
+        return None
+    return puntos if _fraccion_dentro(puntos, impresos) >= 0.6 else None
+
+
+def _coinciden(a: np.ndarray, b: np.ndarray) -> bool:
+    """Si dos cuadriláteros son casi el mismo (más del 75 % de solape)."""
+    area_a, area_b = cv2.contourArea(a), cv2.contourArea(b)
+    if not area_a or not area_b:
+        return False
+    comun, _ = cv2.intersectConvexConvex(a.reshape(-1, 1, 2), b.reshape(-1, 1, 2))
+    return comun / (area_a + area_b - comun) > 0.75
 
 
 def _esquinas(gris: np.ndarray, sugeridas: list | None = None) -> np.ndarray | None:
     """Las cuatro esquinas de la hoja en la imagen pequeña, o None.
 
-    Por orden de confianza: el filo del papel si se ve, lo que dijo la IA,
-    y el contorno de lo impreso.
+    Con esquinas de la IA, mandan ellas: es la única que sabe qué papel es el
+    ticket. Si el filo detectado coincide con ellas se usa el filo, que es
+    más preciso. Sin la IA: el filo, si tiene dentro casi toda la letra, y si
+    no el contorno de lo impreso.
     """
     impresos = _puntos_impresos(gris)
     por_bordes = _por_los_bordes(gris)
-    if por_bordes is not None and _contiene_lo_impreso(por_bordes, impresos):
-        return por_bordes
     de_la_ia = _sugeridas_validas(sugeridas, gris, impresos)
     if de_la_ia is not None:
+        if por_bordes is not None and _coinciden(por_bordes, de_la_ia):
+            return por_bordes
         return de_la_ia
+    if por_bordes is not None and _fraccion_dentro(por_bordes, impresos) >= 0.8:
+        return por_bordes
     return _por_el_contenido(gris, impresos)
 
 
-def _contiene_lo_impreso(esquinas: np.ndarray, puntos: np.ndarray | None) -> bool:
-    """Un borde de "hoja" que deja fuera parte de la letra no es la hoja.
+def _fraccion_dentro(esquinas: np.ndarray, puntos: np.ndarray | None) -> float:
+    """Qué parte de lo impreso queda dentro de un cuadrilátero.
 
-    Pasó con una factura real sobre una mesa blanca: un contorno de sombras
-    salía con cuatro esquinas y la deformaba entera. La hoja de verdad tiene
-    dentro todo lo impreso.
+    Un "borde" que deja fuera un buen trozo de la letra no es la hoja: pasó
+    con una factura sobre mesa blanca, donde un contorno de sombras la cortaba
+    (74 % dentro). No se exige el 100 % porque puede haber otro papel con letra
+    en la foto (un ticket de gasolinera junto a otro arrugado: 84 % dentro).
+    Con margen de 15 px: el filo del papel contra mesa oscura sale como tinta
+    pegada por fuera.
     """
     if puntos is None:
-        return True
+        return 1.0
     muestra = puntos.reshape(-1, 2)[:: max(1, len(puntos) // 2000)].astype("float32")
     poligono = esquinas.reshape(-1, 1, 2)
-    # Con margen: el propio filo del papel contra una mesa oscura sale como
-    # "tinta" pegada por fuera (el umbral adaptativo mira 25 px alrededor).
-    # Lo que cuenta es la letra que queda claramente fuera.
-    fuera = sum(cv2.pointPolygonTest(poligono, (float(x), float(y)), True) < -15 for x, y in muestra)
-    return fuera / len(muestra) < 0.02
+    dentro = sum(cv2.pointPolygonTest(poligono, (float(x), float(y)), True) >= -15 for x, y in muestra)
+    return dentro / len(muestra)
 
 
 def enderezar(foto: Image.Image, sugeridas: list | None = None) -> Image.Image | None:

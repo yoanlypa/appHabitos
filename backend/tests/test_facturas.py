@@ -234,3 +234,18 @@ def _foto() -> bytes:
     salida = _io.BytesIO()
     _Image.new("RGB", (300, 500), (230, 225, 200)).save(salida, format="JPEG")
     return salida.getvalue()
+
+
+def test_el_precio_de_la_gasolina_conserva_los_tres_decimales():
+    """Ticket real de Ballenoil: 45,61 l a 1,637 € = 74,66 €. Con 1,64 no cuadra."""
+    d = interpretar_lectura(
+        {"total": 74.66, "lineas": [{"descripcion": "Sin Plomo 95", "cantidad": 45.61,
+                                     "precio_unitario": "1,637", "importe": 74.66}]},
+        HOY,
+    )
+    linea = d.detalle["lineas"][0]
+    assert linea["precio_unitario"] == "1.637"
+    assert linea["cantidad"] == "45.61"
+    assert interpretar_lectura(
+        {"lineas": [{"descripcion": "x", "precio_unitario": 5.6}]}, HOY
+    ).detalle["lineas"][0]["precio_unitario"] == "5.60"

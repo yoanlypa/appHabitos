@@ -47,7 +47,7 @@ class DatosTicket:
         return " · ".join(partes) or "Ticket escaneado"
 
 
-def _importe(valor) -> Decimal | None:
+def _importe(valor, decimales: int = 2) -> Decimal | None:
     if valor is None or isinstance(valor, bool):
         return None
     if isinstance(valor, (int, float)):
@@ -70,7 +70,7 @@ def _importe(valor) -> Decimal | None:
         return None
     if not importe.is_finite():
         return None
-    return importe.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    return importe.quantize(Decimal(10) ** -decimales, rounding=ROUND_HALF_UP)
 
 
 def _fecha(valor, hoy: date) -> date | None:
@@ -108,6 +108,18 @@ def _numero_texto(valor) -> str | None:
     return f"{importe:.2f}" if importe is not None else None
 
 
+def _precio_texto(valor) -> str | None:
+    """Precio unitario: con 3 decimales si los trae (gasolina a 1,637 €/l).
+
+    Redondearlo a 1,64 hace que litros × precio ya no dé el importe, y en una
+    revisión eso parece un ticket mal apuntado.
+    """
+    precio = _importe(valor, decimales=3)
+    if precio is None:
+        return None
+    return f"{precio:.2f}" if precio == precio.quantize(Decimal("0.01")) else f"{precio:.3f}"
+
+
 def _lineas(valor) -> list[dict]:
     """Las líneas de producto. Una línea sin descripción no sirve para nada."""
     if not isinstance(valor, list):
@@ -124,7 +136,7 @@ def _lineas(valor) -> list[dict]:
             {
                 "descripcion": descripcion,
                 "cantidad": f"{cantidad.normalize():f}" if cantidad is not None else None,
-                "precio_unitario": _numero_texto(bruta.get("precio_unitario")),
+                "precio_unitario": _precio_texto(bruta.get("precio_unitario")),
                 "importe": _numero_texto(bruta.get("importe")),
             }
         )
