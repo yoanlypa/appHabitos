@@ -18,6 +18,7 @@ hueco se ve, un 2340 donde iba 23,40 se cuela.
 - Los vales (cheques de devolución, cupones) caducados no se guardan.
 """
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -287,13 +288,37 @@ def es_factura_propia(detalle: dict, comercio: str | None, nif_propio: str, nomb
     como destinatario no es suya aunque el nombre coincida en otro sitio.
     """
     propio = _nif(nif_propio)
+    # El NIF del emisor manda: si es el de Yoa, es suya aunque la IA lo haya
+    # repetido por error en el destinatario.
+    if propio and _nif(detalle.get("cif")) == propio:
+        return True
     destinatario = detalle.get("destinatario") or {}
     if propio and destinatario.get("nif") == propio:
         return False
-    if propio and _nif(detalle.get("cif")) == propio:
-        return True
-    emisor = " ".join(filter(None, [comercio, detalle.get("razon_social")])).upper()
-    return any(n.upper() in emisor for n in nombres if n)
+    # Por nombre, sin tildes ni mayúsculas: las facturas de autónomo salen a
+    # nombre de la persona ("YOANLY PÉREZ ...") y no de la marca, y la IA unas
+    # veces copia la tilde y otras no.
+    emisor = _sin_acentos(" ".join(filter(None, [comercio, detalle.get("razon_social")])))
+    return any(_sin_acentos(n) in emisor for n in nombres if n.strip())
+
+
+def _sin_acentos(texto: str) -> str:
+    plano = unicodedata.normalize("NFD", texto or "")
+    return " ".join("".join(c for c in plano if unicodedata.category(c) != "Mn").upper().split())
+
+
+_RE_PROPIA = re.compile(r"\b(m[ií]a|emitida|factura m[ií]a)\b", re.IGNORECASE)
+
+
+def marca_propia(texto: str | None) -> tuple[bool, str]:
+    """"mía" o "emitida" en el mensaje: es una factura de Yoa aunque no se reconozca.
+
+    La salida para cuando la lectura falle (un NIF mal leído, un nombre que
+    no está en la lista): quien la manda sabe que es suya.
+    """
+    if not texto or not _RE_PROPIA.search(texto):
+        return False, texto or ""
+    return True, " ".join(_RE_PROPIA.sub(" ", texto).split())
 
 
 _RE_COBRADO = re.compile(r"\b(cobrad[oa]s?|pagad[oa]s?)\b", re.IGNORECASE)

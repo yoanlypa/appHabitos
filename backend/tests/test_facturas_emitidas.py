@@ -145,3 +145,39 @@ def test_por_la_web_se_ve_antes_y_se_confirma(db, monkeypatch):
         assert r.status_code == 201
         a = r.json()
         assert (a["tipo"], a["pendiente"], a["factura_emitida"]) == ("trabajo", True, True)
+
+
+@pytest.mark.asyncio
+async def test_a_nombre_del_autonomo_y_con_tildes(db, monkeypatch):
+    """Factura real: emisor la persona, no la marca, y con tilde."""
+    monkeypatch.setattr(facturas, "NOMBRES_PROPIOS", ["YOA INSTALACIONES", "YOANLY PEREZ ACOSTA"])
+    _lectura(monkeypatch, comercio="YOANLY PÉREZ ACOSTA", cif=None)
+    leido, apunte = await _subir(db)
+    assert leido.emitida is not None and apunte.tipo == "trabajo"
+
+
+@pytest.mark.asyncio
+async def test_el_nif_del_emisor_gana_aunque_la_ia_lo_repita_en_el_cliente(db, monkeypatch):
+    _lectura(monkeypatch, comercio="Fulano", destinatario={"nombre": "Iris Galerie", "nif": NIF})
+    leido, _ = await _subir(db)
+    assert leido.emitida is not None
+
+
+@pytest.mark.asyncio
+async def test_mia_en_el_mensaje_la_fuerza(db, monkeypatch):
+    _lectura(monkeypatch, comercio="Fulano", cif=None)
+    leido, apunte = await _subir(db, "mía cobrada")
+    assert leido.emitida is not None and not apunte.pendiente
+    assert "mía" not in apunte.concepto
+
+
+@pytest.mark.asyncio
+async def test_emitida_convierte_un_gasto_que_era_factura_propia(db, monkeypatch):
+    _lectura(monkeypatch, comercio="Fulano", cif=None)
+    _, gasto = await _subir(db)
+    assert gasto.tipo == "gasto"
+    hecho = facturas.convertir_en_emitida(db, USUARIO, gasto.id, cobrada=False)
+    assert (hecho.tipo, hecho.pendiente, hecho.factura_emitida) == ("trabajo", True, True)
+    assert hecho.cliente.nombre == "Iris Galerie"
+    with pytest.raises(facturas.GastoNoValido):
+        facturas.convertir_en_emitida(db, USUARIO, gasto.id, cobrada=False)

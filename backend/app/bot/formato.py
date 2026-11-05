@@ -73,6 +73,7 @@ def ayuda() -> str:
         "  /borrar <número> — borra un apunte mal escrito\n"
         "  /fecha <número> 15/10 — cambia el día de un apunte\n"
         "  /releer — pone en su día los tickets que quedaron en el día equivocado\n"
+        "  /emitida <número> — una factura tuya que entró como gasto pasa a trabajo\n"
         "  /agenda — lo que toca hoy\n"
         "  /manana — lo que toca mañana\n"
         "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
@@ -339,6 +340,7 @@ def ticket_anotado(apunte, datos, fecha_supuesta: bool = False) -> str:
         lineas.append("Márcalo con /hecha cuando lo uses.")
         lineas.append("")
     lineas.append(f"Si está mal: /borrar {apunte.id} y vuelve a mandarla.")
+    lineas.append(f"Si es una factura TUYA a un cliente: /emitida {apunte.id}")
     return "\n".join(lineas)
 
 

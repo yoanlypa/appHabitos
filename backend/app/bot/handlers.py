@@ -17,6 +17,7 @@ from telegram.ext import ContextTypes
 
 from app.bot import copias, formato
 from app.dominio.parsing import TextoNoInterpretable
+from app.dominio.tickets import marca_cobrado
 from app.dominio.parsing_citas import CitaNoInterpretable, interpretar_cita
 from app.nucleo.db import sesion
 from app.nucleo.transcripcion import (
@@ -49,6 +50,7 @@ from app.servicios.facturas import (
     escanear_y_anotar,
     pdf_de_factura,
     GastoNoValido,
+    convertir_en_emitida,
     pdf_del_periodo,
     releer_fechas,
     vincular_emitida,
@@ -550,3 +552,19 @@ async def releer(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
             )
             return
         await update.message.reply_text(formato.relectura(resultado))
+
+
+async def emitida(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """/emitida 25 [cobrada]: una factura tuya que entró como gasto pasa a trabajo."""
+    if not contexto.args or not contexto.args[0].lstrip("#").isdigit():
+        await update.message.reply_text("Dime cuál: /emitida 25  (o /emitida 25 cobrada)")
+        return
+    apunte_id = int(contexto.args[0].lstrip("#"))
+    cobrada, _ = marca_cobrado(" ".join(contexto.args[1:]))
+    with sesion() as db:
+        try:
+            apunte = convertir_en_emitida(db, update.effective_user.id, apunte_id, cobrada)
+        except (LookupError, GastoNoValido) as exc:
+            await update.message.reply_text(f"No he podido: {exc}")
+            return
+        await update.message.reply_text(formato.factura_vinculada(apunte, nuevo=True))

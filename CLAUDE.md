@@ -322,7 +322,14 @@ parte-del-dia/
     trabajos contarían doble); si hay varios, se pregunta (botones `fe:` en el
     bot, desplegable en la web). En Finanzas van en "Mis facturas", aparte de
     "Tickets", y el PDF del mes sale por separado (emitidas y compras), como
-    los pide la gestoría.
+    los pide la gestoría. La primera factura real falló: salía a nombre de
+    Yoa como autónomo (la persona, no la marca) y entró como gasto. Desde
+    entonces los nombres se comparan sin tildes ni mayúsculas, el NIF del
+    emisor gana aunque la IA lo repita en el cliente, "mía"/"emitida" en el
+    mensaje la fuerza (`marca_propia`), y `/emitida <nº> [cobrada]`
+    (`convertir_en_emitida`) pasa a trabajo lo que entró como gasto, con lo
+    ya leído y sin pagar otra lectura. El repo es público: el nombre completo
+    y el NIF van en `NOMBRES_PROPIOS` y `NIF_PROPIO` de Railway, nunca aquí.
   - **Los vales del ticket van al buzón como notas pendientes** (cheques de
     devolución, cupones, vales de descuento). Visto en un ticket real de
     Ballenoil: un cheque de 25,34 € por pagar con un billete de 100 y un
@@ -372,7 +379,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-310 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+314 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

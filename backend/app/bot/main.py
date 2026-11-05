@@ -47,6 +47,7 @@ def construir_app() -> Application:
     app.add_handler(CommandHandler("borrar", handlers.borrar))
     app.add_handler(CommandHandler("fecha", handlers.fecha))
     app.add_handler(CommandHandler("releer", handlers.releer))
+    app.add_handler(CommandHandler("emitida", handlers.emitida))
     app.add_handler(CommandHandler("copia", handlers.copia))
     app.add_handler(CommandHandler("trimestre", handlers.trimestre))
     app.add_handler(CommandHandler("facturas", handlers.facturas))

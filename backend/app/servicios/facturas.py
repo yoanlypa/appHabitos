@@ -31,6 +31,7 @@ from app.dominio.tickets import (
     fecha_escrita,
     interpretar_lectura,
     marca_cobrado,
+    marca_propia,
     texto_de_vale,
 )
 from app.nucleo.config import NIF_PROPIO, NOMBRES_PROPIOS
@@ -255,7 +256,8 @@ async def escanear_y_anotar(
     if leido.datos.total is None:
         borrar_factura(db, user_id, leido.factura.id)
         return leido, None
-    if es_factura_propia(leido.datos.detalle, leido.datos.comercio, NIF_PROPIO, NOMBRES_PROPIOS):
+    forzada, concepto = marca_propia(concepto)
+    if forzada or es_factura_propia(leido.datos.detalle, leido.datos.comercio, NIF_PROPIO, NOMBRES_PROPIOS):
         cobrada, concepto = marca_cobrado(concepto)
         fecha_escrita_, concepto = fecha_escrita(concepto, hoy_local())
         fecha = fecha_escrita_ or leido.datos.fecha
@@ -715,6 +717,38 @@ def vincular_emitida(
     factura.apunte_id = apunte.id
     if cobrada:
         apunte.pendiente = False
+    db.commit()
+    db.refresh(apunte)
+    return apunte
+
+
+
+def convertir_en_emitida(db: Session, user_id: int, apunte_id: int, cobrada: bool) -> Apunte:
+    """Un gasto que en realidad era una factura de Yoa pasa a trabajo pendiente.
+
+    Para cuando no se reconoció al subirla (pasó con una factura a nombre de
+    Yoa como autónomo, no de la marca). Usa lo ya leído: no paga otra lectura.
+    """
+    apunte = (
+        db.query(Apunte).filter(Apunte.id == apunte_id, Apunte.user_id == user_id).first()
+    )
+    if apunte is None:
+        raise FacturaNoEncontrada(f"apunte {apunte_id} no existe")
+    factura = apunte.factura
+    if factura is None:
+        raise GastoNoValido("ese apunte no tiene factura colgada")
+    if factura.emitida:
+        raise GastoNoValido("esa factura ya está como tuya")
+    datos = interpretar_lectura(datos_leidos(factura), hoy_local())
+    cliente, _ = _cliente_de(db, user_id, datos.detalle.get("destinatario"))
+    factura.emitida = True
+    apunte.tipo = "trabajo"
+    apunte.pendiente = not cobrada
+    apunte.cliente_id = cliente.id if cliente else apunte.cliente_id
+    apunte.concepto = _concepto_de_factura(datos, cliente, "")
+    importe = importe_a_cobrar(datos)
+    if importe:
+        apunte.importe = importe
     db.commit()
     db.refresh(apunte)
     return apunte
