@@ -50,6 +50,13 @@ CORS_ORIGENES = [
     if origen.strip()
 ]
 
+# Dirección de la web, para el botón de /web que entra sin copiar el token.
+# Si no se pone, se usa la primera de CORS_ORIGENES que no sea local: es la
+# misma web, y así no hay que configurar nada más en Railway.
+URL_WEB = os.getenv("URL_WEB", "").strip().rstrip("/") or next(
+    (o.rstrip("/") for o in CORS_ORIGENES if o.startswith("https://")), ""
+)
+
 # Lectura de tickets y facturas escaneados. Usa la misma OPENAI_API_KEY que
 # la voz: un modelo con visión lee el total, la fecha y el comercio de la
 # foto por menos de un céntimo, y acierta mucho más que un OCR clásico con

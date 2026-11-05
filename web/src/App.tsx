@@ -25,6 +25,29 @@ import './App.css'
 
 const CLAVE = 'parte-del-dia:token'
 
+/**
+ * El botón "Abrir la web" de /web trae el token en la dirección
+ * (`#token=...`): se guarda y se borra de la barra enseguida, para que no se
+ * quede en el historial ni salga si se comparte el enlace.
+ */
+function tokenInicial(): string {
+  const enlace = new URLSearchParams(window.location.hash.slice(1)).get('token')?.trim()
+  if (enlace) {
+    try {
+      localStorage.setItem(CLAVE, enlace)
+    } catch {
+      /* sin almacenamiento sigue valiendo para esta visita */
+    }
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    return enlace
+  }
+  try {
+    return localStorage.getItem(CLAVE) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 const SECCIONES = [
   { id: 'hoy', nombre: 'Hoy', icono: '☰' },
   { id: 'notas', nombre: 'Notas', icono: '✎' },
@@ -37,7 +60,7 @@ const SECCIONES = [
 type Seccion = (typeof SECCIONES)[number]['id']
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem(CLAVE) ?? '')
+  const [token, setToken] = useState(tokenInicial)
   const [error, setError] = useState('')
   const [seccion, setSeccion] = useState<Seccion>('hoy')
   const [alarma, setAlarma] = useState('')

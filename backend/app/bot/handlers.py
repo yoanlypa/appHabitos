@@ -10,12 +10,20 @@ sacarla a un hilo.
 """
 from datetime import timedelta
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile, Message, Update
+from telegram import (
+    CopyTextButton,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InputFile,
+    Message,
+    Update,
+)
 from telegram.constants import ChatAction
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 from app.bot import copias, formato
+from app.nucleo.config import URL_WEB
 from app.dominio.parsing import TextoNoInterpretable
 from app.dominio.tickets import marca_cobrado
 from app.dominio.parsing_citas import CitaNoInterpretable, interpretar_cita
@@ -291,8 +299,17 @@ async def avisos(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
 async def web(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
     with sesion() as db:
         token = generar_token(db, update.effective_user.id)
+    # El token va solo en su mensaje y en monoespaciado: en Telegram se copia
+    # tocándolo. Los botones: uno abre la web ya dentro (el token va tras el
+    # "#", que el navegador no manda a ningún servidor) y otro lo copia.
+    botones = []
+    if URL_WEB:
+        botones.append([InlineKeyboardButton("🌐 Abrir la web", url=f"{URL_WEB}/#token={token}")])
+    botones.append([InlineKeyboardButton("📋 Copiar token", copy_text=CopyTextButton(token))])
     await update.message.reply_text(
-        f"Tu token para entrar en la web (no lo compartas):\n\n{token}"
+        f"<code>{token}</code>",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(botones),
     )
 
 
