@@ -29,6 +29,7 @@ class ApunteSalida(BaseModel):
     creado: datetime
     cliente_id: int | None = None
     factura_id: int | None = None
+    factura_emitida: bool = False
 
 
 class ResumenSalida(BaseModel):
@@ -259,6 +260,20 @@ class TicketLeido(BaseModel):
     comercio: str | None
     iva: Importe | None
     concepto: str
+    # Si es una factura que emite Yoa: a quién, cuánto entra de verdad (sin
+    # la retención) y qué trabajos pendientes podrían ser el suyo.
+    emitida: bool = False
+    cliente: str | None = None
+    a_cobrar: Importe | None = None
+    candidatos: list[ApunteSalida] = []
+
+
+class FacturaEmitidaEntrada(BaseModel):
+    apunte_id: int | None = None  # None: trabajo nuevo
+    cobrada: bool = False
+    concepto: str = ""
+    importe: Decimal | None = None
+    fecha: date | None = None
 
 
 class GastoDeFactura(BaseModel):

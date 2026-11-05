@@ -48,8 +48,10 @@ from app.servicios.facturas import (
     FacturaNoValida,
     escanear_y_anotar,
     pdf_de_factura,
+    GastoNoValido,
     pdf_del_periodo,
     releer_fechas,
+    vincular_emitida,
 )
 
 
@@ -454,21 +456,52 @@ async def foto_de_ticket(update: Update, contexto: ContextTypes.DEFAULT_TYPE) ->
             await mensaje.reply_text(f"No he podido leer ese ticket: {exc}")
             return
 
+        if leido.emitida is not None and apunte is None:
+            # Varios trabajos pendientes podrían ser el de esta factura: se
+            # pregunta en vez de colgarla del que no es.
+            cobrada = "1" if leido.emitida.cobrada else "0"
+            fid = leido.factura.id
+            botones = [
+                [InlineKeyboardButton(formato.boton_trabajo(a), callback_data=f"fe:{fid}:{a.id}:{cobrada}")]
+                for a in leido.emitida.candidatos[:6]
+            ]
+            botones.append([InlineKeyboardButton("Ninguno: es un trabajo nuevo", callback_data=f"fe:{fid}:0:{cobrada}")])
+            await mensaje.reply_text(
+                formato.preguntar_trabajo(leido.emitida), reply_markup=InlineKeyboardMarkup(botones)
+            )
+            return
         if apunte is None:
             await mensaje.reply_text(formato.ticket_sin_total())
             return
+        if leido.emitida is not None:
+            texto = formato.factura_emitida(leido.emitida, leido.fecha_supuesta)
+        else:
+            texto = formato.ticket_anotado(apunte, leido.datos, leido.fecha_supuesta)
         # Con el PDF escaneado en la respuesta, como CamScanner: se guarda o se
         # reenvía a la gestoría desde el propio chat. Si no se puede generar,
         # el gasto ya está anotado y la foto guardada: se dice y no pasa nada.
         try:
             contenido, nombre = pdf_de_factura(db, update.effective_user.id, leido.factura.id)
         except ImagenNoLegible:
-            await mensaje.reply_text(formato.ticket_anotado(apunte, leido.datos, leido.fecha_supuesta))
+            await mensaje.reply_text(texto)
             return
-        await mensaje.reply_document(
-            document=InputFile(contenido, filename=nombre),
-            caption=formato.ticket_anotado(apunte, leido.datos, leido.fecha_supuesta),
-        )
+        await mensaje.reply_document(document=InputFile(contenido, filename=nombre), caption=texto)
+
+
+async def elegir_trabajo_de_factura(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """Respuesta a "¿de qué trabajo es esta factura?"."""
+    consulta = update.callback_query
+    await consulta.answer()
+    _, factura_id, apunte_id, cobrada = consulta.data.split(":")
+    with sesion() as db:
+        try:
+            apunte = vincular_emitida(
+                db, consulta.from_user.id, int(factura_id), int(apunte_id) or None, cobrada == "1"
+            )
+        except (LookupError, FacturaNoValida, GastoNoValido) as exc:
+            await consulta.edit_message_text(f"No he podido anotarla: {exc}")
+            return
+        await consulta.edit_message_text(formato.factura_vinculada(apunte, nuevo=apunte_id == "0"))
 
 
 async def facturas(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
@@ -483,14 +516,22 @@ async def facturas(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
 
     await update.message.chat.send_action(ChatAction.UPLOAD_DOCUMENT)
     with sesion() as db:
-        contenido = pdf_del_periodo(db, update.effective_user.id, desde, hasta)
-    if contenido is None:
+        tickets = pdf_del_periodo(db, update.effective_user.id, desde, hasta)
+        emitidas = pdf_del_periodo(db, update.effective_user.id, desde, hasta, emitidas=True)
+    if tickets is None and emitidas is None:
         await update.message.reply_text(formato.sin_facturas(desde))
         return
-    await update.message.reply_document(
-        document=InputFile(contenido, filename=f"facturas-{desde:%Y-%m}.pdf"),
-        caption=formato.facturas_del_mes(desde),
-    )
+    # Por separado, como las pide la gestoría: las de compra y las emitidas.
+    if emitidas is not None:
+        await update.message.reply_document(
+            document=InputFile(emitidas, filename=f"facturas-emitidas-{desde:%Y-%m}.pdf"),
+            caption=formato.emitidas_del_mes(desde),
+        )
+    if tickets is not None:
+        await update.message.reply_document(
+            document=InputFile(tickets, filename=f"tickets-{desde:%Y-%m}.pdf"),
+            caption=formato.facturas_del_mes(desde),
+        )
 
 
 async def releer(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:

@@ -73,6 +73,11 @@ class Apunte(Base):
     def factura_id(self) -> int | None:
         return self.factura.id if self.factura else None
 
+    @property
+    def factura_emitida(self) -> bool:
+        """Si cuelga de una factura que emitió Yoa (no de un ticket de compra)."""
+        return bool(self.factura and self.factura.emitida)
+
 
 class Ajuste(Base):
     __tablename__ = "ajustes"
@@ -211,5 +216,8 @@ class Factura(Base):
     datos = Column(Text, nullable=True)
     # Las esquinas del papel que vio el modelo, para enderezar el PDF.
     esquinas = Column(Text, nullable=True)
+    # True si la factura la emite Yoa a un cliente (cuelga de un trabajo, es
+    # dinero que entra); False si es un ticket o factura de compra (un gasto).
+    emitida = Column(Boolean, nullable=False, default=False, server_default=text("0"))
 
     apunte = relationship("Apunte", back_populates="factura")

@@ -389,3 +389,47 @@ def relectura(resultado) -> str:
     if resultado.quedan:
         lineas.append(f"Quedan {resultado.quedan} por revisar: manda /releer otra vez.")
     return "\n".join(lineas)
+
+
+def emitidas_del_mes(desde) -> str:
+    return f"📤 Tus facturas emitidas de {_mes(desde)}, una por página."
+
+
+def boton_trabajo(apunte) -> str:
+    return f"{apunte.fecha:%d/%m} · {apunte.concepto[:30]} · {euros(apunte.importe)}"
+
+
+def preguntar_trabajo(emitida) -> str:
+    quien = f" de {emitida.cliente.nombre}" if emitida.cliente else ""
+    return (
+        f"📤 Es una factura tuya{quien}. Tengo varios trabajos pendientes que "
+        "podrían ser el suyo. ¿De cuál es?"
+    )
+
+
+def factura_emitida(emitida, fecha_supuesta: bool = False) -> str:
+    """Lo que se hizo con una factura de Yoa: a qué trabajo va y si está cobrada."""
+    a = emitida.apunte
+    lineas = [f"📤 Factura tuya anotada como trabajo (#{a.id}): {a.concepto}"]
+    lineas.append(f"+{euros(a.importe)} · {dia_con_nombre(a.fecha)}")
+    if emitida.vinculada:
+        lineas.append("La he colgado del trabajo que ya tenías apuntado (no se cuenta dos veces).")
+    if emitida.cliente is not None:
+        alta = " (nuevo, dado de alta con los datos de la factura)" if emitida.cliente_nuevo else ""
+        lineas.append(f"Cliente: {emitida.cliente.nombre}{alta}")
+    if a.pendiente:
+        lineas.append(f"⏳ Pendiente de cobro. Cuando te paguen: /cobrado {a.id}")
+    else:
+        lineas.append("✅ Cobrada.")
+    if fecha_supuesta:
+        lineas.append(f"⚠️ No he leído la fecha de la factura: la he puesto hoy. Cámbiala con /fecha {a.id} 15/10")
+    return "\n".join(lineas)
+
+
+def factura_vinculada(apunte, nuevo: bool) -> str:
+    estado = "⏳ Pendiente de cobro" if apunte.pendiente else "✅ Cobrada"
+    como = "como trabajo nuevo" if nuevo else "en el trabajo"
+    return (
+        f"📤 Factura anotada {como} (#{apunte.id}): {apunte.concepto}\n"
+        f"+{euros(apunte.importe)} · {estado}"
+    )

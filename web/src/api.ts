@@ -19,6 +19,8 @@ export type Apunte = {
   cliente_id: number | null
   // La foto del ticket, si el gasto salió de escanearlo.
   factura_id: number | null
+  // Si esa factura la emitió Yoa (cuelga de un trabajo) y no es de compra.
+  factura_emitida: boolean
 }
 
 export type Resumen = {
@@ -486,6 +488,24 @@ export type TicketLeido = {
   comercio: string | null
   iva: string | null
   concepto: string
+  /** Si la factura la emite Yoa: va a un trabajo, no a un gasto. */
+  emitida: boolean
+  cliente: string | null
+  a_cobrar: string | null
+  candidatos: Apunte[]
+}
+
+/** Una factura de Yoa confirmada: a un trabajo ya anotado o a uno nuevo. */
+export function confirmarFacturaEmitida(
+  token: string,
+  facturaId: number,
+  datos: { apunte_id: number | null; cobrada: boolean; concepto: string; importe: string; fecha: string | null },
+) {
+  return pedir<Apunte>(token, `/facturas/${facturaId}/emitida`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos),
+  })
 }
 
 /** Sube la foto y la lee. No anota nada: eso es `confirmarGastoDeFactura`. */
@@ -543,10 +563,10 @@ export function abrirFactura(token: string, facturaId: number) {
 }
 
 /** Todos los tickets del periodo en un PDF, uno por página, para la gestoría. */
-export function abrirFacturasDelPeriodo(token: string, desde: string, hasta: string) {
+export function abrirFacturasDelPeriodo(token: string, desde: string, hasta: string, emitidas = false) {
   return abrirPdf(
     token,
-    `/facturas/pdf?desde=${desde}&hasta=${hasta}`,
-    `facturas-${desde}_${hasta}.pdf`,
+    `/facturas/pdf?desde=${desde}&hasta=${hasta}&emitidas=${emitidas}`,
+    `${emitidas ? 'facturas-emitidas' : 'tickets'}-${desde}_${hasta}.pdf`,
   )
 }

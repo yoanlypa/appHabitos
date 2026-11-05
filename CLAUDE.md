@@ -308,6 +308,21 @@ parte-del-dia/
     cual, sin enderezar ni filtro de sombras: ya es un documento limpio, y
     las esquinas que diga la IA se descartan. Un PDF roto o con contraseña
     da `FacturaNoValida` antes de pagar ninguna lectura.
+  - **Las facturas que emite Yoa entran como trabajo, no como gasto**
+    (`registrar_emitida` en `servicios/facturas.py`, `Factura.emitida`). Se
+    reconocen por el EMISOR (`es_factura_propia`): su NIF (`NIF_PROPIO`, en
+    Railway, no en el repo) o el nombre (`NOMBRES_PROPIOS`). Su NIF sale
+    también como cliente en sus compras (Leroy Merlin, Ballenoil), así que si
+    es el destinatario no es suya. El trabajo queda pendiente de cobro salvo
+    que el mensaje diga "cobrado"/"pagado" (`marca_cobrado`), por el total
+    menos la retención de IRPF si la hay. El cliente se busca por NIF o nombre
+    y, si no está, se da de alta con los datos de la factura: aquí sí, porque
+    vienen escritos, no se adivinan. Si ya hay un trabajo pendiente de ese
+    cliente por ese importe se cuelga de él en vez de crear otro (dos
+    trabajos contarían doble); si hay varios, se pregunta (botones `fe:` en el
+    bot, desplegable en la web). En Finanzas van en "Mis facturas", aparte de
+    "Tickets", y el PDF del mes sale por separado (emitidas y compras), como
+    los pide la gestoría.
   - **Los vales del ticket van al buzón como notas pendientes** (cheques de
     devolución, cupones, vales de descuento). Visto en un ticket real de
     Ballenoil: un cheque de 25,34 € por pagar con un billete de 100 y un
@@ -357,7 +372,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-302 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+310 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

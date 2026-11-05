@@ -1089,3 +1089,9 @@ button.enlace.borrar-enlace {
   color: var(--texto);
   border: 1px solid var(--borde);
 }
+
+/* `.modal label` lleva display:flex, que gana a [hidden]: sin esto, los
+   campos que se ocultan al colgar una factura de un trabajo seguían a la vista. */
+.modal label[hidden] {
+  display: none;
+}

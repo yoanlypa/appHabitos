@@ -17,14 +17,23 @@ borra pasado un día (se llama al escanear) para que no se acumulen fotos que na
 """
 import io
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
 from app.dominio.models import Apunte, Factura
-from app.dominio.tickets import DatosTicket, fecha_escrita, interpretar_lectura, texto_de_vale
+from app.dominio.models import Cliente
+from app.dominio.tickets import (
+    DatosTicket,
+    es_factura_propia,
+    fecha_escrita,
+    interpretar_lectura,
+    marca_cobrado,
+    texto_de_vale,
+)
+from app.nucleo.config import NIF_PROPIO, NOMBRES_PROPIOS
 from app.nucleo import archivos
 from app.nucleo.lectura_tickets import leer_ticket
 from app.nucleo.paginas_pdf import PdfNoLegible, unir_en_una
@@ -53,6 +62,8 @@ class TicketEscaneado:
     # Si no se leyó la fecha (ni se escribió con la foto) y se puso la de
     # hoy. Hay que decirlo: un gasto en el día que no es descuadra el mes.
     fecha_supuesta: bool = False
+    # Si era una factura que emite Yoa: lo que se hizo con ella.
+    emitida: "FacturaEmitida | None" = None
 
 
 def guardar_factura(db: Session, user_id: int, imagen: bytes, mime: str) -> Factura:
@@ -244,6 +255,15 @@ async def escanear_y_anotar(
     if leido.datos.total is None:
         borrar_factura(db, user_id, leido.factura.id)
         return leido, None
+    if es_factura_propia(leido.datos.detalle, leido.datos.comercio, NIF_PROPIO, NOMBRES_PROPIOS):
+        cobrada, concepto = marca_cobrado(concepto)
+        fecha_escrita_, concepto = fecha_escrita(concepto, hoy_local())
+        fecha = fecha_escrita_ or leido.datos.fecha
+        leido.fecha_supuesta = fecha is None
+        leido.emitida = registrar_emitida(
+            db, user_id, leido.factura, leido.datos, cobrada, concepto.strip(), fecha, origen
+        )
+        return leido, leido.emitida.apunte
     # El texto de la foto puede empezar por la fecha ("15/10 material baño"):
     # manda sobre la leída, que quien la escribe tiene el ticket delante. Es
     # lo útil al subir tickets viejos borrosos.
@@ -301,7 +321,9 @@ def _pagina_de_datos(factura: Factura) -> PaginaDeDatos | None:
         a, m, dia = fecha.split("-")
         fecha = f"{dia}/{m}/{a}" + (f"  {d['hora']}" if d.get("hora") else "")
     filas = [
-        ("Comercio", d.get("razon_social") or d.get("comercio")),
+        ("Emisor" if factura.emitida else "Comercio", d.get("razon_social") or d.get("comercio")),
+        ("Cliente", (d.get("destinatario") or {}).get("nombre") if factura.emitida else None),
+        ("NIF cliente", (d.get("destinatario") or {}).get("nif") if factura.emitida else None),
         ("CIF", d.get("cif")),
         ("Dirección", d.get("direccion")),
         ("Nº factura/ticket", d.get("numero")),
@@ -332,8 +354,12 @@ def _pagina_de_datos(factura: Factura) -> PaginaDeDatos | None:
     total = d.get("total") or (f"{apunte.importe:.2f}" if apunte else None)
     if total:
         pie.append(("TOTAL", _euros(total)))
+    if d.get("retencion"):
+        pie.append(("Retención IRPF", "-" + _euros(d["retencion"])))
+    if factura.emitida and apunte is not None:
+        filas.append(("Estado", "Pendiente de cobro" if apunte.pendiente else "Cobrada"))
     return PaginaDeDatos(
-        titulo="Datos del ticket",
+        titulo="Factura emitida" if factura.emitida else "Datos del ticket",
         filas=[(e, v) for e, v in filas if v],
         cabecera=["Descripción", "Cant.", "Precio", "Importe"] if tabla else None,
         tabla=tabla or None,
@@ -341,17 +367,22 @@ def _pagina_de_datos(factura: Factura) -> PaginaDeDatos | None:
     )
 
 
-def pdf_del_periodo(db: Session, user_id: int, desde: date, hasta: date) -> bytes | None:
-    """Todas las facturas de los gastos entre dos fechas, una por página.
+def pdf_del_periodo(
+    db: Session, user_id: int, desde: date, hasta: date, emitidas: bool = False
+) -> bytes | None:
+    """Los justificantes entre dos fechas, uno por página.
 
-    Por fecha del gasto y no de escaneo: es el orden en que las pide la
-    gestoría. Sin facturas devuelve None, que no es un error.
+    Por separado los tickets de compra (gastos) y las facturas que emite Yoa
+    (`emitidas`): la gestoría los pide aparte, porque unos son IVA soportado
+    y otros IVA repercutido. Por fecha del apunte, que es el orden en que
+    los piden. Sin ninguno devuelve None, que no es un error.
     """
     facturas = (
         db.query(Factura)
         .join(Apunte, Factura.apunte_id == Apunte.id)
         .filter(
             Factura.user_id == user_id,
+            Factura.emitida.is_(emitidas),
             Apunte.fecha >= desde,
             Apunte.fecha <= hasta,
         )
@@ -442,3 +473,248 @@ async def releer_fechas(db: Session, user_id: int, tanda: int = 25) -> Relectura
     return Relectura(
         corregidas=corregidas, sin_fecha=sin_fecha, quedan=max(0, len(candidatas) - tanda)
     )
+
+
+
+# ---------- Facturas que emite Yoa ----------
+
+
+@dataclass
+class FacturaEmitida:
+    """Lo que pasó con una factura de Yoa a un cliente.
+
+    `apunte` es el trabajo del que cuelga. Si hay varios trabajos pendientes
+    que podrían ser el suyo, `apunte` va vacío y `candidatos` dice entre
+    cuáles elegir: colgarla del que no es descuadraría dos cuentas.
+    """
+
+    factura: Factura
+    apunte: Apunte | None
+    cliente: Cliente | None
+    cliente_nuevo: bool
+    vinculada: bool  # colgada de un trabajo que ya estaba anotado
+    cobrada: bool
+    candidatos: list = field(default_factory=list)
+
+
+def importe_a_cobrar(datos: DatosTicket) -> Decimal | None:
+    """Lo que de verdad entra: el total menos la retención de IRPF, si la hay."""
+    if datos.total is None:
+        return None
+    retencion = Decimal(datos.detalle["retencion"]) if datos.detalle.get("retencion") else Decimal("0")
+    return datos.total - retencion if retencion < datos.total else datos.total
+
+
+def buscar_cliente(db: Session, user_id: int, destinatario: dict | None) -> Cliente | None:
+    """El cliente ya dado de alta que es el destinatario: por NIF o por nombre exacto."""
+    if not destinatario or not destinatario.get("nombre"):
+        return None
+    nif = destinatario.get("nif")
+    nombre = destinatario["nombre"].casefold()
+    for cliente in db.query(Cliente).filter(Cliente.user_id == user_id).all():
+        if nif and nif in (cliente.notas or "").upper().replace(" ", "").replace("-", ""):
+            return cliente
+        if cliente.nombre.casefold() == nombre:
+            return cliente
+    return None
+
+
+@dataclass
+class VistaEmitida:
+    """Lo que la web enseña antes de anotar una factura propia (sin tocar nada)."""
+
+    cliente: str | None
+    candidatos: list
+
+
+def vista_emitida(db: Session, user_id: int, datos: DatosTicket) -> VistaEmitida | None:
+    if not es_factura_propia(datos.detalle, datos.comercio, NIF_PROPIO, NOMBRES_PROPIOS):
+        return None
+    destinatario = datos.detalle.get("destinatario")
+    cliente = buscar_cliente(db, user_id, destinatario)
+    candidatos = (
+        _trabajos_candidatos(db, user_id, cliente, {importe_a_cobrar(datos), datos.total})
+        if cliente is not None
+        else []
+    )
+    return VistaEmitida(cliente=(destinatario or {}).get("nombre"), candidatos=candidatos)
+
+
+def anotar_emitida(
+    db: Session,
+    user_id: int,
+    factura_id: int,
+    apunte_id: int | None,
+    cobrada: bool,
+    concepto: str,
+    importe: Decimal,
+    fecha: date | None,
+    origen: str,
+) -> Apunte:
+    """La factura propia confirmada desde la web: a un trabajo existente o a uno nuevo."""
+    factura = _suya(db, user_id, factura_id)
+    factura.emitida = True
+    db.commit()
+    if apunte_id is not None:
+        return vincular_emitida(db, user_id, factura_id, apunte_id, cobrada)
+    if factura.apunte_id is not None:
+        raise GastoNoValido("esta factura ya está anotada")
+    if importe is None or importe <= 0:
+        raise GastoNoValido("el importe tiene que ser mayor que cero")
+    datos = interpretar_lectura(datos_leidos(factura), hoy_local())
+    cliente, _ = _cliente_de(db, user_id, datos.detalle.get("destinatario"))
+    apunte = Apunte(
+        user_id=user_id,
+        fecha=fecha or datos.fecha or hoy_local(),
+        tipo="trabajo",
+        concepto=(concepto or "").strip() or _concepto_de_factura(datos, cliente, ""),
+        importe=importe,
+        pendiente=not cobrada,
+        origen=origen,
+        cliente_id=cliente.id if cliente else None,
+    )
+    db.add(apunte)
+    db.flush()
+    factura.apunte_id = apunte.id
+    db.commit()
+    db.refresh(apunte)
+    return apunte
+
+
+def _cliente_de(db: Session, user_id: int, destinatario: dict | None) -> tuple[Cliente | None, bool]:
+    """El cliente de la factura: el que ya existe con ese NIF o nombre, o uno nuevo.
+
+    Aquí sí se da de alta solo, al revés que al anotar un texto: en una
+    factura el nombre, el NIF y la dirección vienen escritos, no se adivinan.
+    """
+    if not destinatario or not destinatario.get("nombre"):
+        return None, False
+    existente = buscar_cliente(db, user_id, destinatario)
+    if existente is not None:
+        return existente, False
+    nif = destinatario.get("nif")
+    cliente = Cliente(
+        user_id=user_id,
+        nombre=destinatario["nombre"],
+        telefono=destinatario.get("telefono"),
+        direccion=destinatario.get("direccion"),
+        notas=f"NIF: {nif}" if nif else None,
+    )
+    db.add(cliente)
+    db.commit()
+    db.refresh(cliente)
+    return cliente, True
+
+
+def _trabajos_candidatos(
+    db: Session, user_id: int, cliente: Cliente | None, importes: set
+) -> list[Apunte]:
+    """Trabajos pendientes, sin factura, que podrían ser el de esta factura."""
+    consulta = db.query(Apunte).filter(
+        Apunte.user_id == user_id,
+        Apunte.tipo == "trabajo",
+        Apunte.pendiente.is_(True),
+    )
+    if cliente is not None:
+        consulta = consulta.filter(Apunte.cliente_id == cliente.id)
+    return [a for a in consulta.order_by(Apunte.fecha.desc()).all() if a.factura is None and a.importe in importes]
+
+
+def registrar_emitida(
+    db: Session,
+    user_id: int,
+    factura: Factura,
+    datos: DatosTicket,
+    cobrada: bool,
+    concepto: str,
+    fecha: date | None,
+    origen: str,
+) -> FacturaEmitida:
+    """Una factura de Yoa: un trabajo pendiente de cobro con la factura colgada.
+
+    Si ya hay un trabajo pendiente del mismo cliente por ese importe (se
+    apuntó "Reforma baño Ana 980" antes de hacer la factura), se cuelga de
+    ese en vez de crear otro: dos trabajos por lo mismo contarían doble lo
+    cobrado. Si hay más de uno posible, no se elige: se devuelven para
+    preguntar.
+    """
+    factura.emitida = True
+    db.commit()
+    cliente, nuevo = _cliente_de(db, user_id, datos.detalle.get("destinatario"))
+    importe = importe_a_cobrar(datos)
+    candidatos = [] if nuevo else _trabajos_candidatos(db, user_id, cliente, {importe, datos.total})
+    resultado = FacturaEmitida(
+        factura=factura, apunte=None, cliente=cliente, cliente_nuevo=nuevo,
+        vinculada=False, cobrada=cobrada,
+    )
+    if len(candidatos) > 1:
+        resultado.candidatos = candidatos
+        return resultado
+    if len(candidatos) == 1:
+        resultado.apunte = vincular_emitida(db, user_id, factura.id, candidatos[0].id, cobrada)
+        resultado.vinculada = True
+        return resultado
+    resultado.apunte = _nuevo_trabajo(
+        db, user_id, factura, datos, cliente, importe, cobrada, concepto, fecha, origen
+    )
+    return resultado
+
+
+def _concepto_de_factura(datos: DatosTicket, cliente: Cliente | None, escrito: str) -> str:
+    partes = []
+    if datos.detalle.get("numero"):
+        partes.append(f"Fra. {datos.detalle['numero']}")
+    partes.append(escrito or datos.concepto or "Factura")
+    if cliente is not None:
+        partes.append(cliente.nombre)
+    return " · ".join(partes)
+
+
+def _nuevo_trabajo(db, user_id, factura, datos, cliente, importe, cobrada, concepto, fecha, origen) -> Apunte:
+    apunte = Apunte(
+        user_id=user_id,
+        fecha=fecha or hoy_local(),
+        tipo="trabajo",
+        concepto=_concepto_de_factura(datos, cliente, concepto),
+        importe=importe,
+        pendiente=not cobrada,
+        origen=origen,
+        cliente_id=cliente.id if cliente else None,
+    )
+    db.add(apunte)
+    db.flush()
+    factura.apunte_id = apunte.id
+    db.commit()
+    db.refresh(apunte)
+    return apunte
+
+
+def vincular_emitida(
+    db: Session, user_id: int, factura_id: int, apunte_id: int | None, cobrada: bool
+) -> Apunte:
+    """Cuelga una factura propia de un trabajo ya anotado, o crea uno (apunte_id None).
+
+    Es lo que contesta la pregunta "¿de qué trabajo es esta factura?".
+    """
+    factura = _suya(db, user_id, factura_id)
+    if factura.apunte_id is not None:
+        raise GastoNoValido("esta factura ya está anotada")
+    if apunte_id is None:
+        datos = interpretar_lectura(datos_leidos(factura), hoy_local())
+        cliente, _ = _cliente_de(db, user_id, datos.detalle.get("destinatario"))
+        return _nuevo_trabajo(
+            db, user_id, factura, datos, cliente, importe_a_cobrar(datos), cobrada, "", datos.fecha, "bot"
+        )
+    apunte = (
+        db.query(Apunte)
+        .filter(Apunte.id == apunte_id, Apunte.user_id == user_id, Apunte.tipo == "trabajo")
+        .first()
+    )
+    if apunte is None or apunte.factura is not None:
+        raise GastoNoValido("ese trabajo no existe o ya tiene factura")
+    factura.apunte_id = apunte.id
+    if cobrada:
+        apunte.pendiente = False
+    db.commit()
+    db.refresh(apunte)
+    return apunte

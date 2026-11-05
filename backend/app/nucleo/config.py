@@ -59,3 +59,13 @@ MODELO_TICKETS = os.getenv("MODELO_TICKETS", "gpt-4o-mini")
 # dentro del volumen /data), que es justo donde tienen que estar para no
 # perderse en un redespliegue.
 RUTA_FACTURAS = os.getenv("RUTA_FACTURAS", "")
+
+# Para reconocer las facturas que emite Yoa (no las que recibe): su NIF y el
+# nombre de la empresa como emisor. El NIF no va en el código: se pone en
+# Railway. Sin él se reconoce solo por el nombre.
+NIF_PROPIO = os.getenv("NIF_PROPIO", "")
+NOMBRES_PROPIOS = [
+    n.strip()
+    for n in os.getenv("NOMBRES_PROPIOS", "YOA INSTALACIONES,YOA PRO").split(",")
+    if n.strip()
+]

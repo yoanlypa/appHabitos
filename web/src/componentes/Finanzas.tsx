@@ -91,12 +91,14 @@ const FILTROS = [
   { id: 'trabajo', nombre: 'Trabajos' },
   { id: 'gasto', nombre: 'Gastos' },
   { id: 'tickets', nombre: 'Tickets' },
+  { id: 'emitidas', nombre: 'Mis facturas' },
 ] as const
 type Filtro = (typeof FILTROS)[number]['id']
 
 function pasa(a: Apunte, filtro: Filtro) {
   if (filtro === 'todo') return true
-  if (filtro === 'tickets') return a.factura_id !== null
+  if (filtro === 'tickets') return a.factura_id !== null && !a.factura_emitida
+  if (filtro === 'emitidas') return a.factura_emitida
   return a.tipo === filtro
 }
 
@@ -298,7 +300,7 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
           {error && <p className="error">{error}</p>}
 
           <div className="anadir">
-            {filtro === 'tickets' ? (
+            {filtro === 'tickets' || filtro === 'emitidas' ? (
               <EscanerFactura
                 token={token}
                 onGuardado={() => setRecargas((n) => n + 1)}
@@ -326,7 +328,9 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
               <p className="vacio">Cargando…</p>
             ) : porDia.length === 0 ? (
               <p className="vacio">
-                {filtro === 'tickets'
+                {filtro === 'emitidas'
+                  ? `No hay facturas tuyas en ${nombre}. Sube el PDF de una factura de YOA INSTALACIONES.`
+                  : filtro === 'tickets'
                   ? `No hay tickets en ${nombre}. Mándale una foto al bot o usa «Escanear ticket» en Hoy.`
                   : `Nada anotado en ${nombre}.`}
               </p>
@@ -389,6 +393,12 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
               onClick={() => void accion(() => abrirFacturasDelPeriodo(token, desde, hasta))}
             >
               Tickets de {nombre} en PDF
+            </button>
+            <button
+              className="enlace"
+              onClick={() => void accion(() => abrirFacturasDelPeriodo(token, desde, hasta, true))}
+            >
+              Mis facturas de {nombre} en PDF
             </button>
             <button
               className="enlace"

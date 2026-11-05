@@ -256,6 +256,59 @@ def _esquinas(valor) -> list | None:
     return puntos
 
 
+def _nif(valor) -> str | None:
+    """El NIF tal cual se compara: mayúsculas, sin espacios ni guiones, sin "ES"."""
+    if not isinstance(valor, str):
+        return None
+    limpio = re.sub(r"[^0-9A-Za-z]", "", valor).upper()
+    if limpio.startswith("ES") and len(limpio) > 9:
+        limpio = limpio[2:]
+    return limpio or None
+
+
+def _destinatario(valor) -> dict | None:
+    if not isinstance(valor, dict):
+        return None
+    datos = {
+        "nombre": _texto(valor.get("nombre"), 120),
+        "nif": _nif(valor.get("nif")),
+        "direccion": _texto(valor.get("direccion"), 160),
+        "telefono": _texto(valor.get("telefono"), 30),
+    }
+    datos = {k: v for k, v in datos.items() if v}
+    return datos if datos.get("nombre") else None
+
+
+def es_factura_propia(detalle: dict, comercio: str | None, nif_propio: str, nombres: list[str]) -> bool:
+    """Si la factura la EMITE Yoa (dinero que entra), no si la recibe.
+
+    El NIF de Yoa sale también en sus compras, como cliente (Leroy Merlin y
+    Ballenoil lo imprimen): por eso cuenta solo el emisor, y si Yoa aparece
+    como destinatario no es suya aunque el nombre coincida en otro sitio.
+    """
+    propio = _nif(nif_propio)
+    destinatario = detalle.get("destinatario") or {}
+    if propio and destinatario.get("nif") == propio:
+        return False
+    if propio and _nif(detalle.get("cif")) == propio:
+        return True
+    emisor = " ".join(filter(None, [comercio, detalle.get("razon_social")])).upper()
+    return any(n.upper() in emisor for n in nombres if n)
+
+
+_RE_COBRADO = re.compile(r"\b(cobrad[oa]s?|pagad[oa]s?)\b", re.IGNORECASE)
+
+
+def marca_cobrado(texto: str | None) -> tuple[bool, str]:
+    """"cobrado" o "pagado" en el mensaje de la factura: ya está cobrada.
+
+    Se quita del texto para que no acabe en el concepto.
+    """
+    if not texto or not _RE_COBRADO.search(texto):
+        return False, texto or ""
+    return True, " ".join(_RE_COBRADO.sub(" ", texto).split())
+
+
 _TIPOS_VALE = {"cheque": "Cheque", "cupon": "Cupón", "vale": "Vale"}
 
 
@@ -350,6 +403,8 @@ def interpretar_lectura(datos: dict, hoy: date) -> DatosTicket:
         "forma_pago": _texto(datos.get("forma_pago"), 40),
         "documento": documento if documento in ("gasto", "devolucion") else None,
         "vales": _vales(datos.get("vales"), hoy),
+        "destinatario": _destinatario(datos.get("destinatario")),
+        "retencion": _numero_texto(datos.get("retencion")) if (_importe(datos.get("retencion")) or 0) > 0 else None,
     }
 
     return DatosTicket(

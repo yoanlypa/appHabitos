@@ -14,7 +14,13 @@
  * bordes: el modelo lee el ticket aunque esté torcido o con la mesa detrás.
  */
 import { useRef, useState } from 'react'
-import { confirmarGastoDeFactura, escanearFactura, type TicketLeido } from '../api'
+import {
+  confirmarFacturaEmitida,
+  confirmarGastoDeFactura,
+  escanearFactura,
+  type TicketLeido,
+} from '../api'
+import { euros, fechaCorta } from '../utiles'
 import { iso } from '../utiles'
 
 type Props = {
@@ -50,6 +56,9 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
   const [importe, setImporte] = useState('')
   const [fecha, setFecha] = useState(iso(new Date()))
   const [guardando, setGuardando] = useState(false)
+  // Solo para facturas propias: ya cobrada, y de qué trabajo es ('' = nuevo).
+  const [cobrada, setCobrada] = useState(false)
+  const [trabajo, setTrabajo] = useState('')
 
   function cerrar() {
     if (vista) URL.revokeObjectURL(vista)
@@ -70,7 +79,11 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
       setVista(esPdf ? null : URL.createObjectURL(imagen))
       setLeido(resultado)
       setConcepto(resultado.concepto)
-      setImporte(resultado.total ? resultado.total.replace('.', ',') : '')
+      const cifra = resultado.emitida ? resultado.a_cobrar : resultado.total
+      setImporte(cifra ? cifra.replace('.', ',') : '')
+      setCobrada(false)
+      // Un solo trabajo posible: se propone; con varios, que elija.
+      setTrabajo(resultado.candidatos.length === 1 ? String(resultado.candidatos[0].id) : '')
       setFecha(resultado.fecha ?? iso(new Date()))
     } catch (err) {
       onError(err)
@@ -80,18 +93,30 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
   }
 
   const importeLimpio = importe.replace(/\s|€/g, '').replace(/\./g, '').replace(',', '.')
-  const importeValido = /^\d+(\.\d{1,2})?$/.test(importeLimpio) && Number(importeLimpio) > 0
+  const importeValido =
+    (leido?.emitida && trabajo !== '') ||
+    (/^\d+(\.\d{1,2})?$/.test(importeLimpio) && Number(importeLimpio) > 0)
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault()
     if (!leido || !importeValido) return
     setGuardando(true)
     try {
-      await confirmarGastoDeFactura(token, leido.factura_id, {
-        concepto: concepto.trim(),
-        importe: importeLimpio,
-        fecha,
-      })
+      if (leido.emitida) {
+        await confirmarFacturaEmitida(token, leido.factura_id, {
+          apunte_id: trabajo ? Number(trabajo) : null,
+          cobrada,
+          concepto: concepto.trim(),
+          importe: importeLimpio,
+          fecha,
+        })
+      } else {
+        await confirmarGastoDeFactura(token, leido.factura_id, {
+          concepto: concepto.trim(),
+          importe: importeLimpio,
+          fecha,
+        })
+      }
       cerrar()
       onGuardado()
     } catch (err) {
@@ -141,7 +166,10 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
       {leido && (
         <div className="modal-fondo" role="dialog" aria-modal="true" aria-label="Gasto escaneado">
           <form className="modal" onSubmit={guardar}>
-            <h3>Gasto del ticket</h3>
+            <h3>{leido.emitida ? `📤 Factura tuya${leido.cliente ? ` a ${leido.cliente}` : ''}` : 'Gasto del ticket'}</h3>
+            {leido.emitida && (
+              <p className="ayuda">Se anota como trabajo (dinero que entra), no como gasto.</p>
+            )}
             {vista ? (
               <img className="ticket-vista" src={vista} alt="Foto del ticket" />
             ) : (
@@ -151,12 +179,28 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
               <p className="error">No he leído el total con seguridad: escríbelo tú.</p>
             )}
 
-            <label>
+            {leido.emitida && leido.candidatos.length > 0 && (
+              <label>
+                ¿De qué trabajo es?
+                <select value={trabajo} onChange={(e) => setTrabajo(e.target.value)}>
+                  <option value="">Un trabajo nuevo</option>
+                  {leido.candidatos.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {fechaCorta(c.fecha)} · {c.concepto} · {euros(c.importe)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {leido.emitida && trabajo !== '' && (
+              <p className="ayuda">Se cuelga de ese trabajo: no se cuenta dos veces.</p>
+            )}
+            <label hidden={leido.emitida && trabajo !== ''}>
               Concepto
               <input value={concepto} onChange={(e) => setConcepto(e.target.value)} />
             </label>
-            <label>
-              Importe (€)
+            <label hidden={leido.emitida && trabajo !== ''}>
+              {leido.emitida ? 'Importe a cobrar (€)' : 'Importe (€)'}
               <input
                 inputMode="decimal"
                 value={importe}
@@ -165,8 +209,8 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
                 autoFocus={!leido.total}
               />
             </label>
-            <label>
-              Fecha del ticket
+            <label hidden={leido.emitida && trabajo !== ''}>
+              {leido.emitida ? 'Fecha de la factura' : 'Fecha del ticket'}
               <input
                 type="date"
                 value={fecha}
@@ -177,6 +221,12 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
             {!leido.fecha && (
               <p className="error">No he leído la fecha: he puesto hoy. Cámbiala si es de otro día.</p>
             )}
+            {leido.emitida && (
+              <label className="casilla">
+                <input type="checkbox" checked={cobrada} onChange={(e) => setCobrada(e.target.checked)} />
+                Ya está cobrada
+              </label>
+            )}
             {leido.iva && (
               <p className="ayuda">IVA leído: {leido.iva.replace('.', ',')} €</p>
             )}
@@ -186,7 +236,7 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
                 Cancelar
               </button>
               <button type="submit" disabled={!importeValido || guardando}>
-                {guardando ? 'Guardando…' : 'Anotar gasto'}
+                {guardando ? 'Guardando…' : leido.emitida ? 'Anotar factura' : 'Anotar gasto'}
               </button>
             </div>
           </form>

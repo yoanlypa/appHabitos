@@ -51,6 +51,7 @@ def construir_app() -> Application:
     app.add_handler(CommandHandler("trimestre", handlers.trimestre))
     app.add_handler(CommandHandler("facturas", handlers.facturas))
     app.add_handler(CallbackQueryHandler(handlers.elegir_cliente, pattern=r"^cli:"))
+    app.add_handler(CallbackQueryHandler(handlers.elegir_trabajo_de_factura, pattern=r"^fe:"))
     # Notas de voz y audios: se transcriben y se anotan como el texto.
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handlers.nota_de_voz))
     # La foto o el PDF de un ticket se lee y se anota como gasto.

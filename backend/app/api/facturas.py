@@ -6,18 +6,21 @@ from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.api.dependencias import get_current_user_id
-from app.api.schemas import ApunteSalida, GastoDeFactura, TicketLeido
+from app.api.schemas import ApunteSalida, FacturaEmitidaEntrada, GastoDeFactura, TicketLeido
 from app.nucleo.db import get_db
 from app.nucleo.lectura_tickets import ErrorDeLectura, LecturaNoDisponible
 from app.servicios.facturas import (
     FacturaNoEncontrada,
     FacturaNoValida,
     GastoNoValido,
+    anotar_emitida,
     anotar_gasto,
+    importe_a_cobrar,
     escanear,
     pdf_de_factura,
     pdf_del_periodo,
     ruta_de,
+    vista_emitida,
 )
 from app.nucleo.pdf import ImagenNoLegible
 
@@ -44,14 +47,38 @@ async def escanear_ticket(
     except ErrorDeLectura as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"No he podido leer la foto: {exc}") from exc
     d = leido.datos
+    vista = vista_emitida(db, user_id, d)
     return TicketLeido(
         factura_id=leido.factura.id,
         total=d.total,
         fecha=d.fecha,
         comercio=d.comercio,
         iva=d.iva,
-        concepto=d.concepto_sugerido,
+        concepto=(d.concepto or d.concepto_sugerido) if vista else d.concepto_sugerido,
+        emitida=vista is not None,
+        cliente=vista.cliente if vista else None,
+        a_cobrar=importe_a_cobrar(d) if vista else None,
+        candidatos=vista.candidatos if vista else [],
     )
+
+
+@router.post("/{factura_id}/emitida", response_model=ApunteSalida, status_code=status.HTTP_201_CREATED)
+def confirmar_emitida(
+    factura_id: int,
+    entrada: FacturaEmitidaEntrada,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Una factura de Yoa confirmada: a un trabajo ya anotado o a uno nuevo."""
+    try:
+        return anotar_emitida(
+            db, user_id, factura_id, entrada.apunte_id, entrada.cobrada,
+            entrada.concepto, entrada.importe, entrada.fecha, origen="web",
+        )
+    except FacturaNoEncontrada as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except GastoNoValido as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 
 
 @router.post("/{factura_id}/gasto", response_model=ApunteSalida, status_code=status.HTTP_201_CREATED)
@@ -99,6 +126,7 @@ def _pdf(contenido: bytes, nombre: str) -> Response:
 def pdf_periodo(
     desde: date,
     hasta: date,
+    emitidas: bool = False,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
@@ -106,12 +134,14 @@ def pdf_periodo(
     if hasta < desde:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "el rango está al revés")
     try:
-        contenido = pdf_del_periodo(db, user_id, desde, hasta)
+        contenido = pdf_del_periodo(db, user_id, desde, hasta, emitidas)
     except ImagenNoLegible as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
     if contenido is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No hay tickets escaneados en esas fechas")
-    return _pdf(contenido, f"facturas-{desde.isoformat()}_{hasta.isoformat()}.pdf")
+        que = "facturas emitidas" if emitidas else "tickets escaneados"
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No hay {que} en esas fechas")
+    nombre = "facturas-emitidas" if emitidas else "tickets"
+    return _pdf(contenido, f"{nombre}-{desde.isoformat()}_{hasta.isoformat()}.pdf")
 
 
 @router.get("/{factura_id}/pdf")
