@@ -221,3 +221,23 @@ class Factura(Base):
     emitida = Column(Boolean, nullable=False, default=False, server_default=text("0"))
 
     apunte = relationship("Apunte", back_populates="factura")
+
+
+class EmisorPropio(Base):
+    """Un emisor que Yoa ha dicho que es él, para reconocer sus facturas solo.
+
+    Sus facturas salen siempre con el mismo formato, pero a nombre de la
+    persona y no de la marca, y la variable `NOMBRES_PROPIOS` puede faltar en
+    Railway. Cada vez que corrige una a mano (/emitida, o "mía" en el
+    mensaje) se guarda aquí el NIF y el nombre leídos tal como los lee la IA,
+    y la siguiente igual entra como suya. Va en la base y no en el código
+    porque el repo es público.
+    """
+
+    __tablename__ = "emisores_propios"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    nif = Column(String, nullable=True)
+    nombre = Column(String, nullable=True)
+    creado = Column(DateTime(timezone=True), server_default=func.now())

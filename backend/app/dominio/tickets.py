@@ -280,26 +280,36 @@ def _destinatario(valor) -> dict | None:
     return datos if datos.get("nombre") else None
 
 
-def es_factura_propia(detalle: dict, comercio: str | None, nif_propio: str, nombres: list[str]) -> bool:
+def es_factura_propia(
+    detalle: dict, comercio: str | None, nif_propio: str | list[str], nombres: list[str]
+) -> bool:
     """Si la factura la EMITE Yoa (dinero que entra), no si la recibe.
 
     El NIF de Yoa sale también en sus compras, como cliente (Leroy Merlin y
     Ballenoil lo imprimen): por eso cuenta solo el emisor, y si Yoa aparece
     como destinatario no es suya aunque el nombre coincida en otro sitio.
+    `nif_propio` puede ser uno o varios: el de Railway y los aprendidos.
     """
-    propio = _nif(nif_propio)
+    lista = [nif_propio] if isinstance(nif_propio, str) else list(nif_propio)
+    propios = {n for n in map(_nif, lista) if n}
     # El NIF del emisor manda: si es el de Yoa, es suya aunque la IA lo haya
     # repetido por error en el destinatario.
-    if propio and _nif(detalle.get("cif")) == propio:
+    if propios and _nif(detalle.get("cif")) in propios:
         return True
     destinatario = detalle.get("destinatario") or {}
-    if propio and destinatario.get("nif") == propio:
+    if propios and _nif(destinatario.get("nif")) in propios:
         return False
     # Por nombre, sin tildes ni mayúsculas: las facturas de autónomo salen a
     # nombre de la persona ("YOANLY PÉREZ ...") y no de la marca, y la IA unas
     # veces copia la tilde y otras no.
     emisor = _sin_acentos(" ".join(filter(None, [comercio, detalle.get("razon_social")])))
-    return any(_sin_acentos(n) in emisor for n in nombres if n.strip())
+    return bool(emisor) and any(_sin_acentos(n) in emisor for n in nombres if n and n.strip())
+
+
+def emisor_leido(detalle: dict, comercio: str | None) -> tuple[str | None, str | None]:
+    """El NIF y el nombre del emisor tal como se compararán, para aprenderlos."""
+    nombre = _sin_acentos(detalle.get("razon_social") or comercio or "") or None
+    return _nif(detalle.get("cif")), nombre
 
 
 def _sin_acentos(texto: str) -> str:

@@ -23,10 +23,11 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.dominio.models import Apunte, Factura
+from app.dominio.models import Apunte, EmisorPropio, Factura
 from app.dominio.models import Cliente
 from app.dominio.tickets import (
     DatosTicket,
+    emisor_leido,
     es_factura_propia,
     fecha_escrita,
     interpretar_lectura,
@@ -42,6 +43,35 @@ from app.nucleo.paginas_pdf import paginas as paginas_pdf
 from app.nucleo.pdf import PaginaDeDatos, imagenes_a_pdf
 from app.nucleo.tiempo import hoy_local
 from app.servicios.apuntes import crear_nota
+
+
+def _es_propia(db: Session, user_id: int, datos: DatosTicket) -> bool:
+    """Lo de Railway (NIF_PROPIO, NOMBRES_PROPIOS) más lo aprendido de Yoa."""
+    aprendidos = db.query(EmisorPropio).filter(EmisorPropio.user_id == user_id).all()
+    nifs = [NIF_PROPIO, *(e.nif for e in aprendidos if e.nif)]
+    nombres = [*NOMBRES_PROPIOS, *(e.nombre for e in aprendidos if e.nombre)]
+    return es_factura_propia(datos.detalle, datos.comercio, nifs, nombres)
+
+
+def aprender_emisor(db: Session, user_id: int, datos: DatosTicket) -> None:
+    """Recuerda el emisor de una factura que Yoa ha dicho que es suya.
+
+    Solo se aprende si no se habría reconocido ya: así no se llena de
+    repetidos. Y nunca un emisor que es a la vez el destinatario, que eso es
+    una compra mal leída y enseñaría a tomar compras por facturas propias.
+    """
+    if _es_propia(db, user_id, datos):
+        return
+    nif, nombre = emisor_leido(datos.detalle, datos.comercio)
+    if not nif and not nombre:
+        return
+    destinatario = datos.detalle.get("destinatario") or {}
+    if nif and emisor_leido({"cif": destinatario.get("nif")}, None)[0] == nif:
+        nif = None
+    if not nif and not nombre:
+        return
+    db.add(EmisorPropio(user_id=user_id, nif=nif, nombre=nombre))
+    db.flush()
 
 
 class FacturaNoEncontrada(LookupError):
@@ -257,7 +287,9 @@ async def escanear_y_anotar(
         borrar_factura(db, user_id, leido.factura.id)
         return leido, None
     forzada, concepto = marca_propia(concepto)
-    if forzada or es_factura_propia(leido.datos.detalle, leido.datos.comercio, NIF_PROPIO, NOMBRES_PROPIOS):
+    if forzada:
+        aprender_emisor(db, user_id, leido.datos)
+    if forzada or _es_propia(db, user_id, leido.datos):
         cobrada, concepto = marca_cobrado(concepto)
         fecha_escrita_, concepto = fecha_escrita(concepto, hoy_local())
         fecha = fecha_escrita_ or leido.datos.fecha
@@ -530,7 +562,7 @@ class VistaEmitida:
 
 
 def vista_emitida(db: Session, user_id: int, datos: DatosTicket) -> VistaEmitida | None:
-    if not es_factura_propia(datos.detalle, datos.comercio, NIF_PROPIO, NOMBRES_PROPIOS):
+    if not _es_propia(db, user_id, datos):
         return None
     destinatario = datos.detalle.get("destinatario")
     cliente = buscar_cliente(db, user_id, destinatario)
@@ -740,6 +772,7 @@ def convertir_en_emitida(db: Session, user_id: int, apunte_id: int, cobrada: boo
     if factura.emitida:
         raise GastoNoValido("esa factura ya está como tuya")
     datos = interpretar_lectura(datos_leidos(factura), hoy_local())
+    aprender_emisor(db, user_id, datos)
     cliente, _ = _cliente_de(db, user_id, datos.detalle.get("destinatario"))
     factura.emitida = True
     apunte.tipo = "trabajo"

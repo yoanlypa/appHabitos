@@ -16,6 +16,7 @@ import pytest  # noqa: E402
 
 from app.dominio.models import (  # noqa: E402
     Ajuste,
+    EmisorPropio,
     Apunte,
     Cita,
     Cliente,
@@ -40,6 +41,6 @@ def db():
     """Una sesión limpia por test: lo que escriba uno no lo ve el siguiente."""
     with sesion() as s:
         yield s
-        for modelo in (Factura, HabitoHecho, Habito, Apunte, Cita, Cliente, Ajuste, TokenAcceso):
+        for modelo in (EmisorPropio, Factura, HabitoHecho, Habito, Apunte, Cita, Cliente, Ajuste, TokenAcceso):
             s.query(modelo).delete()
         s.commit()

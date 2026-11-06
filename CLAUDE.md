@@ -330,6 +330,13 @@ parte-del-dia/
     (`convertir_en_emitida`) pasa a trabajo lo que entró como gasto, con lo
     ya leído y sin pagar otra lectura. El repo es público: el nombre completo
     y el NIF van en `NOMBRES_PROPIOS` y `NIF_PROPIO` de Railway, nunca aquí.
+    Y como esas variables pueden faltar (siguió entrando como gasto), la app
+    **aprende**: al corregir con `/emitida` o forzar con "mía" se guarda el
+    NIF y el nombre del emisor tal como los lee la IA (`EmisorPropio`,
+    `aprender_emisor`), y la siguiente factura del mismo formato entra sola.
+    Nunca se aprende un NIF que sale también de destinatario, y lo aprendido
+    sigue perdiendo contra "su NIF es el del cliente": una compra en Leroy
+    Merlin no se vuelve ingreso.
   - **Los vales del ticket van al buzón como notas pendientes** (cheques de
     devolución, cupones, vales de descuento). Visto en un ticket real de
     Ballenoil: un cheque de 25,34 € por pagar con un billete de 100 y un
@@ -379,7 +386,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-314 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+317 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

@@ -181,3 +181,50 @@ async def test_emitida_convierte_un_gasto_que_era_factura_propia(db, monkeypatch
     assert hecho.cliente.nombre == "Iris Galerie"
     with pytest.raises(facturas.GastoNoValido):
         facturas.convertir_en_emitida(db, USUARIO, gasto.id, cobrada=False)
+
+
+@pytest.mark.asyncio
+async def test_aprende_el_emisor_al_corregir_y_la_siguiente_entra_sola(db, monkeypatch):
+    """Sin nada en Railway: la primera entra como gasto, se corrige con
+    /emitida, y la siguiente con el mismo formato ya es suya. Pasó con las
+    facturas de Yoa a nombre de la persona, todas iguales."""
+    monkeypatch.setattr(facturas, "NIF_PROPIO", "")
+    monkeypatch.setattr(facturas, "NOMBRES_PROPIOS", [])
+    _lectura(monkeypatch, comercio="FULANO PÉREZ", razon_social="FULANO PÉREZ GÓMEZ", cif="Y1111111H")
+    _, primera = await _subir(db)
+    assert primera.tipo == "gasto"
+    facturas.convertir_en_emitida(db, USUARIO, primera.id, cobrada=False)
+
+    # La IA no siempre copia igual: sin tilde y el NIF con guion.
+    _lectura(monkeypatch, comercio="FULANO PEREZ", razon_social=None, cif="Y-1111111-H", numero="2026-016")
+    leido, segunda = await _subir(db)
+    assert leido.emitida is not None and segunda.tipo == "trabajo" and segunda.pendiente
+
+
+@pytest.mark.asyncio
+async def test_lo_aprendido_no_vuelve_suya_una_compra(db, monkeypatch):
+    """Su NIF aprendido sale como cliente en Leroy Merlin: eso sigue siendo gasto."""
+    monkeypatch.setattr(facturas, "NIF_PROPIO", "")
+    monkeypatch.setattr(facturas, "NOMBRES_PROPIOS", [])
+    _lectura(monkeypatch, comercio="FULANO PEREZ", razon_social=None, cif="Y1111111H")
+    _, primera = await _subir(db, "mía")
+    assert primera.tipo == "trabajo"
+
+    _lectura(
+        monkeypatch, comercio="Leroy Merlin", razon_social="LEROY MERLIN ESPAÑA S.L.U.",
+        cif="B84818442", destinatario={"nombre": "FULANO PEREZ", "nif": "Y1111111H"},
+    )
+    _, compra = await _subir(db)
+    assert compra.tipo == "gasto"
+
+
+@pytest.mark.asyncio
+async def test_aprender_dos_veces_no_duplica(db, monkeypatch):
+    from app.dominio.models import EmisorPropio
+
+    monkeypatch.setattr(facturas, "NIF_PROPIO", "")
+    monkeypatch.setattr(facturas, "NOMBRES_PROPIOS", [])
+    _lectura(monkeypatch, comercio="FULANO PEREZ", razon_social=None, cif="Y1111111H")
+    await _subir(db, "mía")
+    await _subir(db, "mía")
+    assert db.query(EmisorPropio).count() == 1
