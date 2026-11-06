@@ -24,9 +24,12 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.dominio.models import Apunte, EmisorPropio, Factura
-from app.dominio.models import Cliente
+from app.dominio.models import Cita, Cliente
 from app.dominio.tickets import (
     DatosTicket,
+    Propios,
+    cruzada,
+    descruzar,
     emisor_leido,
     es_factura_propia,
     fecha_escrita,
@@ -45,32 +48,62 @@ from app.nucleo.tiempo import hoy_local
 from app.servicios.apuntes import crear_nota
 
 
-def _es_propia(db: Session, user_id: int, datos: DatosTicket) -> bool:
+def _propios(db: Session, user_id: int) -> Propios:
     """Lo de Railway (NIF_PROPIO, NOMBRES_PROPIOS) más lo aprendido de Yoa."""
     aprendidos = db.query(EmisorPropio).filter(EmisorPropio.user_id == user_id).all()
-    nifs = [NIF_PROPIO, *(e.nif for e in aprendidos if e.nif)]
-    nombres = [*NOMBRES_PROPIOS, *(e.nombre for e in aprendidos if e.nombre)]
-    return es_factura_propia(datos.detalle, datos.comercio, nifs, nombres)
+    return Propios(
+        nifs=[NIF_PROPIO, *(e.nif for e in aprendidos if e.nif)],
+        nombres=[*NOMBRES_PROPIOS, *(e.nombre for e in aprendidos if e.nombre)],
+        ibans=[e.iban for e in aprendidos if e.iban],
+    )
+
+
+def _es_propia(db: Session, user_id: int, datos: DatosTicket) -> bool:
+    return es_factura_propia(datos.detalle, datos.comercio, _propios(db, user_id))
+
+
+def _enderezar(db: Session, user_id: int, factura: Factura, datos: DatosTicket) -> DatosTicket:
+    """En una factura que es de Yoa, si la IA lo puso de cliente, se da la vuelta.
+
+    Pasó con su factura a IG España XXI: la IA leyó a la empresa como emisor
+    y a Yoa como cliente, y el trabajo quedó a nombre del propio Yoa. Se
+    corrige también lo guardado, para que la ficha del PDF diga lo correcto.
+    """
+    if not cruzada(datos.detalle, datos.comercio, _propios(db, user_id)):
+        return datos
+    detalle, comercio = descruzar(datos.detalle, datos.comercio)
+    datos = DatosTicket(
+        total=datos.total, fecha=datos.fecha, comercio=comercio, iva=datos.iva,
+        concepto=datos.concepto, detalle=detalle, esquinas=datos.esquinas,
+    )
+    factura.datos = json.dumps(_como_json(datos), ensure_ascii=False)
+    db.flush()
+    return datos
 
 
 def aprender_emisor(db: Session, user_id: int, datos: DatosTicket) -> None:
     """Recuerda el emisor de una factura que Yoa ha dicho que es suya.
 
-    Solo se aprende si no se habría reconocido ya: así no se llena de
-    repetidos. Y nunca un emisor que es a la vez el destinatario, que eso es
-    una compra mal leída y enseñaría a tomar compras por facturas propias.
+    Se llama con lo leído ya enderezado. Solo se guarda lo que aún no se
+    sabía (así no se llena de repetidos), y nunca un NIF que también es el del
+    destinatario: eso es una compra mal leída y enseñaría a tomar compras por
+    facturas propias. Ni nada del emisor si quien sale de cliente es Yoa: es
+    la lectura cruzada sin arreglar, y aprenderla haría "suyo" al cliente.
     """
-    if _es_propia(db, user_id, datos):
+    propios = _propios(db, user_id)
+    if cruzada(datos.detalle, datos.comercio, propios):
         return
-    nif, nombre = emisor_leido(datos.detalle, datos.comercio)
-    if not nif and not nombre:
-        return
+    nif, nombre, iban = emisor_leido(datos.detalle, datos.comercio)
     destinatario = datos.detalle.get("destinatario") or {}
-    if nif and emisor_leido({"cif": destinatario.get("nif")}, None)[0] == nif:
+    if nif and (propios.nif(nif) or emisor_leido({"cif": destinatario.get("nif")}, None)[0] == nif):
         nif = None
-    if not nif and not nombre:
+    if nombre and propios.nombre(nombre):
+        nombre = None
+    if iban and propios.iban(iban):
+        iban = None
+    if not (nif or nombre or iban):
         return
-    db.add(EmisorPropio(user_id=user_id, nif=nif, nombre=nombre))
+    db.add(EmisorPropio(user_id=user_id, nif=nif, nombre=nombre, iban=iban))
     db.flush()
 
 
@@ -287,9 +320,11 @@ async def escanear_y_anotar(
         borrar_factura(db, user_id, leido.factura.id)
         return leido, None
     forzada, concepto = marca_propia(concepto)
-    if forzada:
-        aprender_emisor(db, user_id, leido.datos)
     if forzada or _es_propia(db, user_id, leido.datos):
+        leido.datos = _enderezar(db, user_id, leido.factura, leido.datos)
+        # Se aprende también si ya se reconoció: así se guarda su IBAN, que
+        # es lo que la delata la próxima vez que la IA la lea cruzada.
+        aprender_emisor(db, user_id, leido.datos)
         cobrada, concepto = marca_cobrado(concepto)
         fecha_escrita_, concepto = fecha_escrita(concepto, hoy_local())
         fecha = fecha_escrita_ or leido.datos.fecha
@@ -564,7 +599,11 @@ class VistaEmitida:
 def vista_emitida(db: Session, user_id: int, datos: DatosTicket) -> VistaEmitida | None:
     if not _es_propia(db, user_id, datos):
         return None
-    destinatario = datos.detalle.get("destinatario")
+    if cruzada(datos.detalle, datos.comercio, _propios(db, user_id)):
+        detalle, _ = descruzar(datos.detalle, datos.comercio)
+        destinatario = detalle.get("destinatario")
+    else:
+        destinatario = datos.detalle.get("destinatario")
     cliente = buscar_cliente(db, user_id, destinatario)
     candidatos = (
         _trabajos_candidatos(db, user_id, cliente, {importe_a_cobrar(datos), datos.total})
@@ -596,6 +635,7 @@ def anotar_emitida(
     if importe is None or importe <= 0:
         raise GastoNoValido("el importe tiene que ser mayor que cero")
     datos = interpretar_lectura(datos_leidos(factura), hoy_local())
+    datos = _enderezar(db, user_id, factura, datos)
     cliente, _ = _cliente_de(db, user_id, datos.detalle.get("destinatario"))
     apunte = Apunte(
         user_id=user_id,
@@ -760,6 +800,9 @@ def convertir_en_emitida(db: Session, user_id: int, apunte_id: int, cobrada: boo
 
     Para cuando no se reconoció al subirla (pasó con una factura a nombre de
     Yoa como autónomo, no de la marca). Usa lo ya leído: no paga otra lectura.
+    Sobre una que ya es suya, la repara: vuelve a mirar quién es el cliente
+    (por si la IA la leyó cruzada) y rehace el concepto. Así se arregla lo
+    que entró a nombre del propio Yoa.
     """
     apunte = (
         db.query(Apunte).filter(Apunte.id == apunte_id, Apunte.user_id == user_id).first()
@@ -769,19 +812,61 @@ def convertir_en_emitida(db: Session, user_id: int, apunte_id: int, cobrada: boo
     factura = apunte.factura
     if factura is None:
         raise GastoNoValido("ese apunte no tiene factura colgada")
-    if factura.emitida:
-        raise GastoNoValido("esa factura ya está como tuya")
+    ya_era = factura.emitida
     datos = interpretar_lectura(datos_leidos(factura), hoy_local())
+    datos = _enderezar(db, user_id, factura, datos)
     aprender_emisor(db, user_id, datos)
     cliente, _ = _cliente_de(db, user_id, datos.detalle.get("destinatario"))
+    anterior = apunte.cliente
     factura.emitida = True
     apunte.tipo = "trabajo"
-    apunte.pendiente = not cobrada
+    if not ya_era or cobrada:
+        apunte.pendiente = not cobrada
     apunte.cliente_id = cliente.id if cliente else apunte.cliente_id
     apunte.concepto = _concepto_de_factura(datos, cliente, "")
     importe = importe_a_cobrar(datos)
     if importe:
         apunte.importe = importe
+    db.flush()
+    if anterior is not None and anterior.id != apunte.cliente_id:
+        _borrar_si_soy_yo(db, user_id, anterior)
     db.commit()
     db.refresh(apunte)
     return apunte
+
+
+def reparar_emitidas(db: Session, user_id: int) -> list[Apunte]:
+    """Repasa todas las facturas propias ya anotadas y devuelve las que cambiaron.
+
+    Para lo que entró antes del arreglo de las lecturas cruzadas: trabajos a
+    nombre del propio Yoa. No paga ninguna lectura y no toca si están cobradas.
+    """
+    cambiadas = []
+    emitidas = (
+        db.query(Factura)
+        .filter(Factura.user_id == user_id, Factura.emitida.is_(True), Factura.apunte_id.isnot(None))
+        .all()
+    )
+    for factura in emitidas:
+        antes = (factura.apunte.cliente_id, factura.apunte.concepto)
+        apunte = convertir_en_emitida(db, user_id, factura.apunte_id, cobrada=False)
+        if (apunte.cliente_id, apunte.concepto) != antes:
+            cambiadas.append(apunte)
+    return cambiadas
+
+
+def _borrar_si_soy_yo(db: Session, user_id: int, cliente: Cliente) -> None:
+    """El "cliente" que se dio de alta con los datos de Yoa, si no le queda nada.
+
+    Sale de una lectura cruzada. Solo se borra si es él (por NIF o nombre) y
+    ya no tiene apuntes ni citas: un cliente con historia no se toca solo.
+    """
+    propios = _propios(db, user_id)
+    nif = (cliente.notas or "").removeprefix("NIF:").strip()
+    if not (propios.nombre(cliente.nombre) or propios.nif(nif)):
+        return
+    if db.query(Apunte).filter(Apunte.cliente_id == cliente.id).count():
+        return
+    if db.query(Cita).filter(Cita.cliente_id == cliente.id).count():
+        return
+    db.delete(cliente)

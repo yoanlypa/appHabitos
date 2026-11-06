@@ -240,4 +240,7 @@ class EmisorPropio(Base):
     user_id = Column(BigInteger, nullable=False, index=True)
     nif = Column(String, nullable=True)
     nombre = Column(String, nullable=True)
+    # La cuenta que sale en sus facturas para que le paguen: la delata aunque
+    # la IA cruce emisor y cliente.
+    iban = Column(String, nullable=True)
     creado = Column(DateTime(timezone=True), server_default=func.now())

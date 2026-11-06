@@ -337,6 +337,20 @@ parte-del-dia/
     Nunca se aprende un NIF que sale también de destinatario, y lo aprendido
     sigue perdiendo contra "su NIF es el del cliente": una compra en Leroy
     Merlin no se vuelve ingreso.
+    Luego salió peor: la IA leyó su factura **cruzada** (a IG España XXI de
+    emisor y a Yoa de cliente), la versión de entonces aprendió a la empresa
+    como si fuera Yoa y el trabajo quedó con Yoa de cliente. Arreglos:
+    las instrucciones explican cómo distinguir emisor y cliente (cabecera,
+    pie, el IBAN es de quien cobra) y piden el `iban`; en una factura que ya
+    se sabe suya, si Yoa sale de cliente se da la vuelta (`cruzada`,
+    `descruzar`, `_enderezar`, que reescribe también `Factura.datos`); y se
+    aprende su **IBAN**, que la delata aunque vuelva a leerse cruzada: va
+    antes que la regla del NIF del destinatario, porque quien vende pone su
+    cuenta y quien compra no (los enmascarados con asteriscos no cuentan).
+    Nunca se aprende de una lectura cruzada sin arreglar. `/emitida` sobre
+    una ya suya la repara, `/reparar` las repasa todas y borra el "cliente"
+    con los datos de Yoa si se queda sin nada. La migración `f6a3d9b2e8c4`
+    vació lo aprendido el primer día.
   - **Los vales del ticket van al buzón como notas pendientes** (cheques de
     devolución, cupones, vales de descuento). Visto en un ticket real de
     Ballenoil: un cheque de 25,34 € por pagar con un billete de 100 y un
@@ -386,7 +400,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-317 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+323 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

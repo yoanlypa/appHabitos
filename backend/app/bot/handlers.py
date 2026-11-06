@@ -59,6 +59,7 @@ from app.servicios.facturas import (
     pdf_de_factura,
     GastoNoValido,
     convertir_en_emitida,
+    reparar_emitidas,
     pdf_del_periodo,
     releer_fechas,
     vincular_emitida,
@@ -569,6 +570,13 @@ async def releer(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
             )
             return
         await update.message.reply_text(formato.relectura(resultado))
+
+
+async def reparar(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
+    """/reparar: rehace el cliente de tus facturas ya anotadas (las leídas al revés)."""
+    with sesion() as db:
+        cambiadas = reparar_emitidas(db, update.effective_user.id)
+        await update.message.reply_text(formato.emitidas_reparadas(cambiadas))
 
 
 async def emitida(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:

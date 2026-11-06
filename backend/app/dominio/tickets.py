@@ -280,36 +280,106 @@ def _destinatario(valor) -> dict | None:
     return datos if datos.get("nombre") else None
 
 
+def _iban(valor) -> str | None:
+    """Un IBAN entero, sin espacios. Los enmascarados ("ES79 **** 8286") no valen."""
+    if not isinstance(valor, str):
+        return None
+    limpio = re.sub(r"[\s.-]", "", valor).upper()
+    return limpio if re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]{10,30}", limpio) else None
+
+
+@dataclass
+class Propios:
+    """Lo que identifica a Yoa: lo de Railway más lo aprendido al corregir."""
+
+    nifs: list = field(default_factory=list)
+    nombres: list = field(default_factory=list)
+    ibans: list = field(default_factory=list)
+
+    def nif(self, valor) -> bool:
+        limpio = _nif(valor)
+        return bool(limpio) and limpio in {n for n in map(_nif, self.nifs) if n}
+
+    def nombre(self, valor) -> bool:
+        texto = _sin_acentos(valor or "")
+        return bool(texto) and any(_sin_acentos(n) in texto for n in self.nombres if n and n.strip())
+
+    def iban(self, valor) -> bool:
+        limpio = _iban(valor)
+        return bool(limpio) and limpio in {i for i in map(_iban, self.ibans) if i}
+
+
 def es_factura_propia(
-    detalle: dict, comercio: str | None, nif_propio: str | list[str], nombres: list[str]
+    detalle: dict,
+    comercio: str | None,
+    nif_propio: str | list[str] | Propios,
+    nombres: list[str] | None = None,
 ) -> bool:
     """Si la factura la EMITE Yoa (dinero que entra), no si la recibe.
 
     El NIF de Yoa sale también en sus compras, como cliente (Leroy Merlin y
     Ballenoil lo imprimen): por eso cuenta solo el emisor, y si Yoa aparece
     como destinatario no es suya aunque el nombre coincida en otro sitio.
-    `nif_propio` puede ser uno o varios: el de Railway y los aprendidos.
+    Con una excepción: si trae el IBAN de Yoa para pagar, es suya aunque la
+    IA haya cruzado emisor y cliente (pasó con su factura a IG España XXI).
+    Quien vende pone su cuenta; quien compra, no.
     """
-    lista = [nif_propio] if isinstance(nif_propio, str) else list(nif_propio)
-    propios = {n for n in map(_nif, lista) if n}
+    if isinstance(nif_propio, Propios):
+        propios = nif_propio
+    else:
+        lista = [nif_propio] if isinstance(nif_propio, str) else list(nif_propio)
+        propios = Propios(nifs=lista, nombres=list(nombres or []))
     # El NIF del emisor manda: si es el de Yoa, es suya aunque la IA lo haya
     # repetido por error en el destinatario.
-    if propios and _nif(detalle.get("cif")) in propios:
+    if propios.nif(detalle.get("cif")):
+        return True
+    if propios.iban(detalle.get("iban")):
         return True
     destinatario = detalle.get("destinatario") or {}
-    if propios and _nif(destinatario.get("nif")) in propios:
+    if propios.nif(destinatario.get("nif")):
         return False
     # Por nombre, sin tildes ni mayúsculas: las facturas de autónomo salen a
     # nombre de la persona ("YOANLY PÉREZ ...") y no de la marca, y la IA unas
     # veces copia la tilde y otras no.
-    emisor = _sin_acentos(" ".join(filter(None, [comercio, detalle.get("razon_social")])))
-    return bool(emisor) and any(_sin_acentos(n) in emisor for n in nombres if n and n.strip())
+    return propios.nombre(" ".join(filter(None, [comercio, detalle.get("razon_social")])))
 
 
-def emisor_leido(detalle: dict, comercio: str | None) -> tuple[str | None, str | None]:
-    """El NIF y el nombre del emisor tal como se compararán, para aprenderlos."""
+def cruzada(detalle: dict, comercio: str | None, propios: Propios) -> bool:
+    """La IA puso a Yoa de cliente y al cliente de emisor.
+
+    Solo tiene sentido en una factura que ya se sabe que es suya (por el
+    IBAN, o porque Yoa lo dijo): entonces que él salga de destinatario es la
+    lectura al revés, no una compra.
+    """
+    destinatario = detalle.get("destinatario") or {}
+    yo_destinatario = propios.nif(destinatario.get("nif")) or propios.nombre(destinatario.get("nombre"))
+    emisor = " ".join(filter(None, [comercio, detalle.get("razon_social")]))
+    yo_emisor = propios.nif(detalle.get("cif")) or propios.nombre(emisor)
+    return yo_destinatario and not yo_emisor
+
+
+def descruzar(detalle: dict, comercio: str | None) -> tuple[dict, str | None]:
+    """Emisor y cliente cambiados de sitio, el resto igual."""
+    destinatario = detalle.get("destinatario") or {}
+    nuevo = {k: v for k, v in detalle.items() if k not in ("razon_social", "cif", "direccion", "destinatario")}
+    cliente = {
+        "nombre": detalle.get("razon_social") or comercio,
+        "nif": detalle.get("cif"),
+        "direccion": detalle.get("direccion"),
+    }
+    cliente = {k: v for k, v in cliente.items() if v}
+    if cliente.get("nombre"):
+        nuevo["destinatario"] = cliente
+    for clave, origen in (("razon_social", "nombre"), ("cif", "nif"), ("direccion", "direccion")):
+        if destinatario.get(origen):
+            nuevo[clave] = destinatario[origen]
+    return nuevo, destinatario.get("nombre") or comercio
+
+
+def emisor_leido(detalle: dict, comercio: str | None) -> tuple[str | None, str | None, str | None]:
+    """El NIF, el nombre y el IBAN del emisor tal como se compararán, para aprenderlos."""
     nombre = _sin_acentos(detalle.get("razon_social") or comercio or "") or None
-    return _nif(detalle.get("cif")), nombre
+    return _nif(detalle.get("cif")), nombre, _iban(detalle.get("iban"))
 
 
 def _sin_acentos(texto: str) -> str:
@@ -439,6 +509,7 @@ def interpretar_lectura(datos: dict, hoy: date) -> DatosTicket:
         "documento": documento if documento in ("gasto", "devolucion") else None,
         "vales": _vales(datos.get("vales"), hoy),
         "destinatario": _destinatario(datos.get("destinatario")),
+        "iban": _iban(datos.get("iban")),
         "retencion": _numero_texto(datos.get("retencion")) if (_importe(datos.get("retencion")) or 0) > 0 else None,
     }
 

@@ -74,6 +74,7 @@ def ayuda() -> str:
         "  /fecha <número> 15/10 — cambia el día de un apunte\n"
         "  /releer — pone en su día los tickets que quedaron en el día equivocado\n"
         "  /emitida <número> — una factura tuya que entró como gasto pasa a trabajo\n"
+        "  /reparar — corrige el cliente de tus facturas leídas al revés\n"
         "  /agenda — lo que toca hoy\n"
         "  /manana — lo que toca mañana\n"
         "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
@@ -435,3 +436,13 @@ def factura_vinculada(apunte, nuevo: bool) -> str:
         f"📤 Factura anotada {como} (#{apunte.id}): {apunte.concepto}\n"
         f"+{euros(apunte.importe)} · {estado}"
     )
+
+
+def emitidas_reparadas(apuntes) -> str:
+    if not apuntes:
+        return "Tus facturas ya estaban bien: no he cambiado nada."
+    lineas = [f"🔧 He corregido {len(apuntes)} factura(s):"]
+    for a in apuntes:
+        quien = a.cliente.nombre if a.cliente else "sin cliente"
+        lineas.append(f"  #{a.id} {a.concepto} → cliente: {quien}")
+    return "\n".join(lineas)
