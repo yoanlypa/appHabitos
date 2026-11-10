@@ -112,3 +112,30 @@ class TestEditarMovimientos:
             "tipo": "gasto", "concepto": "x", "importe": "1"}).json()
         assert cliente.delete(f"/apuntes/{a['id']}", headers=cab).status_code == 204
         assert cliente.delete(f"/apuntes/{a['id']}", headers=cab).status_code == 404
+
+
+def test_el_grafico_por_meses_cuenta_lo_mismo_que_el_ano(cliente, db):
+    """El gráfico y el total salen de la misma suma: no pueden decir cosas distintas."""
+    _apunte(db, date(2026, 1, 1), "trabajo", "100")
+    _apunte(db, date(2026, 1, 31), "gasto", "12.50")
+    _apunte(db, date(2026, 6, 15), "gasto", "30")
+    _apunte(db, date(2026, 12, 31), "trabajo", "50")
+    _apunte(db, date(2026, 6, 20), "nota", "0")
+    _apunte(db, date(2025, 12, 31), "trabajo", "999")  # año anterior: fuera
+    _apunte(db, date(2026, 3, 3), "trabajo", "777", user_id=111)  # de otro: fuera
+    db.add(Apunte(user_id=USUARIO, fecha=date(2026, 6, 2), tipo="trabajo", concepto="sin cobrar",
+                  importe=Decimal("80"), pendiente=True, origen="web"))
+    db.commit()
+    cab = {"Authorization": f"Bearer {generar_token(db, USUARIO)}"}
+
+    meses = cliente.get("/resumen/meses?anio=2026", headers=cab).json()
+    assert [m["mes"] for m in meses] == list(range(1, 13))
+    assert meses[0] == {"mes": 1, "cobrado": "100.00", "pendiente": "0.00", "gastos": "12.50", "neto": "87.50"}
+    assert meses[5]["pendiente"] == "80.00" and meses[5]["cobrado"] == "0.00"  # lo pendiente no es cobrado
+    assert meses[2]["cobrado"] == "0.00"  # marzo solo tiene lo del otro usuario
+    anio = cliente.get("/resumen/rango?desde=2026-01-01&hasta=2026-12-31", headers=cab).json()
+    for campo in ("cobrado", "pendiente", "gastos", "neto"):
+        assert sum(Decimal(m[campo]) for m in meses) == Decimal(anio[campo])
+
+    assert cliente.get("/resumen/meses?anio=1", headers=cab).status_code == 422
+    assert cliente.get("/resumen/meses?anio=2026").status_code == 401

@@ -66,3 +66,26 @@ def resumen_mes(db: Session, user_id: int, anio: int, mes: int) -> ResumenPeriod
         .all()
     )
     return _resumir(apuntes)
+
+
+def resumen_por_meses(db: Session, user_id: int, anio: int) -> list[ResumenPeriodo]:
+    """Los doce meses de un año, de enero a diciembre, para el gráfico de Finanzas.
+
+    Una sola consulta repartida por mes con la misma suma que todo lo demás:
+    si el gráfico sumara por su cuenta, el día que no cuadrase con el total
+    del año nadie sabría cuál de los dos creerse. Los meses sin nada salen a
+    cero, que también es un dato (y el eje no se queda con huecos).
+    """
+    apuntes = (
+        db.query(Apunte)
+        .filter(
+            Apunte.user_id == user_id,
+            Apunte.fecha >= date(anio, 1, 1),
+            Apunte.fecha <= date(anio, 12, 31),
+        )
+        .all()
+    )
+    por_mes: list[list[Apunte]] = [[] for _ in range(12)]
+    for a in apuntes:
+        por_mes[a.fecha.month - 1].append(a)
+    return [_resumir(del_mes) for del_mes in por_mes]

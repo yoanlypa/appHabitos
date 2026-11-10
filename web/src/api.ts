@@ -124,6 +124,13 @@ export function resumenRango(token: string, desde: string, hasta: string) {
   return pedir<Resumen>(token, `/resumen/rango?desde=${desde}&hasta=${hasta}`)
 }
 
+export type ResumenDeMes = Resumen & { mes: number }
+
+/** Los doce meses de un año, para el gráfico de Finanzas. */
+export function resumenMeses(token: string, anio: number) {
+  return pedir<ResumenDeMes[]>(token, `/resumen/meses?anio=${anio}`)
+}
+
 export function resumenMes(token: string, anio: number, mes: number) {
   return pedir<Resumen>(token, `/resumen/mes?anio=${anio}&mes=${mes}`)
 }

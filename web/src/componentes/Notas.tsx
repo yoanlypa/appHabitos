@@ -1,21 +1,37 @@
 /**
- * El buzón: lo apuntado que todavía no tiene ni fecha ni precio.
+ * Notas, en tablero: lo que hay por hacer, lo que ya tiene fecha y lo hecho.
  *
- * Aquí cae lo que se dicta al bot sin importe ("quiero revisar el coche") y
- * lo que se escribe a mano. Mientras no tenga fecha, es una nota; en cuanto
- * se le pone una, deja de estar aquí y aparece en la agenda. Por eso el
- * buzón solo enseña lo que sigue sin fecha: si se quedara todo, a la tercera
- * semana dejaría de mirarse.
+ * - **Buzón**: lo apuntado que todavía no tiene ni fecha ni precio. Aquí cae
+ *   lo que se dicta al bot sin importe ("quiero revisar el coche") y lo que
+ *   se escribe a mano.
+ * - **Con fecha**: lo que ya está en la agenda y queda por delante. En cuanto
+ *   a una nota se le pone fecha deja de ser una nota y pasa aquí: si el buzón
+ *   se quedara con todo, a la tercera semana dejaría de mirarse.
+ * - **Hecho**: lo cumplido se marca, no se borra. Sale del buzón pero se
+ *   puede devolver. Borrar es para lo que se apuntó mal, y son dos cosas
+ *   distintas que no pueden compartir botón.
  *
- * Editar se hace en la propia línea, sin modal: cambiar una palabra es lo
- * más frecuente y no merece abrir una ventana. El modal se guarda para
- * agendar, que es donde hay varias decisiones a la vez (qué días, a qué
- * hora, y con qué texto se va a quedar).
+ * En el ordenador las tres columnas se ven a la vez y las tarjetas se
+ * arrastran de una a otra; en el móvil se ve una columna y se cambia con las
+ * pestañas de arriba, que arrastrar con el pulgar es pelearse con el scroll.
+ * Los botones de cada tarjeta hacen lo mismo que arrastrar, así que nada
+ * depende de saber que se puede.
  *
- * Lo cumplido se marca, no se borra: sale de la lista pero se puede abrir
- * abajo y devolver al buzón. Borrar es para lo que se apuntó mal, y son dos
- * cosas distintas que no pueden compartir botón.
+ * Editar se hace en la propia tarjeta, sin ventana: cambiar una palabra es lo
+ * más frecuente y no merece abrir nada. La ventana se guarda para agendar,
+ * que es donde hay varias decisiones a la vez.
  */
+import {
+  CalendarPlus,
+  Check,
+  Inbox,
+  Pencil,
+  Plus,
+  Send,
+  Trash2,
+  Undo2,
+  type LucideIcon,
+} from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import {
   agendarNota,
@@ -23,30 +39,51 @@ import {
   crearNota,
   editarNota,
   listarNotas,
+  marcarCitaHecha,
   marcarNotaHecha,
+  proximasCitas,
   TokenInvalido,
+  type Cita,
   type Nota,
 } from '../api'
-import { fechaCorta, iso } from '../utiles'
+import type { Ir } from '../secciones'
+import { avisar, confirmar } from '../ui/avisos'
+import { useEscritorio } from '../ui/ganchos'
+import { Modal } from '../ui/Modal'
+import { Cabecera, ErrorEnLinea, Esqueleto, Vacio } from '../ui/piezas'
+import { Segmentado } from '../ui/Segmentado'
+import { diaRelativo, fechaCorta, hhmm, iso } from '../utiles'
 
 type Props = {
   token: string
   onTokenInvalido: () => void
   /** Para saltar a la agenda después de agendar algo, y verlo ya puesto. */
-  onAgendada?: (fecha: string) => void
+  onIr: Ir
 }
 
-export function Notas({ token, onTokenInvalido, onAgendada }: Props) {
+type Columna = 'buzon' | 'fecha' | 'hecho'
+
+/** Cuántas citas enseña la columna "Con fecha": las de más allá se ven en la agenda. */
+const CITAS_A_LA_VISTA = 30
+
+export function Notas({ token, onTokenInvalido, onIr }: Props) {
+  const escritorio = useEscritorio()
+  const hoyISO = iso(new Date())
+  const [columna, setColumna] = useState<Columna>('buzon')
   const [notas, setNotas] = useState<Nota[]>([])
+  const [citas, setCitas] = useState<Cita[]>([])
+  const [hechas, setHechas] = useState<Nota[]>([])
   const [texto, setTexto] = useState('')
   const [editando, setEditando] = useState<number | null>(null)
   const [borrador, setBorrador] = useState('')
   const [agendando, setAgendando] = useState<Nota | null>(null)
-  const [hechas, setHechas] = useState<Nota[]>([])
-  const [verHechas, setVerHechas] = useState(false)
+  const [sobre, setSobre] = useState<Columna | null>(null)
   const [recargas, setRecargas] = useState(0)
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(true)
+
+  // Las hechas solo se piden si se van a enseñar: son las que crecen.
+  const verHechas = escritorio || columna === 'hecho'
 
   const fallo = useCallback(
     (e: unknown) => {
@@ -60,14 +97,15 @@ export function Notas({ token, onTokenInvalido, onAgendada }: Props) {
     let cancelado = false
     async function cargar() {
       try {
-        // Las hechas solo se piden si se van a enseñar: son las que crecen.
-        const [lista, cumplidas] = await Promise.all([
+        const [lista, proximas, cumplidas] = await Promise.all([
           listarNotas(token),
-          verHechas ? listarNotas(token, true) : Promise.resolve([]),
+          proximasCitas(token, CITAS_A_LA_VISTA),
+          verHechas ? listarNotas(token, true) : Promise.resolve(null),
         ])
         if (cancelado) return
         setNotas(lista)
-        setHechas(cumplidas)
+        setCitas(proximas)
+        if (cumplidas) setHechas(cumplidas)
         setError('')
       } catch (e) {
         if (!cancelado) fallo(e)
@@ -119,132 +157,278 @@ export function Notas({ token, onTokenInvalido, onAgendada }: Props) {
     })
   }
 
+  async function borrar(nota: Nota) {
+    const si = await confirmar({
+      titulo: `¿Borrar «${nota.concepto}»?`,
+      texto: 'Si ya la has hecho, mejor márcala como hecha: así queda constancia.',
+      aceptar: 'Borrar',
+      peligro: true,
+    })
+    if (si) void accion(() => borrarNota(token, nota.id))
+  }
+
+  /** Soltar una tarjeta en una columna hace lo mismo que su botón. */
+  function soltar(destino: Columna, dato: string) {
+    setSobre(null)
+    const [origen, idTexto] = dato.split(':')
+    const id = Number(idTexto)
+    if (origen === 'buzon') {
+      const nota = notas.find((n) => n.id === id)
+      if (!nota) return
+      if (destino === 'hecho') void accion(() => marcarNotaHecha(token, id))
+      if (destino === 'fecha') setAgendando(nota)
+    }
+    if (origen === 'hecho' && destino === 'buzon') {
+      void accion(() => marcarNotaHecha(token, id, false))
+    }
+  }
+
+  function zona(id: Columna) {
+    return {
+      className: sobre === id ? 'columna sobre' : 'columna',
+      onDragOver: (e: React.DragEvent) => {
+        e.preventDefault()
+        setSobre(id)
+      },
+      onDragLeave: (e: React.DragEvent) => {
+        // Solo al salir de la columna, no al pasar por encima de una tarjeta.
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setSobre(null)
+      },
+      onDrop: (e: React.DragEvent) => {
+        e.preventDefault()
+        soltar(id, e.dataTransfer.getData('text/plain'))
+      },
+    }
+  }
+
+  function arrastrable(origen: Columna, id: number) {
+    return {
+      draggable: escritorio && editando !== id,
+      onDragStart: (e: React.DragEvent) => {
+        e.dataTransfer.setData('text/plain', `${origen}:${id}`)
+        e.dataTransfer.effectAllowed = 'move'
+      },
+      onDragEnd: () => setSobre(null),
+    }
+  }
+
+  const pestanas = [
+    { id: 'buzon', nombre: 'Buzón', cuenta: notas.length },
+    { id: 'fecha', nombre: 'Con fecha', cuenta: citas.length },
+    { id: 'hecho', nombre: 'Hecho' },
+  ] as const
+
+  const visible = (id: Columna) => escritorio || columna === id
+
   return (
-    <section className="apuntes buzon">
-      <h2>Buzón de notas</h2>
+    <>
+      <Cabecera
+        titulo="Notas"
+        subtitulo="Lo que tienes por hacer. Ponle fecha y pasa a la agenda."
+      />
 
-      <form className="alta" onSubmit={apuntar}>
-        <input
-          value={texto}
-          onChange={(e) => setTexto(e.target.value)}
-          placeholder="Revisar el coche"
-          aria-label="Nueva nota"
-        />
-        <button type="submit" disabled={!texto.trim()}>
-          Añadir
-        </button>
-      </form>
-      <p className="ayuda">
-        Aquí no se apunta dinero: lo que escribas se guarda tal cual. Ponle fecha y pasa a la
-        agenda.
-      </p>
-
-      {error && <p className="error">{error}</p>}
-
-      {cargando ? (
-        <p className="vacio">Cargando…</p>
-      ) : notas.length === 0 ? (
-        <p className="vacio">No tienes nada pendiente sin fecha.</p>
-      ) : (
-        <ul className="notas">
-          {notas.map((n) => (
-            <li key={n.id}>
-              {editando === n.id ? (
-                <input
-                  className="editando"
-                  autoFocus
-                  value={borrador}
-                  aria-label="Texto de la nota"
-                  onChange={(e) => setBorrador(e.target.value)}
-                  onBlur={() => void guardarEdicion(n.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') void guardarEdicion(n.id)
-                    if (e.key === 'Escape') setEditando(null)
-                  }}
-                />
-              ) : (
-                <span className="concepto">
-                  {n.concepto}
-                  <small>
-                    {fechaCorta(n.fecha)}
-                    {n.cliente ? ` · ${n.cliente.nombre}` : ''}
-                    {n.origen === 'bot' ? ' · por Telegram' : ''}
-                  </small>
-                </span>
-              )}
-
-              <div className="acciones">
-                <button
-                  className="mini hecha"
-                  title="Marcar como hecha"
-                  onClick={() => void accion(() => marcarNotaHecha(token, n.id))}
-                >
-                  ✓
-                </button>
-                <button className="mini" title="Ponerle fecha" onClick={() => setAgendando(n)}>
-                  Agendar
-                </button>
-                <button className="mini" title="Editar" onClick={() => empezarAEditar(n)}>
-                  ✎
-                </button>
-                <button
-                  className="mini borrar"
-                  title="Borrar"
-                  onClick={() => {
-                    if (confirm(`¿Borrar «${n.concepto}»?`)) {
-                      void accion(() => borrarNota(token, n.id))
-                    }
-                  }}
-                >
-                  ✕
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
+      {!escritorio && (
+        <Segmentado opciones={pestanas} valor={columna} onCambio={setColumna} ancho etiqueta="Columna" />
       )}
 
-      <div className="titulo-fila">
-        <button className="enlace" onClick={() => setVerHechas((v) => !v)}>
-          {verHechas ? 'Ocultar lo hecho' : 'Ver lo hecho'}
-        </button>
-      </div>
+      <ErrorEnLinea>{error}</ErrorEnLinea>
 
-      {verHechas &&
-        (hechas.length === 0 ? (
-          <p className="vacio">Todavía no has marcado nada como hecho.</p>
-        ) : (
-          <ul className="notas cumplidas">
-            {hechas.map((n) => (
-              <li key={n.id}>
-                <span className="concepto">
-                  {n.concepto}
-                  <small>{fechaCorta(n.fecha)}</small>
-                </span>
-                <div className="acciones">
-                  <button
-                    className="mini"
-                    title="Devolver al buzón"
-                    onClick={() => void accion(() => marcarNotaHecha(token, n.id, false))}
+      <div className="tablero">
+        {visible('buzon') && (
+          <section {...zona('buzon')}>
+            <TituloColumna icono={Inbox} nombre="Buzón" cuenta={notas.length} />
+
+            <form className="nueva-tarjeta" onSubmit={apuntar}>
+              <Plus size={18} />
+              <input
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                placeholder="Añadir una nota…"
+                aria-label="Nueva nota"
+                enterKeyHint="done"
+              />
+              {texto.trim() && (
+                <button type="submit" className="boton pequeno">
+                  Añadir
+                </button>
+              )}
+            </form>
+
+            {cargando ? (
+              <Esqueleto />
+            ) : notas.length === 0 ? (
+              <Vacio icono={Inbox} titulo="Nada pendiente sin fecha">
+                Lo que le dictes al bot sin importe cae aquí.
+              </Vacio>
+            ) : (
+              <ul className="tarjetas">
+                {notas.map((n) => (
+                  <li key={n.id} className="tarjeta-nota" {...arrastrable('buzon', n.id)}>
+                    {editando === n.id ? (
+                      <input
+                        autoFocus
+                        value={borrador}
+                        aria-label="Texto de la nota"
+                        onChange={(e) => setBorrador(e.target.value)}
+                        onBlur={() => void guardarEdicion(n.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') void guardarEdicion(n.id)
+                          if (e.key === 'Escape') setEditando(null)
+                        }}
+                      />
+                    ) : (
+                      <p className="texto" onDoubleClick={() => empezarAEditar(n)}>
+                        {n.concepto}
+                      </p>
+                    )}
+                    <div className="tarjeta-nota-pie">
+                      <span className="meta">
+                        {fechaCorta(n.fecha)}
+                        {n.cliente ? ` · ${n.cliente.nombre}` : ''}
+                        {n.origen === 'bot' && (
+                          <span className="via" title="Apuntada por Telegram">
+                            <Send size={11} /> Telegram
+                          </span>
+                        )}
+                      </span>
+                      <span className="acciones">
+                        <button
+                          className="boton-icono bien"
+                          title="Marcar como hecha"
+                          aria-label="Marcar como hecha"
+                          onClick={() => void accion(() => marcarNotaHecha(token, n.id))}
+                        >
+                          <Check size={17} />
+                        </button>
+                        <button
+                          className="boton-icono"
+                          title="Ponerle fecha"
+                          aria-label="Ponerle fecha"
+                          onClick={() => setAgendando(n)}
+                        >
+                          <CalendarPlus size={17} />
+                        </button>
+                        <button
+                          className="boton-icono"
+                          title="Editar"
+                          aria-label="Editar"
+                          onClick={() => empezarAEditar(n)}
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          className="boton-icono peligro"
+                          title="Borrar"
+                          aria-label="Borrar"
+                          onClick={() => void borrar(n)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        {visible('fecha') && (
+          <section {...zona('fecha')}>
+            <TituloColumna icono={CalendarPlus} nombre="Con fecha" cuenta={citas.length} />
+            {cargando ? (
+              <Esqueleto />
+            ) : citas.length === 0 ? (
+              <Vacio icono={CalendarPlus} titulo="Nada en la agenda">
+                {escritorio
+                  ? 'Arrastra aquí una nota para ponerle fecha.'
+                  : 'Toca el calendario de una nota para ponerle fecha.'}
+              </Vacio>
+            ) : (
+              <ul className="tarjetas">
+                {citas.map((c) => (
+                  <li
+                    key={c.id}
+                    className="tarjeta-nota tocable"
+                    onClick={() => onIr('agenda', c.fecha < hoyISO ? hoyISO : c.fecha)}
+                    title="Ver en la agenda"
                   >
-                    ↩
-                  </button>
-                  <button
-                    className="mini borrar"
-                    title="Borrar"
-                    onClick={() => {
-                      if (confirm(`¿Borrar «${n.concepto}»?`)) {
-                        void accion(() => borrarNota(token, n.id))
-                      }
-                    }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ))}
+                    <span className={c.fecha <= hoyISO ? 'pastilla acento' : 'pastilla'}>
+                      {c.fecha < hoyISO ? 'En curso' : diaRelativo(c.fecha)}
+                      {hhmm(c.hora) ? ` · ${hhmm(c.hora)}` : ''}
+                      {c.fecha_fin ? ` → ${fechaCorta(c.fecha_fin)}` : ''}
+                    </span>
+                    <p className="texto">{c.titulo}</p>
+                    <div className="tarjeta-nota-pie">
+                      <span className="meta">
+                        {[c.cliente?.nombre, c.direccion].filter(Boolean).join(' · ')}
+                      </span>
+                      <span className="acciones">
+                        <button
+                          className="boton-icono bien"
+                          title="Marcar como hecha"
+                          aria-label="Marcar como hecha"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void accion(async () => {
+                              await marcarCitaHecha(token, c.id)
+                              avisar(`Hecho · ${c.titulo}`)
+                            })
+                          }}
+                        >
+                          <Check size={17} />
+                        </button>
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        {visible('hecho') && (
+          <section {...zona('hecho')}>
+            <TituloColumna icono={Check} nombre="Hecho" cuenta={hechas.length} />
+            {cargando ? (
+              <Esqueleto />
+            ) : hechas.length === 0 ? (
+              <Vacio icono={Check} titulo="Todavía nada">
+                Lo que marques como hecho se queda aquí.
+              </Vacio>
+            ) : (
+              <ul className="tarjetas">
+                {hechas.map((n) => (
+                  <li key={n.id} className="tarjeta-nota cumplida" {...arrastrable('hecho', n.id)}>
+                    <p className="texto">{n.concepto}</p>
+                    <div className="tarjeta-nota-pie">
+                      <span className="meta">{fechaCorta(n.fecha)}</span>
+                      <span className="acciones">
+                        <button
+                          className="boton-icono"
+                          title="Devolver al buzón"
+                          aria-label="Devolver al buzón"
+                          onClick={() => void accion(() => marcarNotaHecha(token, n.id, false))}
+                        >
+                          <Undo2 size={16} />
+                        </button>
+                        <button
+                          className="boton-icono peligro"
+                          title="Borrar"
+                          aria-label="Borrar"
+                          onClick={() => void borrar(n)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+      </div>
 
       {agendando && (
         <ModalAgendar
@@ -254,12 +438,30 @@ export function Notas({ token, onTokenInvalido, onAgendada }: Props) {
             await accion(async () => {
               await agendarNota(token, agendando.id, datos)
               setAgendando(null)
-              onAgendada?.(datos.fecha)
+              onIr('agenda', datos.fecha)
             })
           }}
         />
       )}
-    </section>
+    </>
+  )
+}
+
+function TituloColumna({
+  icono: Icono,
+  nombre,
+  cuenta,
+}: {
+  icono: LucideIcon
+  nombre: string
+  cuenta: number
+}) {
+  return (
+    <header className="columna-titulo">
+      <Icono size={16} />
+      <h2>{nombre}</h2>
+      <span className="contador">{cuenta}</span>
+    </header>
   )
 }
 
@@ -304,26 +506,32 @@ function ModalAgendar({
   }
 
   return (
-    <div className="modal-fondo" role="dialog" aria-modal="true" aria-label="Poner fecha">
-      <form className="modal" onSubmit={enviar}>
-        <h3>Poner fecha</h3>
-
-        <label>
+    <Modal titulo="Poner fecha" onCerrar={onCerrar}>
+      <form className="formulario" onSubmit={enviar}>
+        <label className="campo">
           Tarea
           <input value={titulo} onChange={(e) => setTitulo(e.target.value)} autoFocus />
         </label>
 
-        <label>
-          {variosDias ? 'Desde' : 'Día'}
-          <input
-            type="date"
-            value={desde}
-            onChange={(e) => {
-              setDesde(e.target.value)
-              if (hasta < e.target.value) setHasta(e.target.value)
-            }}
-          />
-        </label>
+        <div className="dos-campos">
+          <label className="campo">
+            {variosDias ? 'Desde' : 'Día'}
+            <input
+              type="date"
+              value={desde}
+              onChange={(e) => {
+                setDesde(e.target.value)
+                if (hasta < e.target.value) setHasta(e.target.value)
+              }}
+            />
+          </label>
+          <label className="campo">
+            <span>
+              Hora <small>(opcional)</small>
+            </span>
+            <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
+          </label>
+        </div>
 
         <label className="casilla">
           <input
@@ -338,7 +546,7 @@ function ModalAgendar({
         </label>
 
         {variosDias && (
-          <label>
+          <label className="campo">
             Hasta
             <input
               type="date"
@@ -349,22 +557,19 @@ function ModalAgendar({
           </label>
         )}
 
-        <label>
-          Hora <small>(opcional)</small>
-          <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
-        </label>
-
-        {!finValido && <p className="error">El último día no puede ser antes del primero.</p>}
+        {!finValido && <ErrorEnLinea>El último día no puede ser antes del primero.</ErrorEnLinea>}
 
         <div className="botones">
-          <button type="button" className="enlace" onClick={onCerrar}>
-            Cancelar
-          </button>
-          <button type="submit" disabled={!titulo.trim() || !finValido}>
-            Pasar a la agenda
-          </button>
+          <span className="derecha">
+            <button type="button" className="boton secundario" onClick={onCerrar}>
+              Cancelar
+            </button>
+            <button type="submit" className="boton" disabled={!titulo.trim() || !finValido}>
+              Pasar a la agenda
+            </button>
+          </span>
         </div>
       </form>
-    </div>
+    </Modal>
   )
 }

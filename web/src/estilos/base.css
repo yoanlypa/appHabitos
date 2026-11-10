@@ -1,0 +1,1079 @@
+/*
+ * La base del diseño: colores, tipografía y las piezas que se repiten en
+ * todas las pantallas (botones, campos, tarjetas, filas, ventanas).
+ *
+ * Todo lo que tiene color sale de las variables de arriba. Así el tema claro
+ * y el oscuro son la misma hoja con otros valores, y una pantalla nueva no
+ * puede inventarse un gris propio.
+ *
+ * Sigue pensado para el móvil primero —se apunta de pie, en mitad de un
+ * trabajo—, pero ya no se queda en una columna estrecha en el ordenador.
+ */
+
+:root {
+  color-scheme: light;
+  --fondo: #f7f7f5;
+  --superficie: #ffffff;
+  --relleno: #f2f2ef;
+  --relleno-2: #e8e8e4;
+  --borde: #e9e8e4;
+  --borde-fuerte: #d5d4ce;
+  --texto: #1d1d1b;
+  --texto-2: #62615c;
+  --texto-3: #8f8e88;
+
+  --acento: #4f46e5;
+  --acento-encima: #4338ca;
+  --acento-texto: #4338ca;
+  --acento-suave: #eef0ff;
+
+  --cobrado: #15803d;
+  --cobrado-suave: #e6f6ec;
+  --pendiente: #b45309;
+  --pendiente-suave: #fdf1dc;
+  --gasto: #c2362c;
+  --gasto-suave: #fdebe8;
+
+  /* Las dos series del gráfico. No son el verde y el rojo de arriba: estos
+     se distinguen también con daltonismo (comprobado, en claro y en oscuro). */
+  --serie-cobrado: #12a37f;
+  --serie-gastos: #d9482f;
+
+  --sombra-1: 0 1px 2px rgba(24, 24, 20, 0.05);
+  --sombra-2: 0 16px 40px -12px rgba(24, 24, 20, 0.22), 0 2px 8px rgba(24, 24, 20, 0.06);
+  --velo: rgba(20, 20, 18, 0.42);
+
+  --radio: 14px;
+  --radio-s: 10px;
+  --radio-xs: 7px;
+
+  font-family: 'Inter Variable', Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* El oscuro va dos veces a propósito: una para quien sigue al sistema y otra
+   para quien lo ha elegido a mano en el menú, que tiene que ganar siempre. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='claro']) {
+    color-scheme: dark;
+    --fondo: #0f0f10;
+    --superficie: #18181a;
+    --relleno: #222225;
+    --relleno-2: #2c2c30;
+    --borde: #27272b;
+    --borde-fuerte: #3a3a3f;
+    --texto: #ececea;
+    --texto-2: #a6a5a0;
+    --texto-3: #76756f;
+    --acento: #5d59e8;
+    --acento-encima: #6f6bf0;
+    --acento-texto: #a9a6ff;
+    --acento-suave: #25254a;
+    --cobrado: #4ade80;
+    --cobrado-suave: #14301f;
+    --pendiente: #fbbf24;
+    --pendiente-suave: #37290b;
+    --gasto: #f87171;
+    --gasto-suave: #3a1917;
+    --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --sombra-2: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.4);
+    --velo: rgba(0, 0, 0, 0.6);
+  }
+}
+:root[data-tema='oscuro'] {
+  color-scheme: dark;
+  --fondo: #0f0f10;
+  --superficie: #18181a;
+  --relleno: #222225;
+  --relleno-2: #2c2c30;
+  --borde: #27272b;
+  --borde-fuerte: #3a3a3f;
+  --texto: #ececea;
+  --texto-2: #a6a5a0;
+  --texto-3: #76756f;
+  --acento: #5d59e8;
+  --acento-encima: #6f6bf0;
+  --acento-texto: #a9a6ff;
+  --acento-suave: #25254a;
+  --cobrado: #4ade80;
+  --cobrado-suave: #14301f;
+  --pendiente: #fbbf24;
+  --pendiente-suave: #37290b;
+  --gasto: #f87171;
+  --gasto-suave: #3a1917;
+  --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --sombra-2: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --velo: rgba(0, 0, 0, 0.6);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--fondo);
+}
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+dl,
+dd,
+fieldset {
+  margin: 0;
+  padding: 0;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--texto-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+a {
+  color: var(--acento-texto);
+  text-decoration: none;
+}
+
+svg {
+  flex-shrink: 0;
+}
+
+code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  background: var(--relleno);
+  border-radius: 5px;
+  padding: 0.1em 0.4em;
+}
+
+/* ---------- Botones ---------- */
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--acento);
+  outline-offset: 2px;
+}
+
+.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border-radius: var(--radio-s);
+  background: var(--acento);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.05s;
+}
+
+.boton:hover:not(:disabled) {
+  background: var(--acento-encima);
+}
+
+.boton:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.boton:disabled {
+  opacity: 0.45;
+}
+
+.boton.secundario {
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: inset 0 0 0 1px var(--borde-fuerte);
+}
+
+.boton.secundario:hover:not(:disabled) {
+  background: var(--relleno);
+}
+
+.boton.suave {
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+}
+
+.boton.suave:hover:not(:disabled) {
+  background: var(--acento-suave);
+  filter: brightness(0.97);
+}
+
+.boton.peligro {
+  background: var(--gasto);
+  color: #fff;
+}
+
+:root[data-tema='oscuro'] .boton.peligro {
+  color: #1d1d1b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='claro']) .boton.peligro {
+    color: #1d1d1b;
+  }
+}
+
+.boton.peligro:hover:not(:disabled) {
+  background: var(--gasto);
+  filter: brightness(0.93);
+}
+
+.boton.pequeno {
+  min-height: 2rem;
+  padding: 0 0.7rem;
+  font-size: 0.82rem;
+  border-radius: var(--radio-xs);
+}
+
+.boton.ancho {
+  width: 100%;
+}
+
+.boton-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radio-xs);
+  color: var(--texto-2);
+  transition: background 0.15s, color 0.15s;
+}
+
+.boton-icono:hover:not(:disabled) {
+  background: var(--relleno);
+  color: var(--texto);
+}
+
+.boton-icono.borde {
+  box-shadow: inset 0 0 0 1px var(--borde-fuerte);
+  background: var(--superficie);
+}
+
+.boton-icono.peligro:hover:not(:disabled) {
+  background: var(--gasto-suave);
+  color: var(--gasto);
+}
+
+.boton-icono.bien:hover:not(:disabled) {
+  background: var(--cobrado-suave);
+  color: var(--cobrado);
+}
+
+.enlace {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--acento-texto);
+  font-size: 0.85rem;
+  font-weight: 550;
+  border-radius: 4px;
+}
+
+.enlace:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.enlace.gris {
+  color: var(--texto-2);
+}
+
+.enlace.peligro {
+  color: var(--gasto);
+}
+
+/* ---------- Campos ---------- */
+
+input,
+select,
+textarea {
+  font: inherit;
+  /* 16 px en el móvil: con menos, el iPhone hace zoom al tocar el campo. */
+  font-size: 16px;
+  color: var(--texto);
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-s);
+  background: var(--superficie);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+input::placeholder {
+  color: var(--texto-3);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 22%, transparent);
+}
+
+input[type='checkbox'] {
+  width: 1.15rem;
+  height: 1.15rem;
+  min-height: 0;
+  padding: 0;
+  accent-color: var(--acento);
+  flex: 0 0 auto;
+}
+
+select {
+  appearance: none;
+  padding-right: 2.2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238f8e88' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7rem center;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 550;
+  color: var(--texto-2);
+}
+
+.campo small {
+  font-weight: 400;
+  color: var(--texto-3);
+}
+
+.campo[hidden] {
+  display: none;
+}
+
+.casilla {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.92rem;
+  color: var(--texto);
+  cursor: pointer;
+}
+
+.dos-campos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+}
+
+.formulario .botones {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.formulario .botones .derecha {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+/* ---------- Texto de apoyo y avisos en línea ---------- */
+
+.ayuda {
+  color: var(--texto-2);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.apagado {
+  color: var(--texto-3);
+}
+
+.error {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  background: var(--gasto-suave);
+  color: var(--gasto);
+  border-radius: var(--radio-s);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.cobrado {
+  color: var(--cobrado);
+}
+.pendiente {
+  color: var(--pendiente);
+}
+.gasto {
+  color: var(--gasto);
+}
+
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- Tarjetas ---------- */
+
+.tarjeta {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra-1);
+  padding: 1rem;
+  min-width: 0;
+}
+
+.tarjeta-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+  min-height: 1.75rem;
+}
+
+.tarjeta-cabecera h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tarjeta-cabecera h2 svg {
+  color: var(--texto-3);
+}
+
+.contador {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--relleno);
+  color: var(--texto-2);
+  font-size: 0.72rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Filas de lista ---------- */
+
+.lista {
+  display: flex;
+  flex-direction: column;
+}
+
+.fila {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.5rem;
+  margin: 0 -0.5rem;
+  border-radius: var(--radio-s);
+  min-width: 0;
+}
+
+/* La raya entre filas es un trazo aparte y no un borde: así no se curva con
+   las esquinas redondeadas que la fila necesita para el fondo al pasar. */
+.fila {
+  position: relative;
+}
+
+.fila + .fila::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0.5rem;
+  right: 0.5rem;
+  border-top: 1px solid var(--borde);
+}
+
+.fila.tocable {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.fila.tocable:hover {
+  background: var(--relleno);
+}
+
+.fila.tocable:hover::before,
+.fila.tocable:hover + .fila::before {
+  display: none;
+}
+
+.fila .principal {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.fila .principal small {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--texto-3);
+}
+
+.fila.hecha .principal {
+  color: var(--texto-3);
+  text-decoration: line-through;
+}
+
+.fila .importe {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fila .acciones {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+
+/* El redondel de la izquierda de cada movimiento: de un vistazo, si entra,
+   sale o está por cobrar, sin leer la etiqueta. */
+.insignia {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--relleno);
+  color: var(--texto-2);
+  flex-shrink: 0;
+}
+
+.insignia.trabajo {
+  background: var(--cobrado-suave);
+  color: var(--cobrado);
+}
+.insignia.gasto {
+  background: var(--gasto-suave);
+  color: var(--gasto);
+}
+.insignia.pendiente {
+  background: var(--pendiente-suave);
+  color: var(--pendiente);
+}
+.insignia.cita {
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+}
+
+/* El círculo de "hecho": vacío mientras está pendiente, relleno al marcarlo. */
+.marca {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--borde-fuerte);
+  color: transparent;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.marca:hover:not(:disabled) {
+  border-color: var(--acento);
+  color: var(--acento);
+}
+
+.marca.puesta {
+  background: var(--acento);
+  border-color: var(--acento);
+  color: #fff;
+}
+
+/* Para que el dedo acierte: el círculo mide 24 px pero se toca en 40. */
+.marca {
+  position: relative;
+}
+.marca::after {
+  content: '';
+  position: absolute;
+  inset: -0.5rem;
+}
+
+.pastilla {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 1.4rem;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  background: var(--relleno);
+  color: var(--texto-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pastilla.cobrado {
+  background: var(--cobrado-suave);
+  color: var(--cobrado);
+}
+.pastilla.pendiente {
+  background: var(--pendiente-suave);
+  color: var(--pendiente);
+}
+.pastilla.gasto {
+  background: var(--gasto-suave);
+  color: var(--gasto);
+}
+.pastilla.acento {
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+}
+
+/* ---------- Selector segmentado y chips de filtro ---------- */
+
+.segmentado {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--radio-s);
+  background: var(--relleno);
+  max-width: 100%;
+}
+
+.segmentado button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  padding: 0 0.85rem;
+  border-radius: 8px;
+  color: var(--texto-2);
+  font-size: 0.85rem;
+  font-weight: 550;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.segmentado button.activa {
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--borde);
+}
+
+/* Dentro de una columna no se estira: mide lo que miden sus opciones. */
+.segmentado:not(.ancho) {
+  align-self: flex-start;
+}
+
+.segmentado.ancho {
+  display: flex;
+}
+
+.segmentado.ancho button {
+  flex: 1;
+  padding: 0 0.4rem;
+}
+
+.chips {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* Deja ver que hay más a la derecha sin recortar el foco de los botones. */
+  padding: 3px;
+  margin: -3px;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  height: 2.1rem;
+  padding: 0 0.85rem;
+  border-radius: 999px;
+  background: var(--superficie);
+  box-shadow: inset 0 0 0 1px var(--borde-fuerte);
+  color: var(--texto-2);
+  font-size: 0.85rem;
+  font-weight: 550;
+  transition: background 0.15s, color 0.15s;
+}
+
+.chip:hover {
+  background: var(--relleno);
+}
+
+.chip.activa {
+  background: var(--texto);
+  color: var(--superficie);
+  box-shadow: none;
+}
+
+.chip small {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Cifras ---------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.kpi {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra-1);
+  padding: 0.85rem 1rem;
+  min-width: 0;
+}
+
+.kpi dt {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 550;
+  color: var(--texto-2);
+}
+
+.kpi dt i {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--texto-3);
+}
+
+.kpi.cobrado dt i {
+  background: var(--cobrado);
+}
+.kpi.pendiente dt i {
+  background: var(--pendiente);
+}
+.kpi.gasto dt i {
+  background: var(--gasto);
+}
+.kpi.neto dt i {
+  background: var(--acento);
+}
+
+.kpi dd {
+  margin-top: 0.3rem;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--texto);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kpi small {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: var(--texto-3);
+}
+
+@media (min-width: 720px) {
+  .kpis.cuatro {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .kpis.tres {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Vacíos y carga ---------- */
+
+.vacio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: var(--texto-3);
+  font-size: 0.88rem;
+}
+
+.vacio svg {
+  color: var(--borde-fuerte);
+  margin-bottom: 0.2rem;
+}
+
+.vacio strong {
+  color: var(--texto-2);
+  font-weight: 600;
+}
+
+.vacio .boton {
+  margin-top: 0.5rem;
+}
+
+.esqueleto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.5rem 0;
+}
+
+.esqueleto i {
+  display: block;
+  height: 2.4rem;
+  border-radius: var(--radio-s);
+  background: linear-gradient(90deg, var(--relleno) 25%, var(--relleno-2) 50%, var(--relleno) 75%);
+  background-size: 200% 100%;
+  animation: brillo 1.4s linear infinite;
+}
+
+.esqueleto i:nth-child(2) {
+  width: 85%;
+}
+.esqueleto i:nth-child(3) {
+  width: 65%;
+}
+
+@keyframes brillo {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ---------- Ventanas ---------- */
+
+/* En el móvil sube desde abajo, que es donde está el pulgar; en el ordenador
+   es una ventana centrada. Es el mismo componente con otra colocación. */
+.modal-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--velo);
+  animation: aparecer 0.15s ease-out;
+}
+
+.modal {
+  width: 100%;
+  max-width: 30rem;
+  max-height: 92dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--superficie);
+  border-radius: 20px 20px 0 0;
+  box-shadow: var(--sombra-2);
+  padding: 0.5rem 1.15rem calc(1.15rem + env(safe-area-inset-bottom));
+  animation: subir 0.22s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.modal::before {
+  content: '';
+  display: block;
+  width: 2.5rem;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--borde-fuerte);
+  margin: 0 auto 0.4rem;
+}
+
+.modal-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.modal-cabecera h2 {
+  font-size: 1.1rem;
+}
+
+.modal-cabecera .boton-icono {
+  margin-right: -0.4rem;
+}
+
+@media (min-width: 640px) {
+  .modal-fondo {
+    align-items: center;
+    padding: 1.5rem;
+  }
+  .modal {
+    border-radius: 18px;
+    padding: 1.15rem 1.35rem 1.35rem;
+    animation: crecer 0.16s ease-out;
+  }
+  .modal::before {
+    display: none;
+  }
+  .modal.estrecha {
+    max-width: 24rem;
+  }
+}
+
+@keyframes aparecer {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes subir {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes crecer {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(6px);
+  }
+}
+
+/* ---------- Avisos que aparecen y se van ---------- */
+
+/* Arriba en el móvil: abajo taparían la barra o los botones de la ventana
+   que esté abierta, que es justo donde se está mirando. */
+.avisos {
+  position: fixed;
+  left: 50%;
+  top: calc(0.75rem + env(safe-area-inset-top));
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  pointer-events: none;
+}
+
+.aviso {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: 100%;
+  padding: 0.65rem 0.95rem;
+  border-radius: 12px;
+  background: var(--texto);
+  color: var(--superficie);
+  font-size: 0.88rem;
+  font-weight: 500;
+  box-shadow: var(--sombra-2);
+  animation: crecer 0.2s ease-out;
+}
+
+.aviso svg {
+  color: var(--serie-cobrado);
+}
+
+.aviso.mal svg {
+  color: var(--serie-gastos);
+}
+
+@media (min-width: 900px) {
+  .avisos {
+    top: auto;
+    bottom: 1.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Varias piezas llevan `display` propio, que gana al atributo `hidden`: sin
+   esto, los campos que se ocultan al colgar una factura de un trabajo
+   seguían a la vista. */
+[hidden] {
+  display: none !important;
+}

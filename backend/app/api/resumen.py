@@ -5,10 +5,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencias import get_current_user_id
-from app.api.schemas import ResumenSalida, TrimestreSalida
+from app.api.schemas import ResumenMesSalida, ResumenSalida, TrimestreSalida
 from app.nucleo.db import get_db
 from app.nucleo.tiempo import hoy_local
-from app.servicios.resumen import ResumenPeriodo, resumen_dia, resumen_mes, resumen_rango
+from app.servicios.resumen import (
+    ResumenPeriodo,
+    resumen_dia,
+    resumen_mes,
+    resumen_por_meses,
+    resumen_rango,
+)
 from app.servicios.trimestres import resumen_trimestre, trimestre_de
 
 router = APIRouter(prefix="/resumen", tags=["resumen"])
@@ -48,6 +54,24 @@ def rango(
     if hasta < desde:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "el rango está al revés")
     return _a_salida(resumen_rango(db, user_id, desde, hasta))
+
+
+@router.get("/meses", response_model=list[ResumenMesSalida])
+def meses(
+    anio: int | None = None,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Los doce meses de un año, para el gráfico. Sin parámetros, el que corre."""
+    anio = anio or hoy_local().year
+    if not 2000 <= anio <= 2100:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "ese año no vale")
+    return [
+        ResumenMesSalida(
+            mes=numero, cobrado=r.cobrado, pendiente=r.pendiente, gastos=r.gastos, neto=r.neto
+        )
+        for numero, r in enumerate(resumen_por_meses(db, user_id, anio), start=1)
+    ]
 
 
 @router.get("/trimestre", response_model=TrimestreSalida)

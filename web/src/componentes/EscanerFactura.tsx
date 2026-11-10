@@ -13,6 +13,7 @@
  * móviles y el modelo la lee igual de bien. Tampoco hace falta recortar los
  * bordes: el modelo lee el ticket aunque esté torcido o con la mesa detrás.
  */
+import { Camera, FileUp } from 'lucide-react'
 import { useRef, useState } from 'react'
 import {
   confirmarFacturaEmitida,
@@ -20,8 +21,9 @@ import {
   escanearFactura,
   type TicketLeido,
 } from '../api'
-import { euros, fechaCorta } from '../utiles'
-import { iso } from '../utiles'
+import { Modal } from '../ui/Modal'
+import { ErrorEnLinea } from '../ui/piezas'
+import { euros, fechaCorta, iso } from '../utiles'
 
 type Props = {
   token: string
@@ -147,40 +149,49 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
       <div className="escaner-botones">
         <button
           type="button"
-          className="escanear"
+          className="boton secundario"
           disabled={leyendo}
           onClick={() => entrada.current?.click()}
         >
-          {leyendo ? 'Leyendo…' : '📷 Escanear ticket'}
+          <Camera size={18} />
+          {leyendo ? 'Leyendo…' : 'Escanear ticket'}
         </button>
         <button
           type="button"
-          className="escanear secundario"
+          className="boton secundario"
           disabled={leyendo}
           onClick={() => entradaPdf.current?.click()}
         >
-          📄 Subir PDF
+          <FileUp size={18} />
+          Subir PDF
         </button>
       </div>
 
       {leido && (
-        <div className="modal-fondo" role="dialog" aria-modal="true" aria-label="Gasto escaneado">
-          <form className="modal" onSubmit={guardar}>
-            <h3>{leido.emitida ? `📤 Factura tuya${leido.cliente ? ` a ${leido.cliente}` : ''}` : 'Gasto del ticket'}</h3>
+        <Modal
+          titulo={
+            leido.emitida
+              ? `Factura tuya${leido.cliente ? ` a ${leido.cliente}` : ''}`
+              : 'Gasto del ticket'
+          }
+          onCerrar={cerrar}
+          cierreFacil={false}
+        >
+          <form className="formulario" onSubmit={guardar}>
             {leido.emitida && (
               <p className="ayuda">Se anota como trabajo (dinero que entra), no como gasto.</p>
             )}
             {vista ? (
               <img className="ticket-vista" src={vista} alt="Foto del ticket" />
             ) : (
-              <p className="ayuda">📄 Factura en PDF leída.</p>
+              <p className="ayuda">Factura en PDF leída.</p>
             )}
             {!leido.total && (
-              <p className="error">No he leído el total con seguridad: escríbelo tú.</p>
+              <ErrorEnLinea>No he leído el total con seguridad: escríbelo tú.</ErrorEnLinea>
             )}
 
             {leido.emitida && leido.candidatos.length > 0 && (
-              <label>
+              <label className="campo">
                 ¿De qué trabajo es?
                 <select value={trabajo} onChange={(e) => setTrabajo(e.target.value)}>
                   <option value="">Un trabajo nuevo</option>
@@ -195,52 +206,60 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
             {leido.emitida && trabajo !== '' && (
               <p className="ayuda">Se cuelga de ese trabajo: no se cuenta dos veces.</p>
             )}
-            <label hidden={leido.emitida && trabajo !== ''}>
+            <label className="campo" hidden={leido.emitida && trabajo !== ''}>
               Concepto
               <input value={concepto} onChange={(e) => setConcepto(e.target.value)} />
             </label>
-            <label hidden={leido.emitida && trabajo !== ''}>
-              {leido.emitida ? 'Importe a cobrar (€)' : 'Importe (€)'}
-              <input
-                inputMode="decimal"
-                value={importe}
-                onChange={(e) => setImporte(e.target.value)}
-                placeholder="23,40"
-                autoFocus={!leido.total}
-              />
-            </label>
-            <label hidden={leido.emitida && trabajo !== ''}>
-              {leido.emitida ? 'Fecha de la factura' : 'Fecha del ticket'}
-              <input
-                type="date"
-                value={fecha}
-                max={iso(new Date())}
-                onChange={(e) => setFecha(e.target.value)}
-              />
-            </label>
+            <div className="dos-campos" hidden={leido.emitida && trabajo !== ''}>
+              <label className="campo">
+                {leido.emitida ? 'A cobrar (€)' : 'Importe (€)'}
+                <input
+                  inputMode="decimal"
+                  value={importe}
+                  onChange={(e) => setImporte(e.target.value)}
+                  placeholder="23,40"
+                  autoFocus={!leido.total}
+                />
+              </label>
+              <label className="campo">
+                {leido.emitida ? 'Fecha de la factura' : 'Fecha del ticket'}
+                <input
+                  type="date"
+                  value={fecha}
+                  max={iso(new Date())}
+                  onChange={(e) => setFecha(e.target.value)}
+                />
+              </label>
+            </div>
             {!leido.fecha && (
-              <p className="error">No he leído la fecha: he puesto hoy. Cámbiala si es de otro día.</p>
+              <ErrorEnLinea>
+                No he leído la fecha: he puesto hoy. Cámbiala si es de otro día.
+              </ErrorEnLinea>
             )}
             {leido.emitida && (
               <label className="casilla">
-                <input type="checkbox" checked={cobrada} onChange={(e) => setCobrada(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={cobrada}
+                  onChange={(e) => setCobrada(e.target.checked)}
+                />
                 Ya está cobrada
               </label>
             )}
-            {leido.iva && (
-              <p className="ayuda">IVA leído: {leido.iva.replace('.', ',')} €</p>
-            )}
+            {leido.iva && <p className="ayuda">IVA leído: {leido.iva.replace('.', ',')} €</p>}
 
             <div className="botones">
-              <button type="button" className="enlace" onClick={cerrar}>
-                Cancelar
-              </button>
-              <button type="submit" disabled={!importeValido || guardando}>
-                {guardando ? 'Guardando…' : leido.emitida ? 'Anotar factura' : 'Anotar gasto'}
-              </button>
+              <span className="derecha">
+                <button type="button" className="boton secundario" onClick={cerrar}>
+                  Cancelar
+                </button>
+                <button type="submit" className="boton" disabled={!importeValido || guardando}>
+                  {guardando ? 'Guardando…' : leido.emitida ? 'Anotar factura' : 'Anotar gasto'}
+                </button>
+              </span>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </>
   )

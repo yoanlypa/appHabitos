@@ -1,0 +1,1221 @@
+/*
+ * Lo propio de cada pantalla. Las piezas comunes (botones, tarjetas, filas,
+ * ventanas) están en base.css; aquí solo lo que una pantalla tiene de suyo.
+ */
+
+/* ---------- Bloques con título fuera de la tarjeta ---------- */
+
+.bloque {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.bloque-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+.bloque-cabecera h2::first-letter {
+  text-transform: uppercase;
+}
+
+.volver {
+  align-self: flex-start;
+}
+
+/* ---------- Inicio: la caja de anotar ---------- */
+
+.captura {
+  padding: 0.6rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.captura:focus-within {
+  border-color: var(--acento);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--acento) 18%, transparent);
+}
+
+.captura form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.captura-icono {
+  margin-left: 0.5rem;
+  color: var(--texto-3);
+}
+
+.captura form input {
+  flex: 1;
+  border: 0;
+  background: none;
+  min-height: 2.75rem;
+  padding: 0 0.25rem;
+  font-size: 1.05rem;
+}
+
+.captura form input:focus {
+  box-shadow: none;
+}
+
+.captura-pie {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  padding: 0.6rem 0.25rem 0;
+  border-top: 1px solid var(--borde);
+}
+
+/* Las pistas de cómo se escribe: en el móvil van en una fila que se
+   desliza, para que cuatro ejemplos no empujen todo lo demás hacia abajo. */
+.pistas {
+  display: flex;
+  gap: 0.4rem 1rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  font-size: 0.78rem;
+  color: var(--texto-3);
+}
+
+.pistas::-webkit-scrollbar {
+  display: none;
+}
+
+.pistas li {
+  white-space: nowrap;
+}
+
+.escaner-botones {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.ticket-vista {
+  width: 100%;
+  max-height: 14rem;
+  object-fit: contain;
+  border-radius: var(--radio-s);
+  background: var(--relleno);
+}
+
+@media (min-width: 900px) {
+  .captura-pie {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-left: 0.5rem;
+  }
+  .pistas {
+    flex-wrap: wrap;
+  }
+  .escaner-botones {
+    display: flex;
+    flex-shrink: 0;
+  }
+  .escaner-botones .boton {
+    min-height: 2.1rem;
+    font-size: 0.85rem;
+    padding: 0 0.8rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .captura form .boton svg {
+    display: none;
+  }
+}
+
+/* Cuando hay dos clientes con el mismo nombre y hay que elegir. */
+.duda {
+  margin-top: 0.6rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radio-s);
+  background: var(--pendiente-suave);
+}
+
+.duda p {
+  margin-bottom: 0.6rem;
+  font-size: 0.92rem;
+}
+
+.duda .opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* ---------- Inicio: tarjetas ---------- */
+
+.rejilla-inicio {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.rejilla-inicio > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .rejilla-inicio {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+  .rejilla-inicio > div {
+    gap: 1.25rem;
+  }
+}
+
+.boton.cobrar {
+  background: var(--pendiente-suave);
+  color: var(--pendiente);
+}
+
+.boton.cobrar:hover:not(:disabled) {
+  background: var(--pendiente-suave);
+  filter: brightness(0.95);
+}
+
+.fila .hora {
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  font-size: 0.88rem;
+  color: var(--acento-texto);
+}
+
+.racha {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--texto-3);
+}
+
+.fila .racha,
+.racha.viva {
+  color: var(--pendiente);
+}
+
+.progreso {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--relleno-2);
+  overflow: hidden;
+  margin-bottom: 0.4rem;
+}
+
+.progreso i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--acento);
+  transition: width 0.3s ease;
+}
+
+.progreso.grande {
+  height: 8px;
+  border-radius: 4px;
+  margin: 0;
+}
+
+.enlace.mas {
+  margin-top: 0.5rem;
+}
+
+/* ---------- Notas: el tablero ---------- */
+
+.tablero {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.columna {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border-radius: var(--radio);
+  background: var(--relleno);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.columna.sobre {
+  background: var(--acento-suave);
+  box-shadow: inset 0 0 0 2px var(--acento);
+}
+
+.columna-titulo {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.1rem 0.25rem;
+  color: var(--texto-2);
+}
+
+.columna-titulo h2 {
+  font-size: 0.9rem;
+  color: var(--texto);
+}
+
+.nueva-tarjeta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.4rem 0 0.7rem;
+  border-radius: var(--radio-s);
+  background: var(--superficie);
+  box-shadow: var(--sombra-1), inset 0 0 0 1px var(--borde);
+  color: var(--texto-3);
+}
+
+.nueva-tarjeta:focus-within {
+  box-shadow: 0 0 0 2px var(--acento);
+}
+
+.nueva-tarjeta input {
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 0;
+}
+
+.nueva-tarjeta input:focus {
+  box-shadow: none;
+}
+
+.tarjetas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tarjeta-nota {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.7rem 0.75rem 0.4rem;
+  border-radius: var(--radio-s);
+  background: var(--superficie);
+  box-shadow: var(--sombra-1), inset 0 0 0 1px var(--borde);
+}
+
+.tarjeta-nota[draggable='true'] {
+  cursor: grab;
+}
+
+.tarjeta-nota[draggable='true']:active {
+  cursor: grabbing;
+}
+
+.tarjeta-nota.tocable {
+  cursor: pointer;
+}
+
+.tarjeta-nota.tocable:hover {
+  box-shadow: var(--sombra-1), inset 0 0 0 1px var(--borde-fuerte);
+}
+
+.tarjeta-nota .texto {
+  width: 100%;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.tarjeta-nota.cumplida .texto {
+  color: var(--texto-3);
+  text-decoration: line-through;
+}
+
+.tarjeta-nota input {
+  min-height: 2.25rem;
+}
+
+.tarjeta-nota-pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 2.25rem;
+}
+
+.tarjeta-nota .meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem 0.5rem;
+  min-width: 0;
+  font-size: 0.76rem;
+  color: var(--texto-3);
+}
+
+.tarjeta-nota .via {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.tarjeta-nota .acciones {
+  display: flex;
+  margin-right: -0.4rem;
+  flex-shrink: 0;
+}
+
+.tarjeta-nota .boton-icono {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+@media (min-width: 900px) {
+  .tablero {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* Con ratón, los botones de la tarjeta se quedan discretos hasta pasar
+     por encima. En el móvil están siempre, que ahí no hay "pasar". */
+  .tarjeta-nota .acciones {
+    opacity: 0.35;
+    transition: opacity 0.12s;
+  }
+  .tarjeta-nota:hover .acciones,
+  .tarjeta-nota:focus-within .acciones {
+    opacity: 1;
+  }
+}
+
+/* ---------- Calendario (agenda y hábitos) ---------- */
+
+.cal-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.cal-cabecera h2 {
+  font-size: 1.05rem;
+  text-transform: capitalize;
+}
+
+.cal-cabecera h2 span {
+  color: var(--texto-3);
+  font-weight: 500;
+}
+
+.cal-mandos {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.cal-mandos .boton {
+  margin-right: 0.35rem;
+}
+
+.cal-rejilla {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.cal-dia-nombre {
+  padding: 0.35rem 0;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--texto-3);
+}
+
+.cal-dia {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  border-radius: var(--radio-s);
+  font-size: 0.9rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-numero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  transition: background 0.12s;
+}
+
+.cal-dia:hover:not(:disabled) .cal-numero {
+  background: var(--relleno);
+}
+
+.cal-dia.hoy .cal-numero {
+  color: var(--acento-texto);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1.5px var(--acento);
+}
+
+.cal-dia.elegido .cal-numero {
+  background: var(--acento);
+  color: #fff;
+  box-shadow: none;
+}
+
+.cal-dia .punto {
+  position: absolute;
+  bottom: 8%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--acento);
+}
+
+.cal-citas {
+  display: none;
+}
+
+/* Los estados de un hábito sobre el mismo calendario. */
+.cal-dia.hecho .cal-numero {
+  background: var(--acento);
+  color: #fff;
+  box-shadow: none;
+}
+
+.cal-dia.fallado .cal-numero {
+  background: var(--relleno);
+  color: var(--texto-3);
+}
+
+.cal-dia.no_toca,
+.cal-dia.antes,
+.cal-dia.futuro {
+  color: var(--texto-3);
+  opacity: 0.55;
+}
+
+.habito-calendario {
+  max-width: 28rem;
+}
+
+.habito-calendario .ayuda {
+  margin-top: 0.75rem;
+}
+
+/* ---------- Agenda ---------- */
+
+.agenda {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.dia-elegido .tarjeta-cabecera {
+  align-items: flex-start;
+}
+
+.dia-elegido .subtitulo {
+  color: var(--texto-3);
+  font-size: 0.82rem;
+}
+
+.dia-elegido .subtitulo::first-letter {
+  text-transform: uppercase;
+}
+
+@media (min-width: 900px) {
+  .agenda {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    gap: 1.25rem;
+  }
+
+  /* El calendario de pared: casillas altas con sus citas escritas. */
+  .calendario.grande .cal-rejilla {
+    gap: 0;
+    border-top: 1px solid var(--borde);
+    border-left: 1px solid var(--borde);
+    border-radius: var(--radio-s);
+    overflow: hidden;
+  }
+
+  .calendario.grande .cal-dia-nombre {
+    border-right: 1px solid var(--borde);
+    border-bottom: 1px solid var(--borde);
+    background: var(--relleno);
+  }
+
+  .calendario.grande .cal-hueco {
+    border-right: 1px solid var(--borde);
+    border-bottom: 1px solid var(--borde);
+    background: color-mix(in srgb, var(--relleno) 50%, transparent);
+  }
+
+  .calendario.grande .cal-dia {
+    aspect-ratio: auto;
+    min-height: 6.25rem;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 0.3rem;
+    border-radius: 0;
+    border-right: 1px solid var(--borde);
+    border-bottom: 1px solid var(--borde);
+    text-align: left;
+    transition: background 0.12s;
+  }
+
+  .calendario.grande .cal-dia:hover {
+    background: var(--relleno);
+  }
+
+  .calendario.grande .cal-dia.elegido {
+    background: var(--acento-suave);
+    box-shadow: inset 0 0 0 2px var(--acento);
+  }
+
+  .calendario.grande .cal-numero {
+    width: 1.6rem;
+    height: 1.6rem;
+    font-size: 0.82rem;
+  }
+
+  .calendario.grande .cal-dia:hover .cal-numero {
+    background: none;
+  }
+
+  .calendario.grande .cal-dia.elegido .cal-numero {
+    background: none;
+    color: var(--acento-texto);
+    font-weight: 700;
+  }
+
+  .calendario.grande .cal-dia.hoy .cal-numero {
+    background: var(--acento);
+    color: #fff;
+    box-shadow: none;
+  }
+
+  .calendario.grande .punto {
+    display: none;
+  }
+
+  .cal-citas {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .cal-cita {
+    display: block;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    background: var(--acento-suave);
+    color: var(--acento-texto);
+    font-size: 0.72rem;
+    font-weight: 550;
+    line-height: 1.45;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cal-cita b {
+    font-weight: 700;
+  }
+
+  .cal-cita.hecha {
+    background: var(--relleno);
+    color: var(--texto-3);
+    text-decoration: line-through;
+  }
+
+  .cal-mas {
+    padding: 0 0.35rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--texto-3);
+  }
+
+  .dia-elegido {
+    position: sticky;
+    top: 0;
+  }
+}
+
+/* ---------- Finanzas ---------- */
+
+.rango-propio {
+  max-width: 26rem;
+}
+
+.movimientos .chips {
+  margin-bottom: 0.75rem;
+}
+
+.movimientos .escaner-botones {
+  display: grid;
+  margin-bottom: 0.5rem;
+}
+
+.movimientos .dia h3 {
+  margin: 0.9rem 0 0.15rem;
+}
+
+.exportar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.exportar div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.mini-select {
+  order: 10;
+  flex: 1 1 100%;
+  min-height: 2.25rem;
+  margin-left: 3rem;
+  font-size: 0.85rem;
+}
+
+@media (min-width: 720px) {
+  .mini-select {
+    order: 0;
+    flex: 0 1 11rem;
+    margin-left: 0;
+    min-height: 2rem;
+  }
+}
+
+.cobros .fila {
+  flex-wrap: wrap;
+}
+
+/* El gráfico: columnas finas, rejilla que apenas se ve, y nada más. */
+
+.grafico .tarjeta-cabecera {
+  align-items: flex-start;
+}
+
+.leyenda {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--texto-2);
+}
+
+.leyenda span,
+.ficha-mes span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.leyenda i,
+.ficha-mes i {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 3px;
+}
+
+i.cobrado,
+.barra-mes.cobrado {
+  background: var(--serie-cobrado);
+}
+
+i.gastos,
+.barra-mes.gastos {
+  background: var(--serie-gastos);
+}
+
+.grafico-anio {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.grafico-anio .boton-icono:disabled {
+  opacity: 0.3;
+}
+
+.grafico-lienzo {
+  position: relative;
+  height: 11.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 0 1.5rem 2.75rem;
+}
+
+.grafico-eje {
+  position: absolute;
+  inset: 0.5rem 0 1.5rem 2.75rem;
+}
+
+.grafico-eje span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--borde);
+}
+
+.grafico-eje b {
+  position: absolute;
+  right: 100%;
+  margin-right: 0.45rem;
+  transform: translateY(-50%);
+  font-size: 0.68rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--texto-3);
+  white-space: nowrap;
+}
+
+.grafico-meses {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  height: 100%;
+}
+
+.grafico-mes {
+  position: relative;
+  height: 100%;
+  border-radius: 6px 6px 0 0;
+  transition: background 0.12s;
+}
+
+.grafico-mes:not(:disabled):hover,
+.grafico-mes.activo {
+  background: color-mix(in srgb, var(--texto) 6%, transparent);
+}
+
+.grafico-mes:disabled .mes-nombre {
+  opacity: 0.45;
+}
+
+.barras {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 100%;
+}
+
+.barra-mes {
+  width: min(22px, 32%);
+  border-radius: 4px 4px 0 0;
+  transition: height 0.3s ease;
+}
+
+.mes-nombre {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0.4rem;
+  text-align: center;
+  font-size: 0.7rem;
+  color: var(--texto-3);
+}
+
+.ficha-mes {
+  position: absolute;
+  z-index: 5;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 12.5rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: var(--radio-s);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  box-shadow: var(--sombra-2);
+  font-size: 0.8rem;
+  color: var(--texto-2);
+  text-align: left;
+  pointer-events: none;
+}
+
+.ficha-mes.izquierda {
+  left: 0;
+  transform: none;
+}
+
+.ficha-mes.derecha {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.ficha-mes strong {
+  color: var(--texto);
+  font-size: 0.85rem;
+  text-transform: capitalize;
+}
+
+.ficha-mes b {
+  margin-left: auto;
+  padding-left: 1rem;
+  color: var(--texto);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.ficha-mes .linea {
+  margin-top: 0.15rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--borde);
+}
+
+.grafico-vacio {
+  position: absolute;
+  inset: 0.5rem 0 1.5rem 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--texto-3);
+  font-size: 0.88rem;
+  pointer-events: none;
+}
+
+/* ---------- Hábitos ---------- */
+
+.lista-habitos {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 900px) {
+  .lista-habitos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+.habito {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.habito-titulo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radio-xs);
+}
+
+.habito-titulo strong {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.habito-titulo:hover strong {
+  color: var(--acento-texto);
+}
+
+.habito-titulo small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  color: var(--texto-3);
+}
+
+.habito-titulo .racha {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--relleno);
+}
+
+.habito-titulo .racha.viva {
+  background: var(--pendiente-suave);
+}
+
+.semana-habito {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.circulo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--texto-3);
+}
+
+.circulo i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 2.4rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--relleno);
+  font-style: normal;
+  font-size: 0.85rem;
+  color: var(--texto-2);
+  transition: background 0.15s, box-shadow 0.15s, transform 0.08s;
+}
+
+.circulo:not(:disabled):active i {
+  transform: scale(0.92);
+}
+
+.circulo:not(:disabled):hover i {
+  box-shadow: inset 0 0 0 2px var(--acento);
+}
+
+.circulo.hecho i {
+  background: var(--acento);
+  color: #fff;
+}
+
+.circulo.hoy span {
+  color: var(--acento-texto);
+}
+
+.circulo.hoy i {
+  background: none;
+  box-shadow: inset 0 0 0 2px var(--acento);
+}
+
+.circulo.no_toca i,
+.circulo.antes i,
+.circulo.futuro i {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--borde);
+}
+
+.circulo.no_toca,
+.circulo.antes {
+  opacity: 0.55;
+}
+
+.circulo.libre i {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--borde-fuerte);
+}
+
+.dias-habito {
+  border: 0;
+}
+
+.dias-habito legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 550;
+  color: var(--texto-2);
+}
+
+.dias-habito .atajos {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.6rem;
+}
+
+/* ---------- Clientes ---------- */
+
+.clientes {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.clientes-ficha {
+  display: none;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+/* En el móvil, o lista o ficha: no caben las dos. */
+.clientes.con-ficha .clientes-lista {
+  display: none;
+}
+
+.clientes.con-ficha .clientes-ficha {
+  display: flex;
+}
+
+@media (min-width: 900px) {
+  .clientes {
+    grid-template-columns: 21rem minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+
+  .clientes .clientes-ficha,
+  .clientes.con-ficha .clientes-lista {
+    display: flex;
+  }
+
+  .clientes-lista {
+    flex-direction: column;
+  }
+
+  .clientes-ficha .volver {
+    display: none;
+  }
+}
+
+.buscador {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  margin-bottom: 0.5rem;
+  border-radius: var(--radio-s);
+  background: var(--relleno);
+  color: var(--texto-3);
+}
+
+.buscador:focus-within {
+  box-shadow: 0 0 0 2px var(--acento);
+}
+
+.buscador input {
+  border: 0;
+  background: none;
+  padding: 0;
+  min-height: 2.5rem;
+}
+
+.buscador input:focus {
+  box-shadow: none;
+}
+
+.fila.elegida,
+.fila.elegida:hover {
+  background: var(--acento-suave);
+}
+
+.fila.elegida::before,
+.fila.elegida + .fila::before {
+  display: none;
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: light-dark(hsl(var(--tono) 55% 91%), hsl(var(--tono) 30% 24%));
+  color: light-dark(hsl(var(--tono) 50% 32%), hsl(var(--tono) 60% 80%));
+  font-size: 0.78rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.avatar.grande {
+  width: 3.25rem;
+  height: 3.25rem;
+  font-size: 1.1rem;
+}
+
+.ficha-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.ficha-cabecera .principal {
+  flex: 1;
+  min-width: 0;
+}
+
+.ficha-cabecera h2 {
+  font-size: 1.2rem;
+}
+
+.contacto {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1rem;
+  margin-top: 0.2rem;
+  font-size: 0.88rem;
+  color: var(--texto-2);
+}
+
+.contacto a,
+.contacto span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* En el móvil la columna a la vista ya la nombran las pestañas de arriba:
+   repetir el título y el fondo gris sería enmarcar dos veces lo mismo. */
+@media (max-width: 899px) {
+  .columna {
+    padding: 0;
+    background: none;
+  }
+  .columna-titulo {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .mes-nombre {
+    font-size: 0.62rem;
+  }
+  .grafico-lienzo,
+  .grafico-eje,
+  .grafico-vacio {
+    padding-left: 2.4rem;
+  }
+  .grafico-eje,
+  .grafico-vacio {
+    padding-left: 0;
+    left: 2.4rem;
+  }
+}

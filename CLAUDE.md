@@ -62,7 +62,9 @@ parte-del-dia/
 │   ├── requirements.txt
 │   ├── Procfile           ✅ dos procesos: web (uvicorn) y bot (polling)
 │   └── .env.example
-└── web/                   ✅ hecho — api.ts + componentes/{Entrada,Panel}.tsx
+└── web/                   ✅ hecho — src/api.ts (lo único que sabe de HTTP),
+                              estilos/ (base, marco, secciones), ui/ (piezas
+                              comunes) y componentes/ (una pantalla cada uno)
 ```
 
 ## Decisiones ya tomadas
@@ -386,6 +388,63 @@ parte-del-dia/
     hoja, None y recorte simple: nunca se deforma por una hoja inventada. Las fotos reales de prueba no están en el repo: llevan
     nombre, dirección y teléfono.
 
+- **La web es una sola app para todo, y se ve como una.** Yoa la quería
+  "como las grandes" (Notion, Trello, una agenda, una app de finanzas) pero
+  con lo que ya hacía. Se rehízo el aspecto y la navegación sin cambiar una
+  sola regla de negocio. Lo que hay que saber para no deshacerlo:
+  - **Un sistema de diseño, no estilos sueltos.** Todos los colores salen de
+    las variables de `estilos/base.css`; claro y oscuro son la misma hoja con
+    otros valores (el oscuro va dos veces: para quien sigue al sistema y para
+    quien lo elige a mano, que tiene que ganar). Las piezas que se repiten
+    están en `ui/` (`Modal`, `Segmentado`, `Calendario`, `piezas.tsx`) y una
+    pantalla nueva las usa en vez de inventarse otras. Iconos de
+    `lucide-react` y la letra Inter servida desde el propio bundle
+    (`@fontsource-variable/inter`): nada se pide a servidores de terceros.
+  - **Menú lateral en el ordenador, barra abajo en el móvil** (`App.tsx`,
+    `estilos/marco.css`, corte en 900 px). Abajo caben cinco: Inicio, Notas,
+    Agenda, Finanzas y Hábitos, que son las de cada día; Clientes, el tema y
+    salir van en el menú de arriba. La sección va en la dirección
+    (`#/agenda`) para que el botón de atrás del móvil vuelva a la pantalla
+    anterior en vez de cerrar la app.
+  - **Inicio junta el día** (`componentes/Inicio.tsx`): la caja de anotar
+    (`Captura.tsx`, misma sintaxis que el bot), las cifras de hoy / mes /
+    trimestre y cuatro tarjetas —movimientos de hoy, próximas citas, hábitos
+    de hoy y notas pendientes— donde se hace lo más frecuente (cobrar, marcar
+    hecho) sin salir. No calcula nada: junta lo que ya daban los endpoints.
+  - **Al anotar se dice qué se ha entendido** (`ui/avisos.ts`, `avisar`):
+    "Gasto · gasolina · 45,00 €". Es la misma regla que en la voz, llevada a
+    la web. Y los "¿seguro?" son una ventana propia (`confirmar`) y no el
+    `confirm()` del navegador, que no decía qué se iba a perder.
+  - **Notas es un tablero** (`componentes/Notas.tsx`): Buzón, Con fecha (las
+    próximas citas) y Hecho. En el ordenador se arrastra de una columna a
+    otra; en el móvil se ve una columna con pestañas, porque arrastrar con el
+    pulgar es pelearse con el scroll. Arrastrar hace lo mismo que los botones
+    de la tarjeta: nada depende de saber que se puede. Las reglas del buzón
+    no cambian (poner fecha saca la nota, lo hecho se marca y no se borra).
+  - **La agenda en el ordenador es un calendario de pared**: cada casilla
+    enseña sus citas (`ui/Calendario.tsx` con `grande`); en el móvil no caben
+    y llevan un punto. Es el mismo calendario que el de los hábitos. Tocar
+    una cita la abre para corregirla (`PATCH /citas/{id}`, que ya existía y
+    la web no usaba); borrar va dentro y con confirmación.
+  - **Finanzas tiene el año mes a mes en un gráfico** (`GraficoMeses.tsx`).
+    Los doce totales los da `GET /resumen/meses`
+    (`servicios/resumen.resumen_por_meses`) con la misma suma que el resto, y
+    hay test de que cuadran con el año: la web sigue sin sumar dinero. Tocar
+    un mes lo pone como periodo. Los dos colores de las barras no son el
+    verde y el rojo de la app sino un par comprobado para daltonismo
+    (`--serie-cobrado`, `--serie-gastos`); la leyenda y la ficha de cada mes
+    lo dicen además con letras.
+  - **Un movimiento se ve igual en todas partes** (`FilaMovimiento.tsx`): el
+    redondel dice si entra, sale o está por cobrar. Tocar la fila la abre en
+    `FormMovimiento`; `movimientos.ts` manda solo lo que cambió.
+  - **Se puede instalar en el móvil** (`public/manifest.webmanifest`, iconos
+    y `viewport-fit=cover`): "Añadir a pantalla de inicio" la abre sin barras
+    de navegador. **Sin service worker a propósito**: no funciona sin
+    conexión, pero tampoco puede quedarse enseñando una versión vieja tras
+    un despliegue, que con datos de dinero es peor.
+  - Los importes llevan el punto de los miles también en cuatro cifras
+    (`1.234,50 €`, `useGrouping: 'always'` en `utiles.ts`), como en el bot.
+
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
   usuario/contraseña. Falta que el bot lo genere con `/web`
@@ -400,7 +459,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-323 tests, un par de segundos. `tests/conftest.py` apunta la base a un fichero
+326 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
@@ -500,28 +559,29 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   (uno los apaga, otro no anota nada, otro sí) y comprobando que si uno
   bloqueó el bot los demás reciben su aviso igual.
 
-- `web/componentes/Notas.tsx` es el buzón: alta, edición en la propia línea
-  (cambiar una palabra no merece abrir una ventana) y un modal para ponerle
-  fecha, donde se elige día o rango, hora opcional y se retoca el texto —
-  que es el momento en que se está pensando en ello. Al agendar salta a la
-  agenda para verlo ya puesto.
+- `web/componentes/Notas.tsx` es el buzón, ahora en tablero: alta, edición
+  en la propia tarjeta (cambiar una palabra no merece abrir una ventana) y
+  una ventana para ponerle fecha, donde se elige día o rango, hora opcional y
+  se retoca el texto — que es el momento en que se está pensando en ello. Al
+  agendar salta a la agenda, en el día elegido, para verlo ya puesto.
 - `web/` es el front en React: `api.ts` es el único sitio que sabe de HTTP,
   `componentes/Entrada.tsx` pide el token que da `/web` en el bot (se
   guarda en localStorage; si la API lo rechaza, se borra y se vuelve a
-  pedir) y `componentes/Panel.tsx` tiene el resumen día/mes, el alta y la
-  lista del día con botón de cobrar. El alta usa la misma sintaxis que el
+  pedir) y `componentes/Inicio.tsx` (antes `Panel.tsx`) tiene el resumen
+  día/mes/trimestre, el alta y la lista del día con botón de cobrar, más lo
+  de hoy de agenda, hábitos y notas. El alta usa la misma sintaxis que el
   bot a propósito: quien apunta desde el móvil no aprende dos formas de
   escribir. El CSV se descarga con fetch y no con un `<a href>`, porque la
   ruta exige el header `Authorization`.
 - `web/componentes/Finanzas.tsx` es la pestaña **Finanzas** de la barra
   (sustituye a Cobros, que va dentro como "Por cobrar": siete botones abajo
-  no caben en el móvil). Por periodos: hoy, este mes, mes anterior, este
+  no caben en el móvil). Lleva además el gráfico del año mes a mes. Por periodos: hoy, este mes, mes anterior, este
   año, año anterior o fechas a mano. El resumen sale de `/resumen/rango`
   (`servicios/resumen.resumen_rango`, la misma suma que día y mes: el total
   del año es la suma de sus meses, y hay test de eso) y los trabajos y gastos
   de `GET /apuntes/rango` (`servicios/apuntes.movimientos`, sin notas,
   extremos incluidos), agrupados por día (con el año si no es el actual).
-  Filtros Todo / Trabajos / Gastos / Tickets, el 🧾 para el PDF de cada
+  Filtros Todo / Trabajos / Gastos / Tickets, el botón del recibo para el PDF de cada
   ticket, y el PDF y el CSV del periodo elegido. No suma nada en el
   navegador: los totales los da el backend.
   **Todo se añade, edita y borra desde ahí** (`componentes/FormMovimiento.tsx`):

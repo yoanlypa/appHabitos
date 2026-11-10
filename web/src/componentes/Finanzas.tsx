@@ -2,21 +2,23 @@
  * Finanzas: todo el dinero de un periodo en una pantalla.
  *
  * El periodo se elige arriba: hoy, este mes, el anterior, este año, el
- * anterior o unas fechas a mano. Debajo, el resumen (cobrado, pendiente, gastos, neto) que da el backend —
- * aquí no se suma nada, que los importes van en céntimos allí. Debajo, los
- * movimientos del mes con filtros: trabajos, gastos, tickets escaneados y lo
- * pendiente de cobro. Los tickets llevan 🧾 para abrir su PDF.
+ * anterior o unas fechas a mano. Debajo, el resumen (cobrado, pendiente,
+ * gastos, neto) que da el backend —aquí no se suma nada, que los importes van
+ * en céntimos allí—, el año mes a mes en un gráfico, y los movimientos del
+ * periodo con filtros: trabajos, gastos, tickets escaneados y facturas
+ * propias. Los que tienen ticket llevan un botón para abrir su PDF.
+ *
+ * Tocar un mes del gráfico lo pone como periodo: es la forma rápida de ir a
+ * "marzo" sin escribir fechas.
  *
  * "Por cobrar" es la antigua pestaña Cobros, metida aquí dentro: lo que te
  * deben es parte de tus finanzas, y así la barra de abajo no se llena.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { Download, FileText, Plus } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   abrirFactura,
   abrirFacturasDelPeriodo,
-  borrarApunte,
-  crearMovimiento,
-  editarApunte,
   descargarCsv,
   marcarCobrado,
   movimientos,
@@ -26,10 +28,21 @@ import {
   type DatosMovimiento,
   type Resumen,
 } from '../api'
+import { borrarMovimiento, guardarMovimiento } from '../movimientos'
+import { Cabecera, ErrorEnLinea, Esqueleto, Kpi, Vacio } from '../ui/piezas'
+import { Segmentado } from '../ui/Segmentado'
+import { diaRelativo, euros, fechaCorta, iso, MESES } from '../utiles'
 import { Cobros } from './Cobros'
 import { EscanerFactura } from './EscanerFactura'
+import { FilaMovimiento } from './FilaMovimiento'
 import { FormMovimiento } from './FormMovimiento'
-import { euros, fechaCorta, iso, MESES } from '../utiles'
+import { GraficoMeses } from './GraficoMeses'
+
+const VISTAS = [
+  { id: 'movimientos', nombre: 'Movimientos' },
+  { id: 'cobrar', nombre: 'Por cobrar' },
+] as const
+type Vista = (typeof VISTAS)[number]['id']
 
 const PERIODOS = [
   { id: 'hoy', nombre: 'Hoy' },
@@ -76,8 +89,16 @@ function titulo(periodo: Periodo, desde: string, hasta: string, hoy: Date) {
       return String(a)
     case 'anio_anterior':
       return String(a - 1)
-    default:
+    default: {
+      // Un mes entero (o lo que va del actual), que es lo que da el gráfico
+      // al tocarlo: se llama por su nombre y no "1 mar – 31 mar".
+      const [da, dm, dd] = desde.split('-').map(Number)
+      const ultimo = iso(new Date(da, dm, 0))
+      if (dd === 1 && hasta.slice(0, 7) === desde.slice(0, 7) && (hasta === ultimo || hasta === iso(hoy))) {
+        return da === a ? MESES[dm - 1] : `${MESES[dm - 1]} de ${da}`
+      }
       return desde === hasta ? fechaCorta(desde) : `${fechaCorta(desde)} – ${fechaCorta(hasta)}`
+    }
   }
 }
 
@@ -104,7 +125,7 @@ function pasa(a: Apunte, filtro: Filtro) {
 
 export function Finanzas({ token, onTokenInvalido }: Props) {
   const hoy = new Date()
-  const [vista, setVista] = useState<'movimientos' | 'cobrar'>('movimientos')
+  const [vista, setVista] = useState<Vista>('movimientos')
   const [periodo, setPeriodo] = useState<Periodo>('mes')
   // Las fechas a mano: empiezan en el mes en curso, que es lo más pedido.
   const [propias, setPropias] = useState<[string, string]>(() => rangoDe('mes', new Date()))
@@ -121,10 +142,13 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
   const rangoValido = desde <= hasta
   const nombre = titulo(periodo, desde, hasta, hoy)
 
-  function fallo(e: unknown) {
-    if (e instanceof TokenInvalido) return onTokenInvalido()
-    setError(e instanceof Error ? e.message : 'Algo ha fallado')
-  }
+  const fallo = useCallback(
+    (e: unknown) => {
+      if (e instanceof TokenInvalido) return onTokenInvalido()
+      setError(e instanceof Error ? e.message : 'Algo ha fallado')
+    },
+    [onTokenInvalido],
+  )
 
   useEffect(() => {
     if (vista !== 'movimientos' || !rangoValido) return
@@ -137,15 +161,13 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
         setError('')
       })
       .catch((e) => {
-        if (cancelado) return
-        if (e instanceof TokenInvalido) return onTokenInvalido()
-        setError(e instanceof Error ? e.message : 'No se han podido cargar los movimientos')
+        if (!cancelado) fallo(e)
       })
       .finally(() => !cancelado && setCargando(false))
     return () => {
       cancelado = true
     }
-  }, [token, vista, desde, hasta, rangoValido, recargas, onTokenInvalido])
+  }, [token, vista, desde, hasta, rangoValido, recargas, fallo])
 
   const visibles = useMemo(() => lista.filter((a) => pasa(a, filtro)), [lista, filtro])
   const cuantos = useMemo(
@@ -168,26 +190,21 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
     setCargando(true)
   }
 
-  /** Guarda lo del formulario: crea uno nuevo o manda solo lo que cambió. */
+  function elegirFechas(nuevas: [string, string]) {
+    setPropias(nuevas)
+    setPeriodo('personalizado')
+    setCargando(true)
+  }
+
   async function guardar(datos: DatosMovimiento) {
-    if (editando) {
-      const cambios: Partial<DatosMovimiento> = {}
-      for (const clave of Object.keys(datos) as (keyof DatosMovimiento)[]) {
-        const antes = clave === 'importe' ? Number(editando.importe) : editando[clave]
-        const ahora = clave === 'importe' ? Number(datos.importe) : datos[clave]
-        if (antes !== ahora) Object.assign(cambios, { [clave]: datos[clave] })
-      }
-      if (Object.keys(cambios).length) await editarApunte(token, editando.id, cambios)
-    } else {
-      await crearMovimiento(token, datos)
-    }
+    await guardarMovimiento(token, editando ?? null, datos)
     setEditando(undefined)
     setRecargas((n) => n + 1)
   }
 
   async function borrar() {
     if (!editando) return
-    await borrarApunte(token, editando.id)
+    await borrarMovimiento(token, editando.id)
     setEditando(undefined)
     setRecargas((n) => n + 1)
   }
@@ -202,29 +219,30 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
     }
   }
 
-  return (
-    <section className="finanzas">
-      <div className="pestanas">
-        <button
-          className={vista === 'movimientos' ? 'activa' : ''}
-          onClick={() => setVista('movimientos')}
-        >
-          Movimientos
-        </button>
-        <button className={vista === 'cobrar' ? 'activa' : ''} onClick={() => setVista('cobrar')}>
-          Por cobrar
-        </button>
-      </div>
+  const deFacturas = filtro === 'tickets' || filtro === 'emitidas'
 
-      {vista === 'cobrar' && <Cobros token={token} onTokenInvalido={onTokenInvalido} />}
+  return (
+    <>
+      <Cabecera titulo="Finanzas">
+        <button className="boton" onClick={() => setEditando(null)}>
+          <Plus size={18} />
+          Añadir
+        </button>
+      </Cabecera>
+
+      <Segmentado opciones={VISTAS} valor={vista} onCambio={setVista} etiqueta="Vista" />
+
+      {vista === 'cobrar' && <Cobros key={recargas} token={token} onTokenInvalido={onTokenInvalido} />}
 
       {vista === 'movimientos' && (
         <>
-          <div className="filtros periodos">
+          <div className="chips" role="tablist" aria-label="Periodo">
             {PERIODOS.map((p) => (
               <button
                 key={p.id}
-                className={periodo === p.id ? 'activa' : ''}
+                role="tab"
+                aria-selected={periodo === p.id}
+                className={periodo === p.id ? 'chip activa' : 'chip'}
                 onClick={() => elegir(p.id)}
               >
                 {p.nombre}
@@ -233,153 +251,97 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
           </div>
 
           {periodo === 'personalizado' && (
-            <div className="rango-propio">
-              <label>
+            <div className="dos-campos rango-propio">
+              <label className="campo">
                 Desde
                 <input
                   type="date"
                   value={propias[0]}
                   max={iso(hoy)}
-                  onChange={(e) => {
-                    setPropias([e.target.value, propias[1]])
-                    setCargando(true)
-                  }}
+                  onChange={(e) => elegirFechas([e.target.value, propias[1]])}
                 />
               </label>
-              <label>
+              <label className="campo">
                 Hasta
                 <input
                   type="date"
                   value={propias[1]}
                   max={iso(hoy)}
-                  onChange={(e) => {
-                    setPropias([propias[0], e.target.value])
-                    setCargando(true)
-                  }}
+                  onChange={(e) => elegirFechas([propias[0], e.target.value])}
                 />
               </label>
             </div>
           )}
-          {!rangoValido && <p className="error">La fecha «desde» va después de «hasta».</p>}
+          {!rangoValido && <ErrorEnLinea>La fecha «desde» va después de «hasta».</ErrorEnLinea>}
 
-          {resumen && (
-            <section className="totales">
-              <dl>
-                <div>
-                  <dt>Cobrado</dt>
-                  <dd className="cobrado">{euros(resumen.cobrado)}</dd>
-                </div>
-                <div>
-                  <dt>Pendiente</dt>
-                  <dd className="pendiente">{euros(resumen.pendiente)}</dd>
-                </div>
-                <div>
-                  <dt>Gastos</dt>
-                  <dd className="gasto">{euros(resumen.gastos)}</dd>
-                </div>
-                <div className="neto">
-                  <dt>Neto</dt>
-                  <dd>{euros(resumen.neto)}</dd>
-                </div>
-              </dl>
-            </section>
-          )}
+          <dl className="kpis cuatro">
+            <Kpi nombre="Cobrado" valor={resumen ? euros(resumen.cobrado) : '—'} tipo="cobrado" />
+            <Kpi nombre="Pendiente" valor={resumen ? euros(resumen.pendiente) : '—'} tipo="pendiente" />
+            <Kpi nombre="Gastos" valor={resumen ? euros(resumen.gastos) : '—'} tipo="gasto" />
+            <Kpi nombre="Neto" valor={resumen ? euros(resumen.neto) : '—'} tipo="neto" />
+          </dl>
 
-          <div className="filtros">
-            {FILTROS.map((f) => (
-              <button
-                key={f.id}
-                className={filtro === f.id ? 'activa' : ''}
-                onClick={() => setFiltro(f.id)}
-              >
-                {f.nombre} <small>{cuantos[f.id] ?? 0}</small>
-              </button>
-            ))}
-          </div>
+          <GraficoMeses
+            token={token}
+            recargas={recargas}
+            onFallo={fallo}
+            onMes={(primero, ultimo) => elegirFechas([primero, ultimo])}
+          />
 
-          {error && <p className="error">{error}</p>}
+          <ErrorEnLinea>{error}</ErrorEnLinea>
 
-          <div className="anadir">
-            {filtro === 'tickets' || filtro === 'emitidas' ? (
+          <section className="tarjeta movimientos">
+            <div className="tarjeta-cabecera">
+              <h2>
+                Movimientos <span className="apagado">· {nombre}</span>
+              </h2>
+            </div>
+
+            <div className="chips" role="tablist" aria-label="Filtro">
+              {FILTROS.map((f) => (
+                <button
+                  key={f.id}
+                  role="tab"
+                  aria-selected={filtro === f.id}
+                  className={filtro === f.id ? 'chip activa' : 'chip'}
+                  onClick={() => setFiltro(f.id)}
+                >
+                  {f.nombre} <small>{cuantos[f.id] ?? 0}</small>
+                </button>
+              ))}
+            </div>
+
+            {deFacturas && (
               <EscanerFactura
                 token={token}
                 onGuardado={() => setRecargas((n) => n + 1)}
                 onError={fallo}
               />
-            ) : (
-              <button type="button" className="escanear" onClick={() => setEditando(null)}>
-                + Añadir {filtro === 'gasto' ? 'gasto' : filtro === 'trabajo' ? 'trabajo' : 'trabajo o gasto'}
-              </button>
             )}
-          </div>
 
-          {editando !== undefined && (
-            <FormMovimiento
-              apunte={editando}
-              tipoInicial={filtro === 'gasto' ? 'gasto' : 'trabajo'}
-              onGuardar={guardar}
-              onBorrar={editando ? borrar : undefined}
-              onCerrar={() => setEditando(undefined)}
-            />
-          )}
-
-          <section className="apuntes">
             {!rangoValido ? null : cargando ? (
-              <p className="vacio">Cargando…</p>
+              <Esqueleto />
             ) : porDia.length === 0 ? (
-              <p className="vacio">
+              <Vacio icono={FileText} titulo={`Nada en ${nombre}`}>
                 {filtro === 'emitidas'
-                  ? `No hay facturas tuyas en ${nombre}. Sube el PDF de una factura de YOA INSTALACIONES.`
+                  ? 'Sube el PDF de una factura tuya y entra como trabajo.'
                   : filtro === 'tickets'
-                  ? `No hay tickets en ${nombre}. Mándale una foto al bot o usa «Escanear ticket» en Hoy.`
-                  : `Nada anotado en ${nombre}.`}
-              </p>
+                    ? 'Mándale una foto al bot o escanea un ticket aquí.'
+                    : 'Lo que anotes en este periodo saldrá aquí.'}
+              </Vacio>
             ) : (
               porDia.map(([fecha, apuntes]) => (
                 <div key={fecha} className="dia">
-                  <h3>
-                    {fechaCorta(fecha)}
-                    {fecha.slice(0, 4) !== String(hoy.getFullYear()) && ` ${fecha.slice(0, 4)}`}
-                  </h3>
-                  <ul>
+                  <h3>{diaRelativo(fecha)}</h3>
+                  <ul className="lista">
                     {apuntes.map((a) => (
-                      <li
+                      <FilaMovimiento
                         key={a.id}
-                        className={`${a.tipo} tocable`}
-                        onClick={() => setEditando(a)}
-                        title="Tocar para editar o borrar"
-                      >
-                        <span className="concepto">
-                          {a.concepto}
-                          {a.factura_id && (
-                            <button
-                              className="mini factura"
-                              title="Ver el ticket en PDF"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                void accion(() => abrirFactura(token, a.factura_id!))
-                              }}
-                            >
-                              🧾
-                            </button>
-                          )}
-                        </span>
-                        <span className={`importe ${a.tipo}`}>
-                          {a.tipo === 'gasto' ? '−' : ''}
-                          {euros(a.importe)}
-                        </span>
-                        {a.pendiente && (
-                          <button
-                            className="cobrar"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void accion(() => marcarCobrado(token, a.id))
-                            }}
-                          >
-                            Cobrar
-                          </button>
-                        )}
-                      </li>
+                        apunte={a}
+                        onAbrir={() => setEditando(a)}
+                        onCobrar={() => void accion(() => marcarCobrado(token, a.id))}
+                        onTicket={() => void accion(() => abrirFactura(token, a.factura_id!))}
+                      />
                     ))}
                   </ul>
                 </div>
@@ -387,28 +349,44 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
             )}
           </section>
 
-          <footer>
-            <button
-              className="enlace"
-              onClick={() => void accion(() => abrirFacturasDelPeriodo(token, desde, hasta))}
-            >
-              Tickets de {nombre} en PDF
-            </button>
-            <button
-              className="enlace"
-              onClick={() => void accion(() => abrirFacturasDelPeriodo(token, desde, hasta, true))}
-            >
-              Mis facturas de {nombre} en PDF
-            </button>
-            <button
-              className="enlace"
-              onClick={() => void accion(() => descargarCsv(token, desde, hasta))}
-            >
-              CSV de {nombre}
-            </button>
-          </footer>
+          <section className="exportar">
+            <h3>Para la gestoría · {nombre}</h3>
+            <div>
+              <button
+                className="boton secundario pequeno"
+                onClick={() => void accion(() => descargarCsv(token, desde, hasta))}
+              >
+                <Download size={15} />
+                CSV
+              </button>
+              <button
+                className="boton secundario pequeno"
+                onClick={() => void accion(() => abrirFacturasDelPeriodo(token, desde, hasta))}
+              >
+                <Download size={15} />
+                Tickets en PDF
+              </button>
+              <button
+                className="boton secundario pequeno"
+                onClick={() => void accion(() => abrirFacturasDelPeriodo(token, desde, hasta, true))}
+              >
+                <Download size={15} />
+                Mis facturas en PDF
+              </button>
+            </div>
+          </section>
         </>
       )}
-    </section>
+
+      {editando !== undefined && (
+        <FormMovimiento
+          apunte={editando}
+          tipoInicial={filtro === 'gasto' ? 'gasto' : 'trabajo'}
+          onGuardar={guardar}
+          onBorrar={editando ? borrar : undefined}
+          onCerrar={() => setEditando(undefined)}
+        />
+      )}
+    </>
   )
 }

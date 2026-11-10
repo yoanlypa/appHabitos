@@ -1,8 +1,8 @@
 /**
  * Hábitos: lo que se quiere hacer con regularidad, y cómo va.
  *
- * La lista toma la idea de los buenos trackers: el nombre grande, la racha al
- * lado y los siete círculos de la semana, que se marcan con un toque. Nada de
+ * La lista toma la idea de los buenos trackers: el nombre, la racha al lado y
+ * los siete círculos de la semana, que se marcan con un toque. Nada de
  * formularios para lo diario: marcar tiene que costar lo mismo que mirar.
  *
  * El estado de cada círculo (hecho, hoy, fallado...) lo calcula el backend,
@@ -14,6 +14,7 @@
  * mes, que es el mismo de la Agenda. Ahí también se marca, para corregir un
  * día pasado que se olvidó.
  */
+import { ArrowLeft, Bell, Check, Flame, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import {
   borrarHabito,
@@ -30,7 +31,11 @@ import {
   type Habito,
   type ResumenHabito,
 } from '../api'
-import { DIAS, MESES } from '../utiles'
+import { confirmar } from '../ui/avisos'
+import { Calendario } from '../ui/Calendario'
+import { Modal } from '../ui/Modal'
+import { Cabecera, ErrorEnLinea, Esqueleto, Kpi, Vacio } from '../ui/piezas'
+import { DIAS } from '../utiles'
 
 type Props = {
   token: string
@@ -39,6 +44,7 @@ type Props = {
 
 const TODOS = [0, 1, 2, 3, 4, 5, 6]
 const LABORABLES = [0, 1, 2, 3, 4]
+const NOMBRES_DIAS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
 
 const DESCRIPCION: Record<EstadoDia, string> = {
   hecho: 'hecho',
@@ -58,15 +64,19 @@ function dias(n: number) {
   return `${n} ${n === 1 ? 'día' : 'días'}`
 }
 
-function racha(n: number) {
-  return n === 1 ? '1 día seguido' : `${n} días seguidos`
-}
-
 function animo(n: number) {
-  if (n >= 21) return 'Imparable 🔥'
-  if (n >= 7) return 'Vas lanzado 🔥'
+  if (n >= 21) return 'Imparable'
+  if (n >= 7) return 'Vas lanzado'
   if (n >= 1) return 'Sigue así'
   return 'Hoy es buen día para empezar'
+}
+
+/** "Todos los días", "De lunes a viernes" o "L · X · V". */
+function cuando(elegidos: number[]) {
+  if (elegidos.length === 7) return 'Todos los días'
+  if (elegidos.join('') === '01234') return 'De lunes a viernes'
+  if (elegidos.join('') === '56') return 'Fines de semana'
+  return elegidos.map((d) => DIAS[d]).join(' · ')
 }
 
 export function Habitos({ token, onTokenInvalido }: Props) {
@@ -149,7 +159,7 @@ export function Habitos({ token, onTokenInvalido }: Props) {
   if (abierto !== null) {
     return (
       <>
-        {error && <p className="error">{error}</p>}
+        <ErrorEnLinea>{error}</ErrorEnLinea>
         <DetalleDeHabito
           token={token}
           habitoId={abierto}
@@ -164,35 +174,73 @@ export function Habitos({ token, onTokenInvalido }: Props) {
     )
   }
 
-  return (
-    <section className="habitos">
-      <div className="habitos-cabecera">
-        <h2>Hábitos</h2>
-        <button
-          className="boton-redondo"
-          onClick={() => setFormulario('nuevo')}
-          aria-label="Nuevo hábito"
-        >
-          +
-        </button>
-      </div>
+  const deHoy = habitos.filter((h) => h.toca_hoy)
+  const hechosHoy = deHoy.filter((h) => h.hecho_hoy).length
 
-      {error && <p className="error">{error}</p>}
+  return (
+    <>
+      <Cabecera
+        titulo="Hábitos"
+        subtitulo={
+          deHoy.length > 0
+            ? hechosHoy === deHoy.length
+              ? 'Hoy lo llevas todo hecho.'
+              : `Hoy llevas ${hechosHoy} de ${deHoy.length}.`
+            : undefined
+        }
+      >
+        <button className="boton" onClick={() => setFormulario('nuevo')}>
+          <Plus size={18} />
+          Nuevo hábito
+        </button>
+      </Cabecera>
+
+      {deHoy.length > 0 && (
+        <div
+          className="progreso grande"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={deHoy.length}
+          aria-valuenow={hechosHoy}
+        >
+          <i style={{ width: `${(hechosHoy / deHoy.length) * 100}%` }} />
+        </div>
+      )}
+
+      <ErrorEnLinea>{error}</ErrorEnLinea>
 
       {cargando ? (
-        <p className="vacio">Cargando…</p>
+        <Esqueleto />
       ) : habitos.length === 0 ? (
-        <div className="habitos-vacio">
-          <p className="vacio">Todavía no tienes hábitos.</p>
-          <button onClick={() => setFormulario('nuevo')}>Crear el primero</button>
+        <div className="tarjeta">
+          <Vacio icono={Flame} titulo="Todavía no tienes hábitos">
+            Beber agua, estirar, repasar las cuentas el viernes…
+            <button className="boton" onClick={() => setFormulario('nuevo')}>
+              Crear el primero
+            </button>
+          </Vacio>
         </div>
       ) : (
         <ul className="lista-habitos">
           {habitos.map((r) => (
-            <li key={r.habito.id} className="habito">
+            <li key={r.habito.id} className="tarjeta habito">
               <button className="habito-titulo" onClick={() => setAbierto(r.habito.id)}>
-                <span className="nombre">{r.habito.nombre}</span>
-                {r.racha > 0 && <span className="racha">{racha(r.racha)}</span>}
+                <span>
+                  <strong>{r.habito.nombre}</strong>
+                  <small>
+                    {cuando(r.habito.dias)}
+                    {r.habito.recordar_a && (
+                      <>
+                        {' · '}
+                        <Bell size={11} /> {r.habito.recordar_a.slice(0, 5)}
+                      </>
+                    )}
+                  </small>
+                </span>
+                <span className={r.racha > 0 ? 'racha viva' : 'racha'} title="Días seguidos">
+                  <Flame size={15} />
+                  {r.racha}
+                </span>
               </button>
               <div className="semana-habito">
                 {r.semana.map((d, i) => (
@@ -201,10 +249,11 @@ export function Habitos({ token, onTokenInvalido }: Props) {
                     className={`circulo ${d.estado}`}
                     disabled={!marcable(d)}
                     aria-pressed={d.estado === 'hecho'}
-                    aria-label={`${DIAS[i]}: ${DESCRIPCION[d.estado]}`}
+                    aria-label={`${NOMBRES_DIAS[i]}: ${DESCRIPCION[d.estado]}`}
                     onClick={() => tocar(r.habito, d)}
                   >
-                    {DIAS[i]}
+                    <span>{DIAS[i]}</span>
+                    <i>{d.estado === 'hecho' && <Check size={16} strokeWidth={3} />}</i>
                   </button>
                 ))}
               </div>
@@ -214,7 +263,7 @@ export function Habitos({ token, onTokenInvalido }: Props) {
       )}
 
       {ventana}
-    </section>
+    </>
   )
 }
 
@@ -254,94 +303,77 @@ function DetalleDeHabito({
     }
   }, [token, habitoId, anio, mes, recargas, onFallo])
 
-  function cambiarMes(salto: number) {
-    const d = new Date(anio, mes - 1 + salto, 1)
-    setAnio(d.getFullYear())
-    setMes(d.getMonth() + 1)
-  }
-
-  if (!detalle) return <p className="vacio">Cargando…</p>
+  if (!detalle) return <Esqueleto />
 
   const { habito } = detalle
-  // Rejilla empezando en lunes: getDay() da 0 para domingo.
-  const hueco = (new Date(anio, mes - 1, 1).getDay() + 6) % 7
   const esRecord = detalle.mejor_racha > 0 && detalle.racha === detalle.mejor_racha
+  const porFecha = new Map(detalle.dias_del_mes.map((d) => [d.fecha, d]))
 
   return (
-    <section className="habito-detalle">
-      <header className="detalle-cabecera">
-        <button className="boton-redondo" onClick={onVolver} aria-label="Volver">
-          ‹
-        </button>
-        <h2>{habito.nombre}</h2>
-        <button className="boton-redondo" onClick={() => onEditar(habito)} aria-label="Editar">
-          ⋯
-        </button>
-      </header>
+    <>
+      <button className="enlace gris volver" onClick={onVolver}>
+        <ArrowLeft size={16} />
+        Todos los hábitos
+      </button>
 
-      <dl className="cifras">
-        <div>
-          <dt>Racha actual</dt>
-          <dd>{dias(detalle.racha)}</dd>
-          <small>{animo(detalle.racha)}</small>
-        </div>
-        <div>
-          <dt>Mejor racha</dt>
-          <dd>{dias(detalle.mejor_racha)}</dd>
-          {esRecord && <small>Es tu récord</small>}
-        </div>
-        <div>
-          <dt>Cumplimiento</dt>
-          <dd>{detalle.porcentaje}%</dd>
-          <small>
-            {detalle.cumplidos} de {dias(detalle.programados)}
-          </small>
-        </div>
+      <Cabecera
+        titulo={habito.nombre}
+        subtitulo={
+          <>
+            {cuando(habito.dias)}
+            {' · '}
+            {habito.recordar_a
+              ? `recordatorio por Telegram a las ${habito.recordar_a.slice(0, 5)}`
+              : 'sin recordatorio'}
+          </>
+        }
+      >
+        <button className="boton secundario" onClick={() => onEditar(habito)}>
+          <Pencil size={16} />
+          Editar
+        </button>
+      </Cabecera>
+
+      <dl className="kpis tres">
+        <Kpi nombre="Racha actual" valor={dias(detalle.racha)} nota={animo(detalle.racha)} />
+        <Kpi
+          nombre="Mejor racha"
+          valor={dias(detalle.mejor_racha)}
+          nota={esRecord ? 'Es tu récord' : undefined}
+        />
+        <Kpi
+          nombre="Cumplimiento"
+          valor={`${detalle.porcentaje}%`}
+          nota={`${detalle.cumplidos} de ${dias(detalle.programados)}`}
+        />
       </dl>
 
-      <section className="calendario">
-        <header className="cal-cabecera">
-          <button className="cal-flecha" onClick={() => cambiarMes(-1)} aria-label="Mes anterior">
-            ‹
-          </button>
-          <h2>
-            {MESES[mes - 1]} {anio}
-          </h2>
-          <button className="cal-flecha" onClick={() => cambiarMes(1)} aria-label="Mes siguiente">
-            ›
-          </button>
-        </header>
-        <div className="cal-rejilla">
-          {DIAS.map((d) => (
-            <span key={d} className="cal-dia-nombre">
-              {d}
-            </span>
-          ))}
-          {Array.from({ length: hueco }, (_, i) => (
-            <span key={`hueco-${i}`} />
-          ))}
-          {detalle.dias_del_mes.map((d) => (
-            <button
-              key={d.fecha}
-              className={`cal-dia ${d.estado}`}
-              disabled={!marcable(d)}
-              aria-pressed={d.estado === 'hecho'}
-              aria-label={`${Number(d.fecha.slice(8))}: ${DESCRIPCION[d.estado]}`}
-              onClick={() => onMarcar(habito, d)}
-            >
-              {Number(d.fecha.slice(8))}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <p className="ayuda">
-        Toca: {habito.dias.map((d) => DIAS[d]).join(' ')}.{' '}
-        {habito.recordar_a
-          ? `Te lo recuerdo por Telegram a las ${habito.recordar_a.slice(0, 5)}.`
-          : 'Sin recordatorio: puedes ponerle uno en ⋯.'}
-      </p>
-    </section>
+      <div className="tarjeta habito-calendario">
+        <Calendario
+          anio={anio}
+          mes={mes}
+          onMes={(a, m) => {
+            setAnio(a)
+            setMes(m)
+          }}
+          onDia={(fecha) => {
+            const dia = porFecha.get(fecha)
+            if (dia) onMarcar(habito, dia)
+          }}
+          celda={(fecha) => {
+            const dia = porFecha.get(fecha)
+            if (!dia) return { desactivado: true }
+            return {
+              clase: dia.estado,
+              desactivado: !marcable(dia),
+              pulsado: dia.estado === 'hecho',
+              etiqueta: `${Number(fecha.slice(8))}: ${DESCRIPCION[dia.estado]}`,
+            }
+          }}
+        />
+        <p className="ayuda">Toca un día pasado para marcarlo o desmarcarlo.</p>
+      </div>
+    </>
   )
 }
 
@@ -379,23 +411,27 @@ function FormularioHabito({
     })
   }
 
-  return (
-    <div
-      className="modal-fondo"
-      role="dialog"
-      aria-modal="true"
-      aria-label={inicial ? 'Editar hábito' : 'Nuevo hábito'}
-    >
-      <form className="modal" onSubmit={enviar}>
-        <h3>{inicial ? 'Editar hábito' : 'Nuevo hábito'}</h3>
+  async function borrar() {
+    if (!onBorrar || !inicial) return
+    const si = await confirmar({
+      titulo: `¿Borrar «${inicial.nombre}»?`,
+      texto: 'Se borra con todo su historial y su racha. No se puede deshacer.',
+      aceptar: 'Borrar',
+      peligro: true,
+    })
+    if (si) void onBorrar()
+  }
 
-        <label>
+  return (
+    <Modal titulo={inicial ? 'Editar hábito' : 'Nuevo hábito'} onCerrar={onCerrar}>
+      <form className="formulario" onSubmit={enviar}>
+        <label className="campo">
           Qué quieres hacer
           <input
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
             placeholder="Beber agua"
-            autoFocus
+            autoFocus={!inicial}
           />
         </label>
 
@@ -406,11 +442,12 @@ function FormularioHabito({
               <button
                 key={letra}
                 type="button"
-                className={`circulo ${elegidos.includes(i) ? 'hecho' : 'futuro'}`}
+                className={`circulo ${elegidos.includes(i) ? 'hecho' : 'libre'}`}
                 aria-pressed={elegidos.includes(i)}
+                aria-label={NOMBRES_DIAS[i]}
                 onClick={() => alternarDia(i)}
               >
-                {letra}
+                <i>{letra}</i>
               </button>
             ))}
           </div>
@@ -433,35 +470,36 @@ function FormularioHabito({
           Recordármelo por Telegram
         </label>
         {conRecordatorio && (
-          <label>
+          <label className="campo">
             A las
             <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
           </label>
         )}
 
-        {elegidos.length === 0 && <p className="error">Elige al menos un día.</p>}
-
-        {onBorrar && (
-          <button
-            type="button"
-            className="enlace peligro"
-            onClick={() => {
-              if (confirm(`¿Borrar «${inicial?.nombre}» con todo su historial?`)) void onBorrar()
-            }}
-          >
-            Borrar este hábito
-          </button>
-        )}
+        {elegidos.length === 0 && <ErrorEnLinea>Elige al menos un día.</ErrorEnLinea>}
 
         <div className="botones">
-          <button type="button" className="enlace" onClick={onCerrar}>
-            Cancelar
-          </button>
-          <button type="submit" disabled={!valido}>
-            {inicial ? 'Guardar' : 'Crear hábito'}
-          </button>
+          {onBorrar && (
+            <button
+              type="button"
+              className="boton-icono peligro"
+              onClick={() => void borrar()}
+              aria-label="Borrar este hábito"
+              title="Borrar este hábito"
+            >
+              <Trash2 size={18} />
+            </button>
+          )}
+          <span className="derecha">
+            <button type="button" className="boton secundario" onClick={onCerrar}>
+              Cancelar
+            </button>
+            <button type="submit" className="boton" disabled={!valido}>
+              {inicial ? 'Guardar' : 'Crear hábito'}
+            </button>
+          </span>
         </div>
       </form>
-    </div>
+    </Modal>
   )
 }
