@@ -30,6 +30,15 @@ class ApunteSalida(BaseModel):
     cliente_id: int | None = None
     factura_id: int | None = None
     factura_emitida: bool = False
+    # De qué trabajo es este gasto, y cómo se llama (para no pedirlo aparte).
+    trabajo_id: int | None = None
+    trabajo_concepto: str | None = None
+    # Solo trabajos: si lo factura Yoa. Solo gastos sueltos: marcado a mano.
+    facturado: bool = False
+    para_gestoria: bool = False
+    # Lo que cuenta: si sale en lo que se manda a la gestoría. Lo decide el
+    # backend (dominio/gestoria.py); la web solo lo pinta.
+    gestoria: bool = False
 
 
 class ResumenSalida(BaseModel):
@@ -58,6 +67,9 @@ class ApunteCambios(BaseModel):
     pendiente: bool | None = None
     fecha: date | None = None
     tipo: str | None = None  # "trabajo" | "gasto"
+    trabajo_id: int | None = None  # mandar null lo desasigna
+    facturado: bool | None = None
+    para_gestoria: bool | None = None
 
 
 class MovimientoEntrada(BaseModel):
@@ -68,6 +80,35 @@ class MovimientoEntrada(BaseModel):
     importe: Decimal
     fecha: date | None = None
     pendiente: bool = False
+    trabajo_id: int | None = None
+    facturado: bool = False
+    para_gestoria: bool = False
+
+
+class FichaTrabajoSalida(BaseModel):
+    """Un trabajo con lo que ha costado: sus gastos, el total y lo que queda."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    trabajo: ApunteSalida
+    gastos: list[ApunteSalida]
+    total_gastos: Importe
+    beneficio: Importe
+
+
+class ParteGestoriaSalida(BaseModel):
+    """Lo de un periodo repartido en lo que va a la gestoría y lo que no."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    emitidas: list[ApunteSalida]
+    recibidas: list[ApunteSalida]
+    trabajos_fuera: list[ApunteSalida]
+    gastos_fuera: list[ApunteSalida]
+    facturado: Importe
+    gastos: Importe
+    diferencia: Importe
+    sin_documento: int
 
 
 class TrimestreSalida(BaseModel):
@@ -286,3 +327,5 @@ class GastoDeFactura(BaseModel):
     concepto: str
     importe: Decimal
     fecha: date | None = None
+    trabajo_id: int | None = None
+    para_gestoria: bool = False

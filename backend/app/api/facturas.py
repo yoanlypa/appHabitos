@@ -90,7 +90,8 @@ def confirmar_gasto(
 ):
     try:
         return anotar_gasto(
-            db, user_id, factura_id, gasto.concepto, gasto.importe, gasto.fecha, origen="web"
+            db, user_id, factura_id, gasto.concepto, gasto.importe, gasto.fecha, origen="web",
+            trabajo_id=gasto.trabajo_id, para_gestoria=gasto.para_gestoria,
         )
     except FacturaNoEncontrada as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
@@ -127,14 +128,19 @@ def pdf_periodo(
     desde: date,
     hasta: date,
     emitidas: bool = False,
+    gestoria: bool = False,
     user_id: int = Depends(get_current_user_id),
     db: Session = Depends(get_db),
 ):
-    """Todas las facturas del periodo en un solo PDF, para la gestoría."""
+    """Todas las facturas del periodo en un solo PDF.
+
+    Con `gestoria`, solo las que van a la gestoría (las de trabajos que
+    factura otra empresa y los gastos sin marcar se quedan fuera).
+    """
     if hasta < desde:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "el rango está al revés")
     try:
-        contenido = pdf_del_periodo(db, user_id, desde, hasta, emitidas)
+        contenido = pdf_del_periodo(db, user_id, desde, hasta, emitidas, solo_gestoria=gestoria)
     except ImagenNoLegible as exc:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
     if contenido is None:

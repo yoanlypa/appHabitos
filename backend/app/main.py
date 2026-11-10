@@ -9,7 +9,17 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import agenda, apuntes, clientes, export, facturas, habitos, notas, resumen
+from app.api import (
+    agenda,
+    apuntes,
+    clientes,
+    export,
+    facturas,
+    gestoria,
+    habitos,
+    notas,
+    resumen,
+)
 from app.nucleo.almacenamiento import avisar_si_es_efimera, estado as estado_almacenamiento
 from app.nucleo.config import CORS_ORIGENES
 from app.nucleo.migraciones import migrar
@@ -47,6 +57,7 @@ def crear_api(con_bot: bool = False) -> FastAPI:
     api.include_router(facturas.router)
     api.include_router(resumen.router)
     api.include_router(export.router)
+    api.include_router(gestoria.router)
 
     @api.get("/salud")
     def salud():

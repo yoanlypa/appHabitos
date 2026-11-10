@@ -52,11 +52,13 @@ parte-del-dia/
 │   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py,
 │   │   │                     transcripcion.py
 │   │   ├── dominio/       ✅ models.py (Apunte, Cliente, Cita, Ajuste, TokenAcceso, Centimos),
-│   │   │                     parsing.py, parsing_citas.py, habitos.py, copia_csv.py
+│   │   │                     parsing.py, parsing_citas.py, habitos.py, copia_csv.py,
+│   │   │                     gestoria.py
 │   │   ├── servicios/     ✅ apuntes, resumen, export, auth, avisos, clientes,
-│   │   │                     agenda, trimestres, voz, notas, restauracion, habitos
+│   │   │                     agenda, trimestres, voz, notas, restauracion, habitos,
+│   │   │                     gestoria
 │   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export,
-│   │   │                     clientes, agenda, notas, habitos
+│   │   │                     clientes, agenda, notas, habitos, gestoria
 │   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py,
 │   │                         copias.py, alarma.py, restaurar.py, habitos.py
 │   ├── requirements.txt
@@ -445,6 +447,63 @@ parte-del-dia/
   - Los importes llevan el punto de los miles también en cuatro cifras
     (`1.234,50 €`, `useGrouping: 'always'` en `utiles.ts`), como en el bot.
 
+- **Un trabajo tiene sus gastos, y no todo va a la gestoría.** Yoa no
+  factura todo lo que trabaja: hay trabajos que factura otra empresa, que le
+  paga por contrato (eso lo lleva él aparte). En la app sigue todo junto,
+  porque es su día a día, pero a la gestoría solo va lo suyo: las facturas
+  que emite y los gastos que les corresponden (las facturas recibidas).
+  Decisiones, las dos primeras tomadas por él:
+  - **El trabajo es la línea que ya se anotaba**, no una tabla nueva. Un
+    gasto cuelga de un trabajo con `Apunte.trabajo_id`, que apunta a otro
+    apunte. Así lo que ya había sirve de trabajo sin migrar nada, y no hay
+    dos cosas llamadas "trabajo". El precio: un trabajo que factura otra
+    empresa, para tener gastos colgados, tiene que estar anotado con su
+    importe y cuenta en los resúmenes de Yoa.
+  - **Qué va a la gestoría** (`dominio/gestoria.va_a_gestoria`, la regla en un
+    solo sitio para que listado, CSV y PDF no puedan decir cosas distintas):
+    un trabajo va si está **facturado** (`Apunte.facturado`); un gasto de un
+    trabajo **sigue a su trabajo** y no se marca aparte, así que si el
+    trabajo se factura mañana el gasto entra solo; un **gasto suelto**
+    (gasolina, el seguro, autónomos) va solo si se marca a mano
+    (`Apunte.para_gestoria`). Nunca se decide por él: aquí no se sabe qué es
+    deducible. Todo empieza en "no".
+  - **El papel manda.** Colgarle a un trabajo una factura emitida lo deja
+    facturado (bot y web), y con la factura colgada no se puede desmarcar. La
+    migración `a7c4e2d9b1f5` marcó así los que ya la tenían.
+  - **Nada se cae de la gestoría sin que se vea.** Si se borra un trabajo
+    facturado (o se convierte en gasto), sus gastos se quedan sueltos pero
+    marcados a mano (`_soltar_gastos`): conservan lo que valían. Al revés, un
+    gasto que se cuelga de un trabajo pierde su marca a mano, para que no
+    reaparezca sola el día que se descuelgue.
+  - **Los resúmenes no cambian**: cobrado, gastos, neto, trimestre y el
+    gráfico siguen contando todo. Lo de la gestoría es otra vista
+    (`servicios/gestoria.parte_gestoria`, `GET /gestoria`), en Finanzas →
+    Gestoría, por mes o por trimestre natural. Enseña las dos mitades, lo que
+    va y lo que **no** va, con un botón para meter lo que se quedó fuera: es
+    una lista de repaso de fin de mes, y un gasto sin marcar solo se descubre
+    si se ve. Y avisa de lo que va **sin su factura o ticket colgado**
+    (`sin_documento`): a la gestoría no le vale una línea en una hoja.
+  - **Cada cosa en el periodo de su fecha**, como en los libros de IVA: la
+    factura en el mes en que se emite y el gasto en el mes del ticket. Un
+    gasto de octubre de un trabajo que se factura en noviembre pasa a salir
+    en octubre *después* de haber mandado octubre; con el trimestre casi
+    siempre se arregla solo, pero es el caso a tener presente.
+  - **Para mandar**: `GET /gestoria/csv` (con BOM, lo abre Excel) y los PDF de
+    emitidas y recibidas con `gestoria=true`. El CSV y los PDF de
+    "Movimientos" siguen llevándolo todo.
+  - En la web, el gasto pregunta "¿De qué trabajo es?" al crearlo, al
+    editarlo y **al confirmar un ticket escaneado**, que es cuando se tiene el
+    papel delante (`DeQueTrabajo.tsx`). Al abrir un trabajo se ven sus gastos
+    y lo que queda (`GET /apuntes/{id}/ficha`; la resta la hace el backend).
+    Desde el bot solo se puede marcar un ticket suelto, escribiendo "para la
+    gestoría" con la foto (`marca_gestoria`; la palabra suelta dentro del
+    concepto no cuenta, o "Factura gestoría octubre" se quedaría en "Factura
+    octubre"). Colgar un gasto de un trabajo desde el bot no está hecho. El
+    bot dice al anotar si el ticket va o no va.
+  - **Pendiente**: la copia CSV del domingo no lleva estas marcas (ni de qué
+    trabajo es cada gasto). Restaurar una copia devuelve los apuntes, pero
+    habría que volver a marcarlos.
+
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
   usuario/contraseña. Falta que el bot lo genere con `/web`
@@ -459,7 +518,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-326 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+341 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

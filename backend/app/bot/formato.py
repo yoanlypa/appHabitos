@@ -333,6 +333,15 @@ def ticket_anotado(apunte, datos, fecha_supuesta: bool = False) -> str:
         )
     if datos.iva is not None:
         lineas.append(f"IVA: {euros(datos.iva)}")
+    # Se dice en los dos sentidos: lo que no se marca no va, y eso hay que
+    # saberlo al subirlo y no al cerrar el trimestre.
+    if apunte.gestoria:
+        lineas.append("📁 Va a la gestoría.")
+    else:
+        lineas.append(
+            "No va a la gestoría. Si es de un trabajo o tiene que ir, márcalo en la web "
+            "(Finanzas → Gestoría), o manda la foto con «para la gestoría»."
+        )
     vales = datos.detalle.get("vales") or []
     if vales:
         lineas.append("")

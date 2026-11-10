@@ -23,6 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func, text
 
+from app.dominio.gestoria import va_a_gestoria
 from app.nucleo.db import Base
 
 
@@ -65,9 +66,35 @@ class Apunte(Base):
     # elegir cliente. Se asocia después, o nunca.
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
 
+    # Solo aplica a tipo="gasto": el trabajo para el que se hizo ese gasto.
+    # El trabajo es otro apunte (la línea "Reforma baño Luis 980" que ya se
+    # anotaba), no una tabla nueva: así lo que hay hoy ya sirve de trabajo.
+    trabajo_id = Column(Integer, ForeignKey("apuntes.id"), nullable=True, index=True)
+    # Solo aplica a tipo="trabajo": si lo factura Yoa. Los que factura otra
+    # empresa (le paga por contrato) no van a la gestoría, ni sus gastos.
+    facturado = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    # Solo aplica a un gasto sin trabajo: marcado a mano para la gestoría.
+    para_gestoria = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+
     cliente = relationship("Cliente", back_populates="apuntes")
     # La foto del ticket, si el gasto salió de escanearlo. Una por apunte.
     factura = relationship("Factura", back_populates="apunte", uselist=False)
+    trabajo = relationship("Apunte", remote_side=[id], back_populates="gastos")
+    gastos = relationship("Apunte", back_populates="trabajo", order_by="Apunte.fecha")
+
+    @property
+    def gestoria(self) -> bool:
+        """Si este apunte sale en lo que se manda a la gestoría."""
+        return va_a_gestoria(
+            self.tipo,
+            self.facturado,
+            self.para_gestoria,
+            self.trabajo.facturado if self.trabajo is not None else None,
+        )
+
+    @property
+    def trabajo_concepto(self) -> str | None:
+        return self.trabajo.concepto if self.trabajo is not None else None
 
     @property
     def factura_id(self) -> int | None:

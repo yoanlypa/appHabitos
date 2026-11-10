@@ -1219,3 +1219,179 @@ i.gastos,
     left: 2.4rem;
   }
 }
+
+/* ---------- Trabajos, sus gastos y la gestoría ---------- */
+
+.marca-gestoria {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.5rem;
+  color: var(--acento-texto);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.casilla span small {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.78rem;
+  color: var(--texto-3);
+  line-height: 1.4;
+}
+
+.casilla:has(small) {
+  align-items: flex-start;
+}
+
+.casilla:has(small) input {
+  margin-top: 0.15rem;
+}
+
+.nota-gestoria {
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radio-s);
+  background: var(--relleno);
+  color: var(--texto-2);
+  font-size: 0.85rem;
+}
+
+.nota-gestoria.va {
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+}
+
+.gastos-del-trabajo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.85rem;
+  border-radius: var(--radio-s);
+  background: var(--relleno);
+}
+
+.gastos-del-trabajo li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.25rem 0;
+  font-size: 0.9rem;
+}
+
+.gastos-del-trabajo li small {
+  color: var(--texto-3);
+  font-size: 0.78rem;
+  margin-left: 0.3rem;
+}
+
+.gastos-del-trabajo li b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.gastos-del-trabajo dl {
+  border-top: 1px solid var(--borde-fuerte);
+  padding-top: 0.4rem;
+}
+
+.gastos-del-trabajo dl div {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.15rem 0;
+  font-size: 0.88rem;
+  color: var(--texto-2);
+}
+
+.gastos-del-trabajo dd {
+  font-variant-numeric: tabular-nums;
+}
+
+.gastos-del-trabajo .queda {
+  color: var(--texto);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.gastos-del-trabajo .boton {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+}
+
+.aviso-linea {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radio-s);
+  background: var(--pendiente-suave);
+  color: var(--pendiente);
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.pagina-finanzas .tarjeta > .escaner-botones {
+  display: grid;
+  margin-bottom: 0.5rem;
+}
+
+.no-va summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.75rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.no-va summary::-webkit-details-marker {
+  display: none;
+}
+
+.no-va summary h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.no-va summary h2::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid var(--texto-3);
+  border-bottom: 2px solid var(--texto-3);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+
+.no-va[open] summary h2::before {
+  transform: rotate(45deg);
+}
+
+.no-va h3 {
+  margin: 1rem 0 0.15rem;
+}
+
+/* Con botón o pastilla además del importe, en el móvil no cabe todo en una
+   línea: el concepto se queda arriba y lo demás baja. */
+@media (max-width: 560px) {
+  .pagina-finanzas .segmentado:not(.ancho) {
+    align-self: stretch;
+    display: flex;
+  }
+  .pagina-finanzas .segmentado:not(.ancho) button {
+    flex: 1;
+    padding: 0 0.4rem;
+  }
+}
+
+/* En las tarjetas de lo que va, todo va: repetir la marca en cada fila sobra. */
+.va-gestoria .marca-gestoria {
+  display: none;
+}
+
+@media (max-width: 719px) {
+  .kpis.tres > :last-child {
+    grid-column: 1 / -1;
+  }
+}

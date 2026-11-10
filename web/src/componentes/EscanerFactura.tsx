@@ -19,16 +19,21 @@ import {
   confirmarFacturaEmitida,
   confirmarGastoDeFactura,
   escanearFactura,
+  trabajosParaElegir,
+  type Apunte,
   type TicketLeido,
 } from '../api'
 import { Modal } from '../ui/Modal'
 import { ErrorEnLinea } from '../ui/piezas'
 import { euros, fechaCorta, iso } from '../utiles'
+import { DeQueTrabajo } from './DeQueTrabajo'
 
 type Props = {
   token: string
   onGuardado: () => void
   onError: (e: unknown) => void
+  /** Si se escanea desde la lista de la gestoría, la casilla ya viene marcada. */
+  paraGestoria?: boolean
 }
 
 const LADO_MAXIMO = 1600
@@ -48,7 +53,7 @@ async function reducir(fichero: File): Promise<Blob> {
   )
 }
 
-export function EscanerFactura({ token, onGuardado, onError }: Props) {
+export function EscanerFactura({ token, onGuardado, onError, paraGestoria = false }: Props) {
   const entrada = useRef<HTMLInputElement>(null)
   const entradaPdf = useRef<HTMLInputElement>(null)
   const [leyendo, setLeyendo] = useState(false)
@@ -61,6 +66,10 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
   // Solo para facturas propias: ya cobrada, y de qué trabajo es ('' = nuevo).
   const [cobrada, setCobrada] = useState(false)
   const [trabajo, setTrabajo] = useState('')
+  // Solo para tickets de gasto: de qué trabajo es y si va a la gestoría.
+  const [trabajos, setTrabajos] = useState<Apunte[]>([])
+  const [deTrabajo, setDeTrabajo] = useState<number | null>(null)
+  const [vaAGestoria, setVaAGestoria] = useState(paraGestoria)
 
   function cerrar() {
     if (vista) URL.revokeObjectURL(vista)
@@ -78,6 +87,10 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
       const esPdf = fichero.type === 'application/pdf' || fichero.name.toLowerCase().endsWith('.pdf')
       const imagen = esPdf ? new Blob([fichero], { type: 'application/pdf' }) : await reducir(fichero)
       const resultado = await escanearFactura(token, imagen)
+      // Si la lista no llega se anota igual, sin trabajo: no se pierde el ticket.
+      setTrabajos(await trabajosParaElegir(token).catch(() => []))
+      setDeTrabajo(null)
+      setVaAGestoria(paraGestoria)
       setVista(esPdf ? null : URL.createObjectURL(imagen))
       setLeido(resultado)
       setConcepto(resultado.concepto)
@@ -117,6 +130,8 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
           concepto: concepto.trim(),
           importe: importeLimpio,
           fecha,
+          trabajo_id: deTrabajo,
+          para_gestoria: deTrabajo === null && vaAGestoria,
         })
       }
       cerrar()
@@ -235,6 +250,15 @@ export function EscanerFactura({ token, onGuardado, onError }: Props) {
               <ErrorEnLinea>
                 No he leído la fecha: he puesto hoy. Cámbiala si es de otro día.
               </ErrorEnLinea>
+            )}
+            {!leido.emitida && (
+              <DeQueTrabajo
+                trabajos={trabajos}
+                trabajoId={deTrabajo}
+                onTrabajo={setDeTrabajo}
+                paraGestoria={vaAGestoria}
+                onParaGestoria={setVaAGestoria}
+              />
             )}
             {leido.emitida && (
               <label className="casilla">

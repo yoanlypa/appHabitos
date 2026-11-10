@@ -21,6 +21,15 @@ export type Apunte = {
   factura_id: number | null
   // Si esa factura la emitió Yoa (cuelga de un trabajo) y no es de compra.
   factura_emitida: boolean
+  // De qué trabajo es este gasto (otro apunte), y cómo se llama.
+  trabajo_id: number | null
+  trabajo_concepto: string | null
+  // Solo trabajos: si lo factura Yoa. Solo gastos sueltos: marcado a mano.
+  facturado: boolean
+  para_gestoria: boolean
+  // Lo que cuenta: si sale en lo que se manda a la gestoría. Lo decide el
+  // backend; aquí solo se pinta.
+  gestoria: boolean
 }
 
 export type Resumen = {
@@ -136,11 +145,11 @@ export function resumenMes(token: string, anio: number, mes: number) {
 }
 
 /**
- * El CSV no se puede enlazar con un <a href> porque la ruta exige el header
+ * Un CSV no se puede enlazar con un <a href> porque la ruta exige el header
  * Authorization, así que se descarga a mano y se guarda como fichero.
  */
-export async function descargarCsv(token: string, desde: string, hasta: string) {
-  const respuesta = await fetch(`${BASE}/export/csv?desde=${desde}&hasta=${hasta}`, {
+async function descargar(token: string, ruta: string, nombre: string) {
+  const respuesta = await fetch(`${BASE}${ruta}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (respuesta.status === 401) throw new TokenInvalido('El token no vale')
@@ -150,9 +159,27 @@ export async function descargarCsv(token: string, desde: string, hasta: string) 
   const url = URL.createObjectURL(blob)
   const enlace = document.createElement('a')
   enlace.href = url
-  enlace.download = `parte-del-dia-${desde}_${hasta}.csv`
+  enlace.download = nombre
   enlace.click()
   URL.revokeObjectURL(url)
+}
+
+/** Todos los movimientos del periodo. */
+export function descargarCsv(token: string, desde: string, hasta: string) {
+  return descargar(
+    token,
+    `/export/csv?desde=${desde}&hasta=${hasta}`,
+    `parte-del-dia-${desde}_${hasta}.csv`,
+  )
+}
+
+/** Solo lo que va a la gestoría: facturas emitidas y sus gastos. */
+export function descargarCsvGestoria(token: string, desde: string, hasta: string) {
+  return descargar(
+    token,
+    `/gestoria/csv?desde=${desde}&hasta=${hasta}`,
+    `gestoria-${desde}_${hasta}.csv`,
+  )
 }
 
 // ---------- Clientes y agenda ----------
@@ -299,6 +326,46 @@ export type DatosMovimiento = {
   importe: string
   fecha: string
   pendiente: boolean
+  /** Solo gastos: el trabajo para el que se hizo. */
+  trabajo_id: number | null
+  /** Solo trabajos: lo factura Yoa. */
+  facturado: boolean
+  /** Solo gastos sin trabajo: va a la gestoría. */
+  para_gestoria: boolean
+}
+
+/** Los trabajos entre los que elegir al decir de cuál es un gasto. */
+export function trabajosParaElegir(token: string) {
+  return pedir<Apunte[]>(token, '/apuntes/trabajos')
+}
+
+export type FichaTrabajo = {
+  trabajo: Apunte
+  gastos: Apunte[]
+  total_gastos: string
+  beneficio: string
+}
+
+/** Un trabajo con sus gastos y lo que queda. La suma la hace el backend. */
+export function fichaTrabajo(token: string, id: number) {
+  return pedir<FichaTrabajo>(token, `/apuntes/${id}/ficha`)
+}
+
+/** Lo de un periodo repartido en lo que va a la gestoría y lo que no. */
+export type ParteGestoria = {
+  emitidas: Apunte[]
+  recibidas: Apunte[]
+  trabajos_fuera: Apunte[]
+  gastos_fuera: Apunte[]
+  facturado: string
+  gastos: string
+  diferencia: string
+  /** Cuántos de los que van no tienen su factura o ticket colgado. */
+  sin_documento: number
+}
+
+export function parteGestoria(token: string, desde: string, hasta: string) {
+  return pedir<ParteGestoria>(token, `/gestoria?desde=${desde}&hasta=${hasta}`)
 }
 
 /** Un trabajo o gasto desde el formulario de Finanzas, con su fecha. */
@@ -323,6 +390,9 @@ export function editarApunte(
     pendiente?: boolean
     fecha?: string
     tipo?: 'trabajo' | 'gasto'
+    trabajo_id?: number | null
+    facturado?: boolean
+    para_gestoria?: boolean
   },
 ) {
   return pedir<Apunte>(token, `/apuntes/${id}`, {
@@ -526,7 +596,13 @@ export function escanearFactura(token: string, imagen: Blob) {
 export function confirmarGastoDeFactura(
   token: string,
   facturaId: number,
-  gasto: { concepto: string; importe: string; fecha: string | null },
+  gasto: {
+    concepto: string
+    importe: string
+    fecha: string | null
+    trabajo_id?: number | null
+    para_gestoria?: boolean
+  },
 ) {
   return pedir<Apunte>(token, `/facturas/${facturaId}/gasto`, {
     method: 'POST',
@@ -570,10 +646,17 @@ export function abrirFactura(token: string, facturaId: number) {
 }
 
 /** Todos los tickets del periodo en un PDF, uno por página, para la gestoría. */
-export function abrirFacturasDelPeriodo(token: string, desde: string, hasta: string, emitidas = false) {
+export function abrirFacturasDelPeriodo(
+  token: string,
+  desde: string,
+  hasta: string,
+  emitidas = false,
+  /** Solo las que van a la gestoría. */
+  gestoria = false,
+) {
   return abrirPdf(
     token,
-    `/facturas/pdf?desde=${desde}&hasta=${hasta}&emitidas=${emitidas}`,
-    `${emitidas ? 'facturas-emitidas' : 'tickets'}-${desde}_${hasta}.pdf`,
+    `/facturas/pdf?desde=${desde}&hasta=${hasta}&emitidas=${emitidas}&gestoria=${gestoria}`,
+    `${emitidas ? 'facturas-emitidas' : gestoria ? 'facturas-recibidas' : 'tickets'}-${desde}_${hasta}.pdf`,
   )
 }
