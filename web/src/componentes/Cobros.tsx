@@ -5,6 +5,7 @@
  * saber que algo lleva dos meses sin cobrarse es lo que hace que cojas el
  * teléfono, y una fecha suelta no transmite eso.
  */
+import { PartyPopper } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import {
   asignarCliente,
@@ -15,7 +16,10 @@ import {
   type Apunte,
   type ClienteListado,
 } from '../api'
+import { avisar } from '../ui/avisos'
+import { ErrorEnLinea, Esqueleto, Kpi, Vacio } from '../ui/piezas'
 import { antiguedad, euros } from '../utiles'
+import { FilaMovimiento } from './FilaMovimiento'
 
 type Props = {
   token: string
@@ -68,59 +72,70 @@ export function Cobros({ token, onTokenInvalido }: Props) {
     }
   }
 
-  const total = pendientes.reduce((suma, a) => suma + Number(a.importe), 0)
+  // En céntimos enteros: sumar euros con decimales acaba en 0,30000000000000004.
+  const total = pendientes.reduce((suma, a) => suma + Math.round(Number(a.importe) * 100), 0) / 100
 
   return (
-    <section className="apuntes">
-      <div className="totales">
-        <dl>
-          <div className="neto">
-            <dt>Te deben en total</dt>
-            <dd className={total > 0 ? 'pendiente' : ''}>{euros(total)}</dd>
-          </div>
-        </dl>
-      </div>
+    <>
+      <dl className="kpis">
+        <Kpi
+          nombre="Te deben en total"
+          valor={euros(total)}
+          tipo="pendiente"
+          nota={
+            pendientes.length === 1 ? '1 trabajo sin cobrar' : `${pendientes.length} trabajos sin cobrar`
+          }
+        />
+      </dl>
 
-      {error && <p className="error">{error}</p>}
+      <ErrorEnLinea>{error}</ErrorEnLinea>
 
-      <h2>Sin cobrar</h2>
-      {cargando ? (
-        <p className="vacio">Cargando…</p>
-      ) : pendientes.length === 0 ? (
-        <p className="vacio">No te debe nadie. Bien.</p>
-      ) : (
-        <ul>
-          {pendientes.map((a) => (
-            <li key={a.id} className="trabajo pendiente-fila">
-              <span className="concepto">
-                {a.concepto}
-                <small>{antiguedad(a.fecha)}</small>
-              </span>
-              <span className="importe pendiente">{euros(a.importe)}</span>
-              <select
-                aria-label="Cliente"
-                className="mini-select"
-                value={a.cliente_id ?? ''}
-                onChange={(e) =>
-                  void accion(() =>
-                    asignarCliente(token, a.id, e.target.value ? Number(e.target.value) : null),
-                  )
+      <section className="tarjeta cobros">
+        <div className="tarjeta-cabecera">
+          <h2>Sin cobrar</h2>
+        </div>
+        {cargando ? (
+          <Esqueleto />
+        ) : pendientes.length === 0 ? (
+          <Vacio icono={PartyPopper} titulo="No te debe nadie">
+            Todo lo que has hecho está cobrado.
+          </Vacio>
+        ) : (
+          <ul className="lista">
+            {pendientes.map((a) => (
+              <FilaMovimiento
+                key={a.id}
+                apunte={a}
+                detalle={antiguedad(a.fecha)}
+                onCobrar={() =>
+                  void accion(async () => {
+                    await marcarCobrado(token, a.id)
+                    avisar(`Cobrado · ${a.concepto} · ${euros(a.importe)}`)
+                  })
                 }
               >
-                <option value="">Sin cliente</option>
-                {clientes.map((c) => (
-                  <option key={c.cliente.id} value={c.cliente.id}>
-                    {c.cliente.nombre}
-                  </option>
-                ))}
-              </select>
-              <button className="cobrar" onClick={() => void accion(() => marcarCobrado(token, a.id))}>
-                Cobrar
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+                <select
+                  aria-label="Cliente"
+                  className="mini-select"
+                  value={a.cliente_id ?? ''}
+                  onChange={(e) =>
+                    void accion(() =>
+                      asignarCliente(token, a.id, e.target.value ? Number(e.target.value) : null),
+                    )
+                  }
+                >
+                  <option value="">Sin cliente</option>
+                  {clientes.map((c) => (
+                    <option key={c.cliente.id} value={c.cliente.id}>
+                      {c.cliente.nombre}
+                    </option>
+                  ))}
+                </select>
+              </FilaMovimiento>
+            ))}
+          </ul>
+        )}
+      </section>
+    </>
   )
 }

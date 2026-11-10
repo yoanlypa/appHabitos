@@ -1,0 +1,377 @@
+/*
+ * El marco: menú lateral en el ordenador, barra de abajo en el móvil.
+ *
+ * Por debajo de 900 px manda el móvil: la página se desplaza entera (así el
+ * navegador puede esconder su barra) y la navegación queda pegada abajo. Por
+ * encima, el menú se queda fijo a la izquierda y solo se mueve el contenido.
+ */
+
+.app {
+  min-height: 100dvh;
+}
+
+.lateral {
+  display: none;
+}
+
+.marca-app {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.logo {
+  border-radius: 28%;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.35);
+}
+
+.barra-arriba {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 3.25rem;
+  padding: 0 0.6rem 0 1rem;
+  background: color-mix(in srgb, var(--fondo) 85%, transparent);
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+}
+
+.contenido {
+  padding: 0.5rem 1rem calc(6rem + env(safe-area-inset-bottom));
+}
+
+.pagina {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 68rem;
+  margin: 0 auto;
+}
+
+.cabecera-pagina {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cabecera-pagina .subtitulo {
+  margin-top: 0.15rem;
+  color: var(--texto-2);
+  font-size: 0.92rem;
+}
+
+.cabecera-pagina .subtitulo::first-letter {
+  text-transform: uppercase;
+}
+
+.cabecera-acciones {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ---------- Barra de abajo (móvil) ---------- */
+
+.barra {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  background: color-mix(in srgb, var(--superficie) 92%, transparent);
+  backdrop-filter: saturate(1.4) blur(14px);
+  -webkit-backdrop-filter: saturate(1.4) blur(14px);
+  border-top: 1px solid var(--borde);
+  padding: 0.3rem 0.25rem calc(0.3rem + env(safe-area-inset-bottom));
+}
+
+.barra button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.4rem 0.1rem 0.25rem;
+  border-radius: var(--radio-s);
+  color: var(--texto-3);
+  font-size: 0.68rem;
+  font-weight: 550;
+  transition: color 0.15s;
+}
+
+.barra button.activa {
+  color: var(--acento-texto);
+}
+
+.barra button:active {
+  background: var(--relleno);
+}
+
+/* ---------- Elementos de menú (lateral y menú del móvil) ---------- */
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0 0.65rem;
+  border-radius: var(--radio-xs);
+  color: var(--texto-2);
+  font-size: 0.92rem;
+  font-weight: 550;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+
+.nav-item:hover {
+  background: var(--relleno-2);
+  color: var(--texto);
+}
+
+.nav-item.activa {
+  background: var(--relleno-2);
+  color: var(--texto);
+}
+
+.nav-item.activa svg {
+  color: var(--acento-texto);
+}
+
+.selector-tema {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--radio-s);
+  background: var(--relleno-2);
+}
+
+.selector-tema button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 1.75rem;
+  border-radius: 7px;
+  color: var(--texto-3);
+}
+
+.selector-tema button.activa {
+  background: var(--superficie);
+  color: var(--texto);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.menu-movil {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.menu-movil .nav-item {
+  min-height: 3rem;
+  font-size: 1rem;
+}
+
+.menu-movil .nav-item:hover {
+  background: var(--relleno);
+}
+
+.menu-tema {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 3rem;
+  padding: 0 0.65rem;
+  color: var(--texto-2);
+  font-weight: 550;
+}
+
+.menu-tema .selector-tema {
+  background: var(--relleno);
+}
+
+.menu-tema .selector-tema button {
+  width: 2.75rem;
+  height: 2.1rem;
+}
+
+/* ---------- Alarma de almacenamiento ---------- */
+
+/* Fija arriba y sin botón de cerrar: es la avería más cara que puede tener
+   esto, y un aviso que se quita con una x se quita sin leerlo. El rojo es
+   fijo y no el del tema: con el rojo claro del modo oscuro, el texto blanco
+   no se leería. */
+.alarma {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  background: #b91c1c;
+  color: #fff;
+  padding: 0.7rem 1rem;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.alarma svg {
+  margin-top: 0.1rem;
+}
+
+.alarma small {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  opacity: 0.9;
+}
+
+/* Con la alarma puesta, la barra de arriba se queda debajo de ella. */
+.alarma ~ .marco .barra-arriba {
+  position: static;
+}
+
+/* ---------- Ordenador ---------- */
+
+@media (min-width: 900px) {
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  .marco {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+  }
+
+  .lateral {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 1.1rem 0.75rem 0.9rem;
+    background: var(--relleno);
+    border-right: 1px solid var(--borde);
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .lateral .marca-app {
+    padding: 0.25rem 0.5rem;
+  }
+
+  .lateral nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .lateral-pie {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .lateral-pie .selector-tema {
+    align-self: flex-start;
+    margin-left: 0.4rem;
+  }
+
+  .barra-arriba,
+  .barra {
+    display: none;
+  }
+
+  .contenido {
+    overflow-y: auto;
+    padding: 2rem 2.25rem 3rem;
+  }
+
+  .pagina {
+    gap: 1.25rem;
+  }
+
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 0.95rem;
+    min-height: 2.5rem;
+  }
+}
+
+/* ---------- Entrada ---------- */
+
+.entrada {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+}
+
+.entrada-caja {
+  width: 100%;
+  max-width: 24rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.75rem 1.5rem;
+}
+
+.entrada-caja .logo {
+  margin-bottom: 0.25rem;
+}
+
+.entrada-caja form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.entrada-pasos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  counter-reset: paso;
+}
+
+.entrada-pasos li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  color: var(--texto-2);
+  font-size: 0.9rem;
+}
+
+.entrada-pasos li::before {
+  counter-increment: paso;
+  content: counter(paso);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+  font-size: 0.72rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}

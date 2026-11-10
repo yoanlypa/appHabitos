@@ -39,6 +39,12 @@ class ResumenSalida(BaseModel):
     neto: Importe
 
 
+class ResumenMesSalida(ResumenSalida):
+    """Un mes del gráfico anual: los mismos cuatro totales, con su número."""
+
+    mes: int
+
+
 class ApunteCreado(BaseModel):
     """El apunte y, si el nombre no bastó para decidir, entre quiénes elegir."""
 
