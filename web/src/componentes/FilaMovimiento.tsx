@@ -7,7 +7,7 @@
  * está por cobrar. Tocar la fila la abre para editarla; cobrar y ver el
  * ticket tienen su botón propio y no abren nada.
  */
-import { ArrowDownLeft, ArrowUpRight, Clock, ReceiptText, StickyNote } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Clock, Landmark, ReceiptText, StickyNote } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Apunte } from '../api'
 import { euros } from '../utiles'
@@ -25,9 +25,24 @@ type Props = {
 
 function estado(a: Apunte) {
   if (a.tipo === 'nota') return 'Nota'
-  if (a.tipo === 'gasto') return a.factura_id ? 'Gasto · con ticket' : 'Gasto'
-  if (a.pendiente) return 'Pendiente de cobro'
-  return a.factura_emitida ? 'Cobrado · con factura' : 'Cobrado'
+  if (a.tipo === 'gasto') {
+    // De un trabajo, lo que más dice es de cuál; del suelto, que es un gasto.
+    const que = a.trabajo_concepto ?? 'Gasto'
+    return a.factura_id ? `${que} · con ticket` : que
+  }
+  const cobro = a.pendiente ? 'Pendiente de cobro' : 'Cobrado'
+  return a.factura_emitida ? `${cobro} · con factura` : cobro
+}
+
+/** La marca de lo que va a la gestoría: "Facturado" en un trabajo, "Gestoría" en un gasto. */
+function MarcaGestoria({ apunte: a }: { apunte: Apunte }) {
+  if (!a.gestoria) return null
+  return (
+    <span className="marca-gestoria" title="Va a la gestoría">
+      <Landmark size={11} />
+      {a.tipo === 'trabajo' ? 'Facturado' : 'Gestoría'}
+    </span>
+  )
 }
 
 export function FilaMovimiento({ apunte: a, detalle, onAbrir, onCobrar, onTicket, children }: Props) {
@@ -50,7 +65,10 @@ export function FilaMovimiento({ apunte: a, detalle, onAbrir, onCobrar, onTicket
       </span>
       <span className="principal">
         {a.concepto}
-        <small>{detalle ?? estado(a)}</small>
+        <small>
+          {detalle ?? estado(a)}
+          <MarcaGestoria apunte={a} />
+        </small>
       </span>
       {children}
       {a.factura_id && onTicket && (

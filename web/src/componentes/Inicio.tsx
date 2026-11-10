@@ -29,20 +29,18 @@ import {
   TokenInvalido,
   type Apunte,
   type Cita,
-  type DatosMovimiento,
   type Nota,
   type Resumen,
   type ResumenHabito,
   type ResumenTrimestre,
 } from '../api'
-import { borrarMovimiento, guardarMovimiento } from '../movimientos'
 import type { Ir } from '../secciones'
 import { Cabecera, ErrorEnLinea, Esqueleto, Kpi, Vacio } from '../ui/piezas'
 import { Segmentado } from '../ui/Segmentado'
 import { diaRelativo, euros, fechaLarga, hhmm, iso, MESES, saludo } from '../utiles'
 import { Captura } from './Captura'
+import { EditorMovimiento } from './EditorMovimiento'
 import { FilaMovimiento } from './FilaMovimiento'
-import { FormMovimiento } from './FormMovimiento'
 
 type Props = {
   token: string
@@ -129,20 +127,6 @@ export function Inicio({ token, onTokenInvalido, onIr }: Props) {
     } catch (e) {
       fallo(e)
     }
-  }
-
-  async function guardarEdicion(datos: DatosMovimiento) {
-    if (!editando) return
-    await guardarMovimiento(token, editando, datos)
-    setEditando(null)
-    recargar()
-  }
-
-  async function borrarEdicion() {
-    if (!editando) return
-    await borrarMovimiento(token, editando.id)
-    setEditando(null)
-    recargar()
   }
 
   const deHoy = habitos.filter((h) => h.toca_hoy)
@@ -394,10 +378,10 @@ export function Inicio({ token, onTokenInvalido, onIr }: Props) {
       </div>
 
       {editando && (
-        <FormMovimiento
+        <EditorMovimiento
+          token={token}
           apunte={editando}
-          onGuardar={guardarEdicion}
-          onBorrar={borrarEdicion}
+          onCambio={recargar}
           onCerrar={() => setEditando(null)}
         />
       )}

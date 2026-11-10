@@ -13,6 +13,9 @@
  *
  * "Por cobrar" es la antigua pestaña Cobros, metida aquí dentro: lo que te
  * deben es parte de tus finanzas, y así la barra de abajo no se llena.
+ *
+ * "Gestoría" es lo mismo mirado para mandarlo: solo lo que factura Yoa y
+ * sus gastos, por mes o por trimestre (`Gestoria.tsx`).
  */
 import { Download, FileText, Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -25,22 +28,22 @@ import {
   resumenRango,
   TokenInvalido,
   type Apunte,
-  type DatosMovimiento,
   type Resumen,
 } from '../api'
-import { borrarMovimiento, guardarMovimiento } from '../movimientos'
 import { Cabecera, ErrorEnLinea, Esqueleto, Kpi, Vacio } from '../ui/piezas'
 import { Segmentado } from '../ui/Segmentado'
 import { diaRelativo, euros, fechaCorta, iso, MESES } from '../utiles'
 import { Cobros } from './Cobros'
+import { EditorMovimiento } from './EditorMovimiento'
 import { EscanerFactura } from './EscanerFactura'
 import { FilaMovimiento } from './FilaMovimiento'
-import { FormMovimiento } from './FormMovimiento'
+import { Gestoria } from './Gestoria'
 import { GraficoMeses } from './GraficoMeses'
 
 const VISTAS = [
   { id: 'movimientos', nombre: 'Movimientos' },
   { id: 'cobrar', nombre: 'Por cobrar' },
+  { id: 'gestoria', nombre: 'Gestoría' },
 ] as const
 type Vista = (typeof VISTAS)[number]['id']
 
@@ -196,19 +199,6 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
     setCargando(true)
   }
 
-  async function guardar(datos: DatosMovimiento) {
-    await guardarMovimiento(token, editando ?? null, datos)
-    setEditando(undefined)
-    setRecargas((n) => n + 1)
-  }
-
-  async function borrar() {
-    if (!editando) return
-    await borrarMovimiento(token, editando.id)
-    setEditando(undefined)
-    setRecargas((n) => n + 1)
-  }
-
   async function accion(hacer: () => Promise<unknown>) {
     try {
       setError('')
@@ -233,6 +223,13 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
       <Segmentado opciones={VISTAS} valor={vista} onCambio={setVista} etiqueta="Vista" />
 
       {vista === 'cobrar' && <Cobros key={recargas} token={token} onTokenInvalido={onTokenInvalido} />}
+
+      {vista === 'gestoria' && (
+        <>
+          <ErrorEnLinea>{error}</ErrorEnLinea>
+          <Gestoria token={token} recargas={recargas} onAbrir={setEditando} onFallo={fallo} />
+        </>
+      )}
 
       {vista === 'movimientos' && (
         <>
@@ -379,11 +376,11 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
       )}
 
       {editando !== undefined && (
-        <FormMovimiento
+        <EditorMovimiento
+          token={token}
           apunte={editando}
           tipoInicial={filtro === 'gasto' ? 'gasto' : 'trabajo'}
-          onGuardar={guardar}
-          onBorrar={editando ? borrar : undefined}
+          onCambio={() => setRecargas((n) => n + 1)}
           onCerrar={() => setEditando(undefined)}
         />
       )}

@@ -45,7 +45,8 @@ from app.nucleo.paginas_pdf import PdfNoLegible, unir_en_una
 from app.nucleo.paginas_pdf import paginas as paginas_pdf
 from app.nucleo.pdf import PaginaDeDatos, imagenes_a_pdf
 from app.nucleo.tiempo import hoy_local
-from app.servicios.apuntes import crear_nota
+from app.dominio.gestoria import marca_gestoria
+from app.servicios.apuntes import MovimientoNoValido, crear_nota, trabajo_de_gasto
 
 
 def _propios(db: Session, user_id: int) -> Propios:
@@ -237,14 +238,25 @@ def anotar_gasto(
     importe: Decimal,
     fecha: date | None,
     origen: str,
+    trabajo_id: int | None = None,
+    para_gestoria: bool = False,
 ) -> Apunte:
-    """El gasto confirmado, con su foto colgada."""
+    """El gasto confirmado, con su foto colgada.
+
+    Es el momento de decir de qué trabajo es o si va a la gestoría: se tiene
+    el ticket delante. Después se puede cambiar, pero después no se hace.
+    """
     factura = _suya(db, user_id, factura_id)
     if factura.apunte_id is not None:
         raise GastoNoValido("esta factura ya está anotada")
     if importe is None or importe <= 0:
         raise GastoNoValido("el importe tiene que ser mayor que cero")
     concepto = (concepto or "").strip() or "Ticket escaneado"
+    if trabajo_id is not None:
+        try:
+            trabajo_de_gasto(db, user_id, trabajo_id)
+        except MovimientoNoValido as exc:
+            raise GastoNoValido(str(exc)) from exc
 
     apunte = Apunte(
         user_id=user_id,
@@ -254,6 +266,9 @@ def anotar_gasto(
         importe=importe,
         pendiente=False,
         origen=origen,
+        trabajo_id=trabajo_id,
+        # De un trabajo, sigue a su trabajo; la marca a mano es solo del suelto.
+        para_gestoria=para_gestoria and trabajo_id is None,
     )
     db.add(apunte)
     db.flush()
@@ -336,6 +351,8 @@ async def escanear_y_anotar(
     # El texto de la foto puede empezar por la fecha ("15/10 material baño"):
     # manda sobre la leída, que quien la escribe tiene el ticket delante. Es
     # lo útil al subir tickets viejos borrosos.
+    # Y puede llevar "para la gestoría": desde el bot no hay casilla que marcar.
+    para_gestoria, concepto = marca_gestoria(concepto)
     fecha_escrita_, concepto = fecha_escrita(concepto, hoy_local())
     fecha = fecha_escrita_ or leido.datos.fecha
     leido.fecha_supuesta = fecha is None
@@ -347,6 +364,7 @@ async def escanear_y_anotar(
         leido.datos.total,
         fecha,
         origen,
+        para_gestoria=para_gestoria,
     )
     return leido, apunte
 
@@ -437,9 +455,17 @@ def _pagina_de_datos(factura: Factura) -> PaginaDeDatos | None:
 
 
 def pdf_del_periodo(
-    db: Session, user_id: int, desde: date, hasta: date, emitidas: bool = False
+    db: Session,
+    user_id: int,
+    desde: date,
+    hasta: date,
+    emitidas: bool = False,
+    solo_gestoria: bool = False,
 ) -> bytes | None:
     """Los justificantes entre dos fechas, uno por página.
+
+    Con `solo_gestoria`, solo los de apuntes que van a la gestoría: los
+    tickets de un trabajo que factura otra empresa no son para ella.
 
     Por separado los tickets de compra (gastos) y las facturas que emite Yoa
     (`emitidas`): la gestoría los pide aparte, porque unos son IVA soportado
@@ -460,6 +486,8 @@ def pdf_del_periodo(
     )
     # Solo las fotos, sin la ficha de cada una: para la gestoría importa el
     # documento, y doblar las páginas del mes no aporta.
+    if solo_gestoria:
+        facturas = [f for f in facturas if f.apunte.gestoria]
     presentes = [f for f in facturas if archivos.ruta_absoluta(f.ruta).exists()]
     if not presentes:
         return None
@@ -646,6 +674,8 @@ def anotar_emitida(
         pendiente=not cobrada,
         origen=origen,
         cliente_id=cliente.id if cliente else None,
+        # Lleva colgada una factura de Yoa: está facturado, y va a la gestoría.
+        facturado=True,
     )
     db.add(apunte)
     db.flush()
@@ -754,6 +784,8 @@ def _nuevo_trabajo(db, user_id, factura, datos, cliente, importe, cobrada, conce
         pendiente=not cobrada,
         origen=origen,
         cliente_id=cliente.id if cliente else None,
+        # Lleva colgada una factura de Yoa: está facturado, y va a la gestoría.
+        facturado=True,
     )
     db.add(apunte)
     db.flush()
@@ -787,6 +819,7 @@ def vincular_emitida(
     if apunte is None or apunte.factura is not None:
         raise GastoNoValido("ese trabajo no existe o ya tiene factura")
     factura.apunte_id = apunte.id
+    apunte.facturado = True
     if cobrada:
         apunte.pendiente = False
     db.commit()
@@ -820,6 +853,10 @@ def convertir_en_emitida(db: Session, user_id: int, apunte_id: int, cobrada: boo
     anterior = apunte.cliente
     factura.emitida = True
     apunte.tipo = "trabajo"
+    apunte.facturado = True
+    # Era un gasto: lo que tuviera de gasto ya no aplica.
+    apunte.trabajo_id = None
+    apunte.para_gestoria = False
     if not ya_era or cobrada:
         apunte.pendiente = not cobrada
     apunte.cliente_id = cliente.id if cliente else apunte.cliente_id

@@ -10,6 +10,7 @@ from app.api.schemas import (
     ApunteCreado,
     ApunteEntrada,
     ApunteSalida,
+    FichaTrabajoSalida,
     MovimientoEntrada,
 )
 from app.dominio.parsing import TextoNoInterpretable
@@ -21,9 +22,11 @@ from app.servicios.apuntes import (
     crear_movimiento,
     anotar,
     borrar_apunte,
+    ficha_trabajo,
     listar_apuntes,
     marcar_cobrado,
     movimientos,
+    trabajos_para_elegir,
 )
 
 router = APIRouter(prefix="/apuntes", tags=["apuntes"])
@@ -49,6 +52,28 @@ def rango(
     if hasta < desde:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "el rango está al revés")
     return movimientos(db, user_id, desde, hasta)
+
+
+@router.get("/trabajos", response_model=list[ApunteSalida])
+def trabajos(
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Los trabajos entre los que elegir al decir de cuál es un gasto."""
+    return trabajos_para_elegir(db, user_id)
+
+
+@router.get("/{apunte_id}/ficha", response_model=FichaTrabajoSalida)
+def ficha(
+    apunte_id: int,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Un trabajo con sus gastos y lo que queda después de ellos."""
+    try:
+        return ficha_trabajo(db, user_id, apunte_id)
+    except ApunteNoEncontrado as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
 
 
 @router.post("", response_model=ApunteCreado, status_code=status.HTTP_201_CREATED)
