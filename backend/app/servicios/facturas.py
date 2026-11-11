@@ -165,6 +165,11 @@ def _imagen_para_leer(contenido: bytes, mime: str) -> tuple[bytes, str]:
     return salida.getvalue(), "image/jpeg"
 
 
+def imagen_para_leer(contenido: bytes, mime: str) -> tuple[bytes, str]:
+    """Lo mismo, para quien lee otra cosa que un ticket (una lista de pagos)."""
+    return _imagen_para_leer(contenido, mime)
+
+
 async def escanear(db: Session, user_id: int, imagen: bytes, mime: str) -> TicketEscaneado:
     """Guarda la foto y la lee. Si la lectura falla, la foto no se queda.
 

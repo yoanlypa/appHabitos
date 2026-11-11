@@ -100,6 +100,18 @@ def _pendiente(valor: str) -> bool:
     raise ValueError(f"pendiente '{valor}' no es ni sí ni no")
 
 
+def es_copia(texto: str) -> bool:
+    """Si la primera fila es la cabecera de una copia del bot, esté bien o mal lo demás.
+
+    Sirve para no confundir dos cosas al recibir un CSV: una copia con una
+    fila rota (hay que decir cuál, no tragársela) y un fichero que
+    sencillamente es otra cosa (una lista de movimientos hecha a mano).
+    """
+    primera = texto.lstrip("\ufeff").split("\n", 1)[0].lower()
+    celdas = {celda.strip().strip('"') for celda in primera.replace(";", ",").split(",")}
+    return all(columna in celdas for columna in COLUMNAS)
+
+
 def leer_copia(texto: str) -> list[FilaCopia]:
     texto = texto.lstrip("﻿")
     primera = texto.split("\n", 1)[0]

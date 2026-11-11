@@ -1,5 +1,8 @@
 """Restaurar una copia: se le reenvía al bot el CSV y vuelve lo que falte.
 
+Un CSV que no es una copia del bot (no trae su cabecera) no se rechaza: se
+pasa a `bot/importar.py`, que lo lee como una lista de movimientos.
+
 Es el camino de vuelta de `bot/copias.py`. Como en todo el bot, aquí no se
 decide nada: se baja el fichero, se lee con `dominio/copia_csv.py`, se
 planifica con `servicios/restauracion.py` y se pinta.
@@ -16,8 +19,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-from app.bot import formato
-from app.dominio.copia_csv import CopiaNoValida, decodificar, leer_copia
+from app.bot import formato, importar
+from app.dominio.copia_csv import CopiaNoValida, decodificar, es_copia, leer_copia
 from app.nucleo.db import sesion
 from app.servicios.restauracion import planificar, restaurar
 
@@ -41,7 +44,17 @@ async def recibir_copia(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     try:
-        filas = leer_copia(decodificar(datos))
+        texto = decodificar(datos)
+    except CopiaNoValida as exc:
+        await update.message.reply_text(formato.copia_no_valida(exc))
+        return
+    if not es_copia(texto):
+        # No es una de las copias del bot. Puede ser una lista de movimientos
+        # hecha a mano o sacada de otra app: eso es importar, no restaurar.
+        await importar.proponer_csv(update.message, contexto, update.effective_user.id, datos)
+        return
+    try:
+        filas = leer_copia(texto)
     except CopiaNoValida as exc:
         await update.message.reply_text(formato.copia_no_valida(exc))
         return

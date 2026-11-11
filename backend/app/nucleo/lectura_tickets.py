@@ -81,7 +81,30 @@ def hay_lectura() -> bool:
     return bool(OPENAI_API_KEY)
 
 
-async def leer_ticket(imagen: bytes, mime: str) -> dict:
+_INSTRUCCIONES_LISTA = (
+    "Eres un lector de capturas de pantalla y extractos españoles. La imagen "
+    "es una LISTA de varios pagos o movimientos: el historial de una app de "
+    "parking o de peajes, un extracto del banco, una lista de pedidos. "
+    'Responde SOLO un objeto JSON {"movimientos": [...]} con un elemento por '
+    "cada fila de la lista, en el mismo orden, sin saltarte ninguna y sin "
+    "inventar nada. Cada elemento:\n"
+    '- "fecha": el día del movimiento, convertido a YYYY-MM-DD (en España el '
+    'día va primero: "09/11/2026" es 2026-11-09). Si la fila tiene inicio y '
+    "fin, la de INICIO.\n"
+    '- "concepto": de 2 a 6 palabras que digan qué es y dónde, sin importes, '
+    'fechas ni horas (ej. "Parking Sector 2 Málaga", "Peaje AP-7"). Usa '
+    "exactamente el mismo concepto en las filas que sean lo mismo.\n"
+    '- "importe": lo pagado o recibido, número positivo con punto decimal.\n'
+    '- "tipo": "gasto" si es un pago, cargo o compra; "ingreso" si es dinero '
+    "recibido.\n"
+    "Si una fila sale cortada y no se le lee con seguridad la fecha o el "
+    "importe, NO la pongas: una fila de menos es mejor que una inventada. "
+    'Si la imagen no es una lista de movimientos, responde {"movimientos": []}.'
+)
+
+
+async def _preguntar(instrucciones: str, imagen: bytes, mime: str, max_tokens: int) -> dict:
+    """Le enseña la imagen al modelo y devuelve el objeto JSON que conteste."""
     if not OPENAI_API_KEY:
         raise LecturaNoDisponible("falta OPENAI_API_KEY en el entorno")
     if not imagen:
@@ -94,11 +117,9 @@ async def leer_ticket(imagen: bytes, mime: str) -> dict:
         "model": MODELO_TICKETS,
         "response_format": {"type": "json_object"},
         "temperature": 0,
-        # Con las líneas de producto la respuesta crece; el tope evita que un
-        # ticket de supermercado larguísimo dispare el coste.
-        "max_tokens": 2500,
+        "max_tokens": max_tokens,
         "messages": [
-            {"role": "system", "content": _INSTRUCCIONES},
+            {"role": "system", "content": instrucciones},
             {
                 "role": "user",
                 "content": [{"type": "image_url", "image_url": {"url": url_datos, "detail": "high"}}],
@@ -127,3 +148,19 @@ async def leer_ticket(imagen: bytes, mime: str) -> dict:
     if not isinstance(datos, dict):
         raise ErrorDeLectura("el servicio devolvió algo que no es un objeto")
     return datos
+
+
+async def leer_ticket(imagen: bytes, mime: str) -> dict:
+    # Con las líneas de producto la respuesta crece; el tope evita que un
+    # ticket de supermercado larguísimo dispare el coste.
+    return await _preguntar(_INSTRUCCIONES, imagen, mime, max_tokens=2500)
+
+
+async def leer_movimientos(imagen: bytes, mime: str) -> dict:
+    """Una captura con varios pagos (historial de parking, extracto): la lista entera.
+
+    Es otra pregunta que la de un ticket, no un campo más de aquella: un
+    ticket es UNA compra con su total, y pedirle las dos cosas a la vez
+    empeoraba la lectura de la que importa todos los días.
+    """
+    return await _preguntar(_INSTRUCCIONES_LISTA, imagen, mime, max_tokens=3000)

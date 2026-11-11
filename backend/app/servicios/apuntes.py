@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.dominio.models import Apunte
 from app.nucleo import archivos
-from app.dominio.parsing import TextoNoInterpretable, interpretar_texto
+from app.dominio.parsing import TextoNoInterpretable, interpretar_con_fecha
 from app.dominio.tickets import fecha_escrita
 from app.nucleo.tiempo import hoy_local
 from app.servicios.clientes import clientes_mencionados
@@ -25,10 +25,12 @@ class ApunteNoEncontrado(LookupError):
 def crear_apunte(
     db: Session, user_id: int, texto: str, origen: str, cliente_id: int | None = None
 ) -> Apunte:
-    interpretado = interpretar_texto(texto)
+    # El día puede ir delante ("ayer -45 gasolina"); si no, es de hoy.
+    hoy = hoy_local()
+    interpretado, fecha = interpretar_con_fecha(texto, hoy)
     apunte = Apunte(
         user_id=user_id,
-        fecha=hoy_local(),
+        fecha=fecha or hoy,
         tipo=interpretado.tipo,
         concepto=interpretado.concepto,
         importe=interpretado.importe,
@@ -112,6 +114,11 @@ def _suyo(db: Session, user_id: int, apunte_id: int) -> Apunte:
     if apunte is None:
         raise ApunteNoEncontrado(f"apunte {apunte_id} no existe para el usuario {user_id}")
     return apunte
+
+
+def obtener_apunte(db: Session, user_id: int, apunte_id: int) -> Apunte:
+    """Un apunte por su número, solo si es de quien lo pide."""
+    return _suyo(db, user_id, apunte_id)
 
 
 def borrar_apunte(db: Session, user_id: int, apunte_id: int) -> Apunte:

@@ -18,7 +18,7 @@ from telegram.ext import (
     filters,
 )
 
-from app.bot import alarma, avisos, copias, habitos, handlers, restaurar
+from app.bot import acciones, alarma, avisos, copias, habitos, handlers, importar, menu, restaurar
 from app.nucleo.config import TELEGRAM_BOT_TOKEN
 from app.nucleo.migraciones import migrar
 
@@ -27,11 +27,16 @@ def construir_app() -> Application:
     if not TELEGRAM_BOT_TOKEN:
         raise RuntimeError("Falta TELEGRAM_BOT_TOKEN en el entorno")
 
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    # post_init solo lo llama run_polling (el arranque en local); en Railway
+    # lo hace `en_marcha()` a mano, que es quien inicializa allí.
+    app = (
+        Application.builder().token(TELEGRAM_BOT_TOKEN).post_init(menu.publicar_comandos).build()
+    )
     # Antes que nada: si los datos no se guardan, que se diga en el chat.
     alarma.programar(app)
 
-    app.add_handler(CommandHandler("start", handlers.start))
+    # /start, /menu y los botones del teclado de abajo.
+    menu.registrar(app)
     app.add_handler(CommandHandler("hoy", handlers.hoy))
     app.add_handler(CommandHandler("mes", handlers.mes))
     app.add_handler(CommandHandler("cobrado", handlers.cobrado))
@@ -63,8 +68,12 @@ def construir_app() -> Application:
             handlers.foto_de_ticket,
         )
     )
-    # Un CSV reenviado es una copia que restaurar.
+    # Un CSV reenviado es una copia que restaurar, o una lista de movimientos.
     restaurar.registrar(app)
+    # Un Excel, y los botones de "añadir estos N".
+    importar.registrar(app)
+    # Los botones de debajo de cada apunte y de las listas.
+    acciones.registrar(app)
     # /habitos con sus botones, y los recordatorios a la hora de cada uno.
     habitos.registrar(app)
     # Lo último: cualquier texto que no sea un comando se anota como apunte.
@@ -84,6 +93,7 @@ async def en_marcha():
     """
     app = construir_app()
     await app.initialize()
+    await menu.publicar_comandos(app)
     await app.start()
     await app.updater.start_polling()
     try:

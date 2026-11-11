@@ -293,4 +293,4 @@ class TestPorElBot:
         update, mensaje = _reenviar(datos)
         await bot_restaurar.recibir_copia(update, _contexto(datos, {}))
 
-        assert "No puedo restaurar" in mensaje.respuestas[0][0]
+        assert "No puedo leer ese fichero" in mensaje.respuestas[0][0]

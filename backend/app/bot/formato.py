@@ -25,9 +25,25 @@ def apunte_creado(apunte: Apunte) -> str:
     if apunte.tipo == "nota":
         return f"Nota guardada: {apunte.concepto}  (#{apunte.id})"
     if apunte.tipo == "gasto":
-        return f"Gasto anotado: {apunte.concepto} — {euros(apunte.importe)}  (#{apunte.id})"
-    estado = "pendiente de cobro" if apunte.pendiente else "cobrado"
-    return f"Trabajo anotado ({estado}): {apunte.concepto} — {euros(apunte.importe)}  (#{apunte.id})"
+        linea = f"Gasto anotado: {apunte.concepto} — {euros(apunte.importe)}  (#{apunte.id})"
+    else:
+        estado = "pendiente de cobro" if apunte.pendiente else "cobrado"
+        linea = (
+            f"Trabajo anotado ({estado}): {apunte.concepto} — {euros(apunte.importe)}  (#{apunte.id})"
+        )
+    # El día solo se dice cuando no es hoy: es cuando puede estar mal, y con
+    # el nombre del día de la semana un día equivocado salta a la vista.
+    if apunte.fecha != hoy_local():
+        linea += f"\n📅 {dia_con_nombre(apunte.fecha).capitalize()}"
+    return linea
+
+
+def pregunta_si_es_gasto(palabra: str) -> str:
+    """Bajo un trabajo cobrado cuyo concepto suena a gasto ("gasolina 45")."""
+    return (
+        f"⚠️ Lo he apuntado como dinero que ENTRA, pero «{palabra}» suena a gasto.\n"
+        "Si lo es, toca «Es un gasto». La próxima vez: -45 gasolina"
+    )
 
 
 def escuchado(texto: str) -> str:
@@ -59,35 +75,40 @@ def ayuda() -> str:
         "  Cambio de grifo Ana 120     → trabajo cobrado\n"
         "  pendiente Reforma baño 980  → trabajo sin cobrar\n"
         "  -45 gasolina                → gasto\n"
+        "  ayer -45 gasolina           → gasto de ayer\n"
+        "  3/11 parking 2,75           → con su día delante\n"
         "  Llamar al fontanero martes  → nota, sin dinero\n\n"
-        "Cuando no puedas escribir, mándame una nota de voz: la escucho y\n"
-        "la anoto igual. Y si me mandas la foto o el PDF de un ticket o una\n"
-        "factura, lo anoto como\n"
-        "gasto y te devuelvo el PDF escaneado.\n\n"
+        "Debajo de cada apunte tienes botones para cobrarlo, cambiarle el día, "
+        "pasarlo de cobro a gasto o borrarlo: no hace falta recordar su número.\n\n"
+        "También puedes mandarme:\n"
+        "  🎤 una nota de voz: la escucho y la anoto igual\n"
+        "  🧾 la foto o el PDF de un ticket o una factura: lo anoto y te devuelvo el PDF\n"
+        "  📋 varios de golpe: un apunte por línea en un mensaje, un Excel o CSV "
+        "(columnas fecha, concepto, importe), o una captura con varios pagos "
+        "(escribe «lista» en la foto). Te enseño lo que he leído antes de guardar nada.\n\n"
         "Comandos:\n"
-        "  /hoy — resumen del día\n"
+        "  /hoy — resumen y apuntes del día\n"
         "  /mes — resumen del mes\n"
         "  /trimestre — lo que llevas este trimestre\n"
-        "  /facturas — los tickets del mes en un PDF ('/facturas pasado': el anterior)\n"
-        "  /cobrado <número> — marca un trabajo como cobrado\n"
-        "  /borrar <número> — borra un apunte mal escrito\n"
-        "  /fecha <número> 15/10 — cambia el día de un apunte\n"
-        "  /releer — pone en su día los tickets que quedaron en el día equivocado\n"
-        "  /emitida <número> — una factura tuya que entró como gasto pasa a trabajo\n"
-        "  /reparar — corrige el cliente de tus facturas leídas al revés\n"
+        "  /deben — quién te debe dinero (y cobrarlo con un toque)\n"
         "  /agenda — lo que toca hoy\n"
         "  /manana — lo que toca mañana\n"
         "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
         "      también vale: /cita 20 de septiembre a las 10am Ver la casa\n"
         "  /notas — el buzón de lo que no tiene fecha\n"
-        "  /hecha <número> — marca una nota como cumplida\n"
         "  /habitos — marca los hábitos de hoy\n"
-        "  /deben — quién te debe dinero\n"
+        "  /facturas — los tickets del mes en un PDF ('/facturas pasado': el anterior)\n"
         "  /cliente Ana Ruiz 600111222 — da de alta un cliente\n"
+        "  /web — entrar en la web\n"
+        "  /copia — te mando todo en un CSV, por si acaso\n"
         "  /avisos on|off — resumen automático cada noche\n"
-        "  /web — token para entrar en la web\n"
-        "  /copia — te mando todo en un CSV, por si acaso\n\n"
-        "Si algún día pierdes datos, reenvíame una de esas copias y vuelvo a "
+        "  /menu — vuelve a sacar los botones de abajo\n\n"
+        "Con el número del apunte, por si lo prefieres a los botones:\n"
+        "  /cobrado 12 · /borrar 12 · /fecha 12 15/10 · /hecha 12\n"
+        "  /emitida 12 — una factura tuya que entró como gasto pasa a trabajo\n"
+        "  /releer — pone en su día los tickets que quedaron en el día equivocado\n"
+        "  /reparar — corrige el cliente de tus facturas leídas al revés\n\n"
+        "Si algún día pierdes datos, reenvíame una de las copias y vuelvo a "
         "meter lo que falte."
     )
 
@@ -115,6 +136,8 @@ def dia_con_nombre(fecha) -> str:
         return "hoy"
     if fecha == hoy + timedelta(days=1):
         return "mañana"
+    if fecha == hoy - timedelta(days=1):
+        return "ayer"
     return f"el {_NOMBRE_DIA[fecha.weekday()]} {fecha.strftime('%d/%m')}"
 
 
@@ -137,7 +160,7 @@ def lista_notas(notas: list) -> str:
         quien = f" — {n.cliente.nombre}" if n.cliente else ""
         lineas.append(f"  #{n.id} {n.concepto}{quien} ({n.fecha.strftime('%d/%m')})")
     lineas.append("")
-    lineas.append("/hecha <número> cuando la cumplas. Ponerles fecha, desde la web.")
+    lineas.append("Toca una cuando la cumplas (o /hecha <número>). Ponerles fecha, desde la web.")
     return "\n".join(lineas)
 
 
@@ -191,8 +214,10 @@ def copia_ya_estaba(plan) -> str:
 
 def copia_no_valida(motivo) -> str:
     return (
-        f"No puedo restaurar ese fichero: {motivo}.\n\n"
-        "Tiene que ser una de las copias que te mando yo (el CSV de /copia)."
+        f"No puedo leer ese fichero: {motivo}.\n\n"
+        "Vale una de las copias que te mando yo (el CSV de /copia), o un CSV o "
+        "Excel con tres columnas en la primera fila: fecha, concepto, importe "
+        "(y, si quieres, tipo: gasto o trabajo)."
     )
 
 
@@ -275,6 +300,7 @@ def lista_deudas(pendientes: list) -> str:
     for a in pendientes:
         quien = f" — {a.cliente.nombre}" if a.cliente else ""
         lineas.append(f"  #{a.id} {a.concepto}{quien}: {euros(a.importe)} ({a.fecha.strftime('%d/%m')})")
+    lineas += ["", "Toca uno cuando te lo paguen."]
     return "\n".join(lineas)
 
 
@@ -298,6 +324,8 @@ def descripcion_corta(cliente) -> str:
 
 
 def apunte_borrado(apunte) -> str:
+    if apunte.tipo == "nota":
+        return f"Borrada la nota: {apunte.concepto}"
     return f"Borrado: {apunte.concepto} — {euros(apunte.importe)}"
 
 
@@ -380,7 +408,10 @@ def sin_facturas(desde) -> str:
 
 
 def fecha_cambiada(apunte) -> str:
-    return f"📅 Movido al {dia_con_nombre(apunte.fecha)} (#{apunte.id}): {apunte.concepto}"
+    dia = dia_con_nombre(apunte.fecha)
+    # "al martes 03/11", pero "a hoy" y "a ayer": salía "Movido al el martes".
+    donde = f"al {dia[3:]}" if dia.startswith("el ") else f"a {dia}"
+    return f"📅 Movido {donde} (#{apunte.id}): {apunte.concepto}"
 
 
 def relectura(resultado) -> str:
@@ -455,3 +486,146 @@ def emitidas_reparadas(apuntes) -> str:
         quien = a.cliente.nombre if a.cliente else "sin cliente"
         lineas.append(f"  #{a.id} {a.concepto} → cliente: {quien}")
     return "\n".join(lineas)
+
+
+# --- Lo que se ve al tocar los botones de un apunte ---------------------------
+
+
+def tipo_cambiado(apunte) -> str:
+    if apunte.tipo == "gasto":
+        return f"Cambiado a GASTO: {apunte.concepto} — −{euros(apunte.importe)}  (#{apunte.id})"
+    return f"Cambiado a COBRO: {apunte.concepto} — +{euros(apunte.importe)}  (#{apunte.id})"
+
+
+def confirmar_borrado(apunte) -> str:
+    aviso = "\nSe irá también la foto de su ticket." if apunte.factura is not None else ""
+    if apunte.tipo == "nota":
+        return f"¿Borro esta nota?\n{apunte.concepto}  (#{apunte.id})"
+    return f"¿Borro esto?\n{apunte.concepto} — {euros(apunte.importe)}  (#{apunte.id}){aviso}"
+
+
+def pedir_fecha(apunte) -> str:
+    return (
+        f"¿De qué día es «{apunte.concepto}»?\n"
+        "Escríbeme solo el día: 15/10, 3 de octubre, ayer…"
+    )
+
+
+def lista_del_dia(apuntes: list, muestra: int = 12) -> str:
+    """Los apuntes de hoy debajo del resumen: las cifras dicen cuánto, esto dice qué."""
+    if not apuntes:
+        return "Hoy todavía no has apuntado nada."
+    lineas = []
+    for a in apuntes[:muestra]:
+        if a.tipo == "gasto":
+            cuanto = f"−{euros(a.importe)}"
+        else:
+            cuanto = f"+{euros(a.importe)}" + (" ⏳" if a.pendiente else "")
+        lineas.append(f"  #{a.id} {a.concepto}: {cuanto}")
+    if len(apuntes) > muestra:
+        lineas.append(f"  … y {len(apuntes) - muestra} más (en la web)")
+    return "\n".join(lineas)
+
+
+def boton_cobrar(apunte) -> str:
+    quien = f"{apunte.cliente.nombre.split()[0]} · " if apunte.cliente else ""
+    return f"✅ {quien}{apunte.concepto[:24]} · {euros(apunte.importe)}"
+
+
+def boton_nota(nota) -> str:
+    return f"✓ {nota.concepto[:40]}"
+
+
+# --- Importar varios de golpe -------------------------------------------------
+
+
+def _fila_de_movimiento(m) -> str:
+    cuando = m.fecha.strftime("%d/%m")
+    if m.tipo is None:
+        return f"{cuando}  {m.concepto} — {euros(m.importe)}"
+    signo = "−" if m.tipo == "gasto" else "+"
+    sin_cobrar = " (pendiente)" if m.pendiente else ""
+    return f"{cuando}  {m.concepto} — {signo}{euros(m.importe)}{sin_cobrar}"
+
+
+def plan_de_importacion(plan, muestra: int = 20) -> str:
+    """Lo leído, antes de guardar nada: es el momento de ver un importe mal leído."""
+    lineas = []
+    if plan.nuevos:
+        total = sum(m.importe for m in plan.nuevos)
+        plural = "s" if len(plan.nuevos) != 1 else ""
+        lineas.append(f"📋 He leído {len(plan.nuevos)} movimiento{plural} nuevo{plural} ({euros(total)}):")
+        for m in plan.nuevos[:muestra]:
+            lineas.append(f"  {_fila_de_movimiento(m)}")
+        if len(plan.nuevos) > muestra:
+            lineas.append(f"  … y {len(plan.nuevos) - muestra} más")
+    if plan.repetidos:
+        if lineas:
+            lineas.append("")
+        cuantos = len(plan.repetidos)
+        lineas.append(
+            f"Est{'os' if cuantos != 1 else 'e'} {cuantos} ya l{'os' if cuantos != 1 else 'o'} "
+            "tienes (mismo día e importe), no los toco:"
+            if plan.nuevos
+            else f"He leído {cuantos} y ya los tienes todos (mismo día e importe):"
+        )
+        for m in plan.repetidos[:8]:
+            lineas.append(f"  {_fila_de_movimiento(m)}")
+        if cuantos > 8:
+            lineas.append(f"  … y {cuantos - 8} más")
+    if plan.nuevos:
+        lineas += ["", "Repásalos: todavía no he guardado nada."]
+    return "\n".join(lineas)
+
+
+def preguntar_tipo_de_importacion(movimientos, muestra: int = 12) -> str:
+    total = sum(m.importe for m in movimientos)
+    lineas = [f"📋 He leído {len(movimientos)} movimientos ({euros(total)}):"]
+    for m in movimientos[:muestra]:
+        lineas.append(f"  {_fila_de_movimiento(m)}")
+    if len(movimientos) > muestra:
+        lineas.append(f"  … y {len(movimientos) - muestra} más")
+    lineas += ["", "El fichero no dice si son gastos o cobros. ¿Qué son?"]
+    return "\n".join(lineas)
+
+
+def importacion_hecha(apuntes: list, ya_estaban: int = 0) -> str:
+    if not apuntes:
+        return "No faltaba ninguno: ya los tenías todos. No he añadido nada."
+    plural = "s" if len(apuntes) != 1 else ""
+    gastos = sum(a.importe for a in apuntes if a.tipo == "gasto")
+    entra = sum(a.importe for a in apuntes if a.tipo == "trabajo")
+    lineas = [f"✅ Añadido{plural} {len(apuntes)} movimiento{plural}."]
+    if gastos:
+        lineas.append(f"Gastos: −{euros(gastos)}")
+    if entra:
+        lineas.append(f"Trabajos: +{euros(entra)}")
+    if ya_estaban:
+        lineas.append(f"{ya_estaban} ya estaban y no los he repetido.")
+    lineas.append("Míralos con /mes o en la web (Finanzas).")
+    return "\n".join(lineas)
+
+
+def importacion_deshecha(cuantos: int) -> str:
+    if cuantos == 0:
+        return "Ya no quedaba nada de esa importación."
+    return f"Deshecho: he quitado los {cuantos} movimientos que acababa de añadir."
+
+
+def importacion_caducada() -> str:
+    return (
+        "Ya no tengo esa lista a mano (puede que me haya reiniciado). "
+        "Mándamela otra vez y la vuelvo a leer."
+    )
+
+
+def captura_sin_movimientos() -> str:
+    return (
+        "No he sabido leer varios movimientos en esa imagen, así que no he anotado nada.\n"
+        "Prueba con la captura entera y nítida, o escríbemelos uno por línea:\n"
+        "3/11 -2,75 parking\n4/11 -2,75 parking"
+    )
+
+
+def importacion_caducada_para_deshacer() -> str:
+    return "Eso ya no lo puedo deshacer de golpe. Bórralos uno a uno: /borrar <número>."

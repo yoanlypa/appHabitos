@@ -22,9 +22,10 @@ from telegram.constants import ChatAction
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
-from app.bot import copias, formato
+from app.bot import acciones, copias, formato, importar
 from app.nucleo.config import URL_WEB
-from app.dominio.parsing import TextoNoInterpretable
+from app.dominio.importacion import leer_lineas, marca_lista
+from app.dominio.parsing import TextoNoInterpretable, suena_a_gasto
 from app.dominio.tickets import marca_cobrado
 from app.dominio.parsing_citas import CitaNoInterpretable, interpretar_cita
 from app.nucleo.db import sesion
@@ -43,6 +44,7 @@ from app.servicios.apuntes import (
     marcar_cobrado,
 )
 from app.servicios.apuntes import anotar as anotar_apunte
+from app.servicios.apuntes import listar_apuntes
 from app.servicios.auth import generar_token
 from app.servicios.avisos import activar_avisos, avisos_activos
 from app.servicios.clientes import asignar_cliente, crear_cliente, pendientes_de_cobro
@@ -56,6 +58,7 @@ from app.nucleo.pdf import ImagenNoLegible
 from app.servicios.facturas import (
     FacturaNoValida,
     escanear_y_anotar,
+    imagen_para_leer,
     pdf_de_factura,
     GastoNoValido,
     convertir_en_emitida,
@@ -66,11 +69,7 @@ from app.servicios.facturas import (
 )
 
 
-async def start(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(formato.ayuda())
-
-
-async def anotar(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
+async def anotar(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
     """Cualquier mensaje de texto que no sea un comando es un apunte.
 
     Si el texto nombra a un cliente y no hay duda de cuál es, queda colgado
@@ -80,7 +79,19 @@ async def anotar(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
     Lo que no lleve importe se guarda como nota, igual que lo dictado.
     Escribir no cuesta nada y es lo que se hace siempre que se puede: sería
     absurdo que el bot solo supiera guardar recordatorios por voz.
+
+    Dos cosas se miran antes, y ninguna se queda con un texto que no sea
+    suyo: si se acaba de tocar "Escribir el día" en un apunte y esto es una
+    fecha, es la respuesta a eso; y si son varias líneas y todas llevan su
+    importe, es una lista que se enseña entera antes de guardarla.
     """
+    if await acciones.fecha_escrita_para(update, contexto):
+        return
+    varios = leer_lineas(update.message.text, hoy_local())
+    if varios is not None:
+        await importar.proponer(update.message, contexto, update.effective_user.id, varios)
+        return
+
     with sesion() as db:
         try:
             anotado = anotar_apunte(
@@ -102,34 +113,38 @@ async def _responder_anotado(mensaje: Message, anotado, encabezado: str = "") ->
 
     Lo comparten el texto y las notas de voz: la única diferencia es que la
     voz enseña antes lo que se entendió al escuchar.
+
+    Debajo van los botones del apunte (cobrar, otro día, es un gasto,
+    borrar). Y si es un cobro cuyo concepto suena a gasto y no nombra a
+    ningún cliente ("gasolina 45" sin guion), se pregunta en el momento: es
+    el error que más caro sale y hasta ahora pasaba sin decir nada.
     """
     apunte = anotado.apunte
     delante = f"{encabezado}\n\n" if encabezado else ""
 
-    if apunte.cliente is not None:
+    if anotado.candidatos:
+        botones = [
+            [
+                InlineKeyboardButton(
+                    formato.descripcion_corta(c), callback_data=f"cli:{apunte.id}:{c.id}"
+                )
+            ]
+            for c in anotado.candidatos
+        ]
+        botones.append([InlineKeyboardButton("Ninguno", callback_data=f"cli:{apunte.id}:0")])
         await mensaje.reply_text(
-            delante + formato.apunte_creado_con_cliente(apunte, apunte.cliente)
+            f"{delante}{formato.apunte_creado(apunte)}\n\n"
+            f"{formato.preguntar_cliente(anotado.candidatos[0].nombre.split()[0])}",
+            reply_markup=InlineKeyboardMarkup(botones),
         )
         return
 
-    if not anotado.candidatos:
-        await mensaje.reply_text(delante + formato.apunte_creado(apunte))
-        return
-
-    botones = [
-        [
-            InlineKeyboardButton(
-                formato.descripcion_corta(c), callback_data=f"cli:{apunte.id}:{c.id}"
-            )
-        ]
-        for c in anotado.candidatos
-    ]
-    botones.append([InlineKeyboardButton("Ninguno", callback_data=f"cli:{apunte.id}:0")])
-    await mensaje.reply_text(
-        f"{delante}{formato.apunte_creado(apunte)}\n\n"
-        f"{formato.preguntar_cliente(anotado.candidatos[0].nombre.split()[0])}",
-        reply_markup=InlineKeyboardMarkup(botones),
-    )
+    texto = delante + acciones.texto_de(apunte)
+    if apunte.tipo == "trabajo" and not apunte.pendiente and apunte.cliente is None:
+        palabra = suena_a_gasto(apunte.concepto)
+        if palabra:
+            texto += "\n\n" + formato.pregunta_si_es_gasto(palabra)
+    await mensaje.reply_text(texto, reply_markup=acciones.botones_de(apunte))
 
 
 # Extensión por tipo de audio: el transcriptor deduce el formato del nombre
@@ -224,12 +239,9 @@ async def elegir_cliente(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -
             await consulta.edit_message_text("Ese apunte ya no está.")
             return
 
-        if apunte.cliente is None:
-            await consulta.edit_message_text(formato.apunte_creado(apunte))
-        else:
-            await consulta.edit_message_text(
-                formato.apunte_creado_con_cliente(apunte, apunte.cliente)
-            )
+        await consulta.edit_message_text(
+            acciones.texto_de(apunte), reply_markup=acciones.botones_de(apunte)
+        )
 
 
 async def cliente(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
@@ -255,7 +267,10 @@ async def cliente(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
 async def hoy(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
     with sesion() as db:
         r = resumen_dia(db, update.effective_user.id)
-        await update.message.reply_text(formato.resumen("Hoy:", r))
+        del_dia = listar_apuntes(db, update.effective_user.id)
+        await update.message.reply_text(
+            formato.resumen("Hoy:", r) + "\n\n" + formato.lista_del_dia(del_dia)
+        )
 
 
 async def mes(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
@@ -276,7 +291,9 @@ async def cobrado(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
         except ApunteNoEncontrado:
             await update.message.reply_text(f"No tengo ningún apunte con el número {apunte_id}.")
             return
-        await update.message.reply_text(formato.apunte_cobrado(apunte))
+        await update.message.reply_text(
+            formato.apunte_cobrado(apunte), reply_markup=acciones.botones_de(apunte)
+        )
 
 
 async def avisos(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
@@ -354,8 +371,9 @@ async def notas(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
     editable, y eso es cosa de la web; aquí sería un baile de botones.
     """
     with sesion() as db:
+        pendientes = listar_notas(db, update.effective_user.id)
         await update.message.reply_text(
-            formato.lista_notas(listar_notas(db, update.effective_user.id))
+            formato.lista_notas(pendientes), reply_markup=acciones.botones_de_notas(pendientes)
         )
 
 
@@ -380,8 +398,9 @@ async def hecha(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def deben(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
     with sesion() as db:
+        pendientes = pendientes_de_cobro(db, update.effective_user.id)
         await update.message.reply_text(
-            formato.lista_deudas(pendientes_de_cobro(db, update.effective_user.id))
+            formato.lista_deudas(pendientes), reply_markup=acciones.botones_de_deudas(pendientes)
         )
 
 
@@ -402,7 +421,9 @@ async def fecha(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
                 "No entiendo esa fecha. Escríbela así: 15/10, 15/10/2025, ayer o 3 de octubre."
             )
             return
-        await update.message.reply_text(formato.fecha_cambiada(apunte))
+        await update.message.reply_text(
+            formato.fecha_cambiada(apunte), reply_markup=acciones.botones_de(apunte)
+        )
 
 
 async def borrar(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
@@ -462,6 +483,20 @@ async def foto_de_ticket(update: Update, contexto: ContextTypes.DEFAULT_TYPE) ->
         await mensaje.reply_text(f"No he podido descargar la foto: {exc}")
         return
 
+    # "lista" en el texto de la foto: no es un ticket sino una captura con
+    # varios pagos (el historial del parking). No se guarda como factura.
+    if marca_lista(mensaje.caption):
+        try:
+            para_leer = imagen_para_leer(datos, mime)
+        except FacturaNoValida as exc:
+            await mensaje.reply_text(f"No he podido leer ese fichero: {exc}")
+            return
+        if not await importar.proponer_captura(
+            mensaje, contexto, update.effective_user.id, *para_leer
+        ):
+            await mensaje.reply_text(formato.captura_sin_movimientos())
+        return
+
     with sesion() as db:
         try:
             leido, apunte = await escanear_y_anotar(
@@ -491,6 +526,13 @@ async def foto_de_ticket(update: Update, contexto: ContextTypes.DEFAULT_TYPE) ->
             )
             return
         if apunte is None:
+            # Sin total no era un ticket. Antes de rendirse: puede ser una
+            # captura con varios pagos mandada sin decir "lista". Cuesta una
+            # lectura más, pero solo en el caso que ya había fallado.
+            if mime != "application/pdf" and await importar.proponer_captura(
+                mensaje, contexto, update.effective_user.id, datos, mime
+            ):
+                return
             await mensaje.reply_text(formato.ticket_sin_total())
             return
         if leido.emitida is not None:
@@ -500,12 +542,15 @@ async def foto_de_ticket(update: Update, contexto: ContextTypes.DEFAULT_TYPE) ->
         # Con el PDF escaneado en la respuesta, como CamScanner: se guarda o se
         # reenvía a la gestoría desde el propio chat. Si no se puede generar,
         # el gasto ya está anotado y la foto guardada: se dice y no pasa nada.
+        botones = acciones.botones_de(apunte)
         try:
             contenido, nombre = pdf_de_factura(db, update.effective_user.id, leido.factura.id)
         except ImagenNoLegible:
-            await mensaje.reply_text(texto)
+            await mensaje.reply_text(texto, reply_markup=botones)
             return
-        await mensaje.reply_document(document=InputFile(contenido, filename=nombre), caption=texto)
+        await mensaje.reply_document(
+            document=InputFile(contenido, filename=nombre), caption=texto, reply_markup=botones
+        )
 
 
 async def elegir_trabajo_de_factura(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:

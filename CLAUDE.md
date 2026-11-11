@@ -60,7 +60,8 @@ parte-del-dia/
 │   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export,
 │   │   │                     clientes, agenda, notas, habitos, gestoria
 │   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py,
-│   │                         copias.py, alarma.py, restaurar.py, habitos.py
+│   │                         copias.py, alarma.py, restaurar.py, habitos.py,
+│   │                         menu.py, acciones.py, importar.py
 │   ├── requirements.txt
 │   ├── Procfile           ✅ dos procesos: web (uvicorn) y bot (polling)
 │   └── .env.example
@@ -126,6 +127,68 @@ parte-del-dia/
     45 el mismo día son dos. Siempre enseña antes lo que va a meter y pide
     un sí: una copia vieja devolvería lo que se borró adrede después. La
     copia no lleva clientes ni citas, así que eso no vuelve.
+
+- **El bot se usa tocando, no recordando números.** Antes, corregir un
+  apunte era `/fecha 34 15/10` con el 34 de memoria. Tres piezas, y ninguna
+  tiene reglas propias (llaman a los servicios de siempre):
+  - **Botones bajo cada apunte** (`bot/acciones.py`, datos `ap:<acción>:<id>`):
+    cobrar, otro día (hoy/ayer/anteayer o escribirlo), pasar de cobro a
+    gasto y al revés, borrar. Borrar pide un segundo toque. Lo que salió de
+    un ticket no ofrece cambiar el tipo: para eso está `/emitida`, que mueve
+    también el papel. `/deben` y `/notas` son listas que se resuelven
+    tocando. Los comandos con número siguen valiendo.
+  - **"Escribir el día" no puede comerse un apunte.** Tras tocarlo, el
+    siguiente texto solo se toma por la respuesta si es una fecha y nada
+    más; si es "-45 gasolina", se deja de esperar y se anota como siempre.
+  - **Menú** (`bot/menu.py`): la lista de comandos se publica en Telegram al
+    arrancar (`set_my_commands`; si falla, el bot arranca igual) y `/start`
+    o `/menu` sacan un teclado fijo con lo de cada día. Sus botones mandan
+    su etiqueta como texto, así que el handler que los reconoce va ANTES
+    del que anota cualquier texto: hay test del orden.
+- **El día puede ir delante del apunte**: "ayer -45 gasolina",
+  "3/11 parking 2,75" (`dominio/parsing.interpretar_con_fecha`, que usa
+  `tickets.fecha_escrita`: fechas del pasado). Vale para el bot, la voz y
+  la caja de la web, porque la regla está en `servicios/apuntes`. Nada se
+  consume si lo que queda no es un apunte con importe: "15/10 llamar a Ana"
+  sigue siendo una nota con su fecha dentro. Cuando el apunte no es de hoy,
+  la respuesta dice el día con su nombre.
+- **"gasolina 45" sin guion se pregunta, no se cambia.** Sigue entrando
+  como cobro (la regla no se toca: nunca se decide por él), pero si el
+  concepto lleva una palabra de `parsing.suena_a_gasto` y no nombra a
+  ningún cliente, el bot avisa y el botón "Es un gasto" lo arregla. La
+  lista es corta adrede: "material" no está, que se le cobra al cliente.
+- **Varios movimientos de golpe** (`dominio/importacion.py`,
+  `servicios/importacion.py`, `bot/importar.py`). Salió de once tickets de
+  parking: once mensajes y once `/fecha`. Cuatro entradas, un pasillo:
+  un mensaje con un apunte por línea, un CSV que no sea una copia, un Excel
+  (`nucleo/hojas.py`, openpyxl) y una captura con varios pagos
+  (`nucleo/lectura_tickets.leer_movimientos`, otra pregunta al modelo, no
+  un campo más en la de los tickets). Decisiones:
+  - **Siempre se enseña antes y entra al confirmar**, al revés que un
+    apunte suelto: un importe mal leído entre once no se ve después.
+  - **Repetido = mismo día, tipo e importe; el concepto no cuenta**, al
+    revés que al restaurar una copia. Dos capturas del mismo historial se
+    solapan y el modelo puede nombrar distinto la misma fila. Se cuenta, no
+    se busca (dos parkings de 2,75 el mismo día son dos). Lo apartado se
+    enseña y se puede meter igual: nunca se descarta en silencio.
+  - **Varias líneas solo son una lista si TODAS llevan importe.** Una nota
+    con saltos de línea sigue siendo una nota.
+  - **Una tabla sin columna de tipo**: con signos mezclados es un extracto
+    (negativo = gasto); con todo positivo se pregunta si son gastos o
+    cobros. Una fila mala y no entra ninguna, como en la copia.
+  - **Una copia del bot con una fila rota no se cuela como lista**
+    (`copia_csv.es_copia`): si trae la cabecera de la copia, se le exige lo
+    de la copia y se dice qué fila falla.
+  - **La foto**: con "lista" en el texto va directa al lector de listas y
+    no se guarda como factura. Sin texto se lee como ticket; solo si no
+    tiene total (antes: "no he sabido leer") se prueba como lista. Un
+    ticket con su total nunca pasa por ahí. Con un solo movimiento no es
+    una lista.
+  - Lo leído espera en `user_data`, cada lista con su número (dos capturas
+    seguidas son dos listas); un reinicio las pierde y se pide reenviar.
+    Tras añadir hay un "Deshacer" que quita solo lo recién importado.
+  - Pendiente: importar desde la web, y probar el lector de capturas con
+    fotos reales (los tests sustituyen al modelo).
 
 - **`func.sum()` sobre un importe ya devuelve euros.** El tipo `Centimos`
   se aplica también a los agregados, así que dividir otra vez entre 100 es
