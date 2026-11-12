@@ -18,7 +18,7 @@ from telegram.ext import (
     filters,
 )
 
-from app.bot import acciones, alarma, avisos, copias, habitos, handlers, importar, menu, restaurar
+from app.bot import acciones, alarma, avisos, citas, copias, habitos, handlers, importar, menu, restaurar
 from app.nucleo.config import TELEGRAM_BOT_TOKEN
 from app.nucleo.migraciones import migrar
 
@@ -76,6 +76,8 @@ def construir_app() -> Application:
     acciones.registrar(app)
     # /habitos con sus botones, y los recordatorios a la hora de cada uno.
     habitos.registrar(app)
+    # /correo, y el recordatorio de cada cita el mismo día.
+    citas.registrar(app)
     # Lo último: cualquier texto que no sea un comando se anota como apunte.
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.anotar))
 

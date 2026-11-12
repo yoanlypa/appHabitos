@@ -50,17 +50,17 @@ parte-del-dia/
 ├── backend/
 │   ├── app/
 │   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py,
-│   │   │                     transcripcion.py
+│   │   │                     transcripcion.py, correo.py
 │   │   ├── dominio/       ✅ models.py (Apunte, Cliente, Cita, Ajuste, TokenAcceso, Centimos),
 │   │   │                     parsing.py, parsing_citas.py, habitos.py, copia_csv.py,
-│   │   │                     gestoria.py
+│   │   │                     gestoria.py, recordatorios.py
 │   │   ├── servicios/     ✅ apuntes, resumen, export, auth, avisos, clientes,
 │   │   │                     agenda, trimestres, voz, notas, restauracion, habitos,
 │   │   │                     gestoria
 │   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export,
-│   │   │                     clientes, agenda, notas, habitos, gestoria
+│   │   │                     clientes, agenda, notas, habitos, gestoria, ajustes
 │   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py,
-│   │                         copias.py, alarma.py, restaurar.py, habitos.py,
+│   │                         copias.py, alarma.py, restaurar.py, habitos.py, citas.py,
 │   │                         menu.py, acciones.py, importar.py
 │   ├── requirements.txt
 │   ├── Procfile           ✅ dos procesos: web (uvicorn) y bot (polling)
@@ -567,6 +567,30 @@ parte-del-dia/
     trabajo es cada gasto). Restaurar una copia devuelve los apuntes, pero
     habría que volver a marcarlos.
 
+- **Cada cita se recuerda también el mismo día, y por correo si se quiere.**
+  Una cita a las 14:00 no avisó ese día: el aviso de las 21:00 solo contaba
+  las de mañana. Ahora, además:
+  - **Una hora antes** (`AVISO_CITA_MINUTOS`), y se puede avisar hasta la hora
+    misma: si el bot estaba reiniciándose, a la media hora todavía sirve; ya
+    empezada, no (un aviso tarde es ruido). Sin hora, a las 08:00
+    (`AVISO_CITA_SIN_HORA`) con media hora de margen. Solo el primer día de
+    una cita de varios. La regla, pura, en `dominio/recordatorios.py`.
+  - Lo comprueba un trabajo cada minuto (`bot/citas.py`), como los hábitos,
+    para que lo creado desde la web entre solo. Lo avisado se guarda en la
+    base (`Cita.avisada_el`): un reinicio no repite, y mover la cita de día o
+    de hora lo borra para que vuelva a avisar. `/avisos off` lo apaga también.
+  - **Correo por Resend, no por SMTP**: Railway bloquea SMTP en el plan Hobby
+    y con Gmail la conexión ni se abre. `nucleo/correo.py` usa su API HTTPS
+    con `RESEND_API_KEY`. Sin dominio propio, Resend solo deja mandar desde su
+    remitente de pruebas y **solo a la dirección de la cuenta**: la cuenta se
+    abre con el correo donde se quieren recibir los avisos.
+  - La dirección va en la base (`Ajuste.correo`), no en una variable: el repo
+    es público y es de cada usuario. Se pone en la web (menú → Avisos, con un
+    botón de **correo de prueba**, que es como se sabe que la clave está bien
+    antes de que haga falta) o con `/correo` en el bot.
+  - Un canal que falla no tira el otro: si Telegram falla, el correo sale; si
+    el correo falla, se apunta en el log y Telegram ya salió.
+
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
   usuario/contraseña. Falta que el bot lo genere con `/web`
@@ -581,7 +605,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-341 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+428 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

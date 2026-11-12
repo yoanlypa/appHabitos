@@ -660,3 +660,30 @@ export function abrirFacturasDelPeriodo(
     `${emitidas ? 'facturas-emitidas' : gestoria ? 'facturas-recibidas' : 'tickets'}-${desde}_${hasta}.pdf`,
   )
 }
+
+// ---------- Ajustes ----------
+
+export type Ajustes = {
+  avisos_activos: boolean
+  /** A dónde se mandan también por correo los avisos de citas. */
+  correo: string | null
+  /** Si el servidor sabe mandar correos (falta la clave de Resend si no). */
+  correo_disponible: boolean
+}
+
+export function leerAjustes(token: string) {
+  return pedir<Ajustes>(token, '/ajustes')
+}
+
+/** null o vacío quita el correo. */
+export function guardarCorreo(token: string, correo: string | null) {
+  return pedir<Ajustes>(token, '/ajustes', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ correo }),
+  })
+}
+
+export function probarCorreo(token: string) {
+  return pedir<{ enviado_a: string }>(token, '/ajustes/correo/prueba', { method: 'POST' })
+}

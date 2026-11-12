@@ -76,3 +76,16 @@ NOMBRES_PROPIOS = [
     for n in os.getenv("NOMBRES_PROPIOS", "YOA INSTALACIONES,YOA PRO").split(",")
     if n.strip()
 ]
+
+# Avisos por correo. Railway no deja salir por SMTP en el plan Hobby (Gmail
+# no conecta), así que se manda por la API HTTPS de Resend (resend.com, gratis
+# hasta 100 al día). Sin la clave, los avisos siguen llegando por Telegram.
+# Sin dominio propio verificado, Resend solo deja mandar desde su remitente de
+# pruebas y solo a la dirección con la que se abrió la cuenta.
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+CORREO_REMITENTE = os.getenv("CORREO_REMITENTE", "Parte del día <onboarding@resend.dev>")
+
+# Recordatorio de una cita el mismo día: cuántos minutos antes de su hora, y
+# a qué hora se avisa de las que no tienen hora.
+AVISO_CITA_MINUTOS = int(os.getenv("AVISO_CITA_MINUTOS", "60"))
+AVISO_CITA_SIN_HORA = os.getenv("AVISO_CITA_SIN_HORA", "08:00")

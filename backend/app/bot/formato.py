@@ -629,3 +629,39 @@ def captura_sin_movimientos() -> str:
 
 def importacion_caducada_para_deshacer() -> str:
     return "Eso ya no lo puedo deshacer de golpe. Bórralos uno a uno: /borrar <número>."
+
+
+def recordatorio_cita(cita) -> str:
+    """El aviso del mismo día: qué, a qué hora, con quién y dónde."""
+    hora = f" a las {cita.hora.strftime('%H:%M')}" if cita.hora else ""
+    lineas = [f"⏰ Hoy{hora}: {cita.titulo}"]
+    if cita.cliente:
+        telefono = f" ({cita.cliente.telefono})" if cita.cliente.telefono else ""
+        lineas.append(f"Con {cita.cliente.nombre}{telefono}")
+    if cita.direccion:
+        lineas.append(f"En {cita.direccion}")
+    if cita.fecha_fin:
+        lineas.append(f"Dura hasta el {dia_con_nombre(cita.fecha_fin)}")
+    if cita.notas:
+        lineas.append(cita.notas)
+    return "\n".join(lineas)
+
+
+def asunto_recordatorio_cita(cita) -> str:
+    hora = cita.hora.strftime("%H:%M") + " · " if cita.hora else ""
+    return f"Hoy {hora}{cita.titulo}"
+
+
+def estado_correo(correo: str | None, disponible: bool) -> str:
+    if not correo:
+        return (
+            "Los avisos de tus citas solo te llegan por aquí.\n"
+            "Para recibirlos también por correo: /correo nombre@gmail.com"
+        )
+    texto = f"Los avisos de tus citas te llegan también a {correo}.\nPara quitarlo: /correo off"
+    if not disponible:
+        texto += (
+            "\n\n⚠️ El servidor todavía no sabe mandar correos: falta RESEND_API_KEY en "
+            "Railway. Hasta entonces, solo por aquí."
+        )
+    return texto
