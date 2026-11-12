@@ -204,7 +204,8 @@ def test_ajustes_por_http(db, monkeypatch, correos):
     with TestClient(crear_api()) as c:
         assert c.get("/ajustes").status_code == 401
         assert c.get("/ajustes", headers=cab).json() == {
-            "avisos_activos": True, "correo": None, "correo_disponible": True}
+            "avisos_activos": True, "correo": None, "correo_disponible": True,
+            "aviso_cita_minutos": 120}
         assert c.post("/ajustes/correo/prueba", headers=cab).status_code == 422  # sin correo
         assert c.patch("/ajustes", headers=cab, json={"correo": "mal"}).status_code == 422
         r = c.patch("/ajustes", headers=cab, json={"correo": "Nombre@Ejemplo.com"})

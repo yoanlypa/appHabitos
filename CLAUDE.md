@@ -570,7 +570,8 @@ parte-del-dia/
 - **Cada cita se recuerda también el mismo día, y por correo si se quiere.**
   Una cita a las 14:00 no avisó ese día: el aviso de las 21:00 solo contaba
   las de mañana. Ahora, además:
-  - **Una hora antes** (`AVISO_CITA_MINUTOS`), y se puede avisar hasta la hora
+  - **Dos horas antes** (`AVISO_CITA_MINUTOS`, 120; Yoa lo pidió así tras
+    probar con una), y se puede avisar hasta la hora
     misma: si el bot estaba reiniciándose, a la media hora todavía sirve; ya
     empezada, no (un aviso tarde es ruido). Sin hora, a las 08:00
     (`AVISO_CITA_SIN_HORA`) con media hora de margen. Solo el primer día de

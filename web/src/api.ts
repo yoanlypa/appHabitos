@@ -669,6 +669,8 @@ export type Ajustes = {
   correo: string | null
   /** Si el servidor sabe mandar correos (falta la clave de Resend si no). */
   correo_disponible: boolean
+  /** Con cuántos minutos de antelación se avisa de una cita ese mismo día. */
+  aviso_cita_minutos: number
 }
 
 export function leerAjustes(token: string) {
