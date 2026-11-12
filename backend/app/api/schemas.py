@@ -329,3 +329,14 @@ class GastoDeFactura(BaseModel):
     fecha: date | None = None
     trabajo_id: int | None = None
     para_gestoria: bool = False
+
+
+class AjustesSalida(BaseModel):
+    avisos_activos: bool
+    correo: str | None
+    # Si el servidor sabe mandar correos (está la clave de Resend).
+    correo_disponible: bool
+
+
+class AjustesCambios(BaseModel):
+    correo: str | None = None  # null o vacío lo quita

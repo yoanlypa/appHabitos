@@ -24,6 +24,7 @@ import {
   Flame,
   House,
   LogOut,
+  BellRing,
   Menu,
   Monitor,
   Moon,
@@ -36,6 +37,7 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { salud } from './api'
 import { Agenda } from './componentes/Agenda'
+import { Ajustes } from './componentes/Ajustes'
 import { Clientes } from './componentes/Clientes'
 import { Entrada } from './componentes/Entrada'
 import { Finanzas } from './componentes/Finanzas'
@@ -122,6 +124,7 @@ export default function App() {
   const [diaAgenda, setDiaAgenda] = useState<string | undefined>(undefined)
   const [alarma, setAlarma] = useState('')
   const [menu, setMenu] = useState(false)
+  const [ajustes, setAjustes] = useState(false)
   const [tema, setTema] = useTema()
 
   useEffect(() => {
@@ -228,6 +231,10 @@ export default function App() {
           </nav>
 
           <div className="lateral-pie">
+            <button className="nav-item" onClick={() => setAjustes(true)}>
+              <BellRing size={18} />
+              Avisos
+            </button>
             <SelectorDeTema tema={tema} onCambio={setTema} />
             <button className="nav-item" onClick={() => void pedirSalir()}>
               <LogOut size={18} />
@@ -286,12 +293,26 @@ export default function App() {
               <span>Tema</span>
               <SelectorDeTema tema={tema} onCambio={setTema} />
             </div>
+            <button
+              className="nav-item"
+              onClick={() => {
+                setMenu(false)
+                setAjustes(true)
+              }}
+            >
+              <BellRing size={20} />
+              Avisos
+            </button>
             <button className="nav-item" onClick={() => void pedirSalir()}>
               <LogOut size={20} />
               Salir
             </button>
           </div>
         </Modal>
+      )}
+
+      {ajustes && (
+        <Ajustes token={token} onTokenInvalido={invalido} onCerrar={() => setAjustes(false)} />
       )}
 
       <Avisos />

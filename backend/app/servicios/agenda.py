@@ -166,6 +166,9 @@ def actualizar_cita(
 
     if titulo is not None and titulo.strip():
         cita.titulo = titulo.strip()
+    if (fecha is not None and fecha != cita.fecha) or (hora is not _SIN_TOCAR and hora != cita.hora):
+        # Movida de día o de hora: el recordatorio ya mandado era para la de antes.
+        cita.avisada_el = None
     if fecha is not None:
         cita.fecha = fecha
     if fecha_fin is not _SIN_TOCAR:

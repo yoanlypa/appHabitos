@@ -34,6 +34,7 @@ COMANDOS = [
     ("trimestre", "Lo que llevas este trimestre"),
     ("facturas", "Tickets del mes en PDF"),
     ("web", "Abrir la web"),
+    ("correo", "Avisos de citas también por correo"),
     ("copia", "Copia de todo en CSV"),
     ("menu", "Sacar los botones de abajo"),
     ("start", "Ayuda: todo lo que entiendo"),

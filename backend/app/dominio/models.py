@@ -112,6 +112,10 @@ class Ajuste(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(BigInteger, nullable=False, unique=True, index=True)
     avisos_activos = Column(Boolean, nullable=False, default=True)
+    # A dónde mandar también por correo los avisos de citas. Vacío: solo Telegram.
+    # En la base y no en una variable de Railway: el repo es público y cada
+    # usuario tiene la suya.
+    correo = Column(String, nullable=True)
 
 
 class TokenAcceso(Base):
@@ -168,6 +172,9 @@ class Cita(Base):
     hecha = Column(Boolean, nullable=False, default=False)
     creado = Column(DateTime(timezone=True), server_default=func.now())
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
+    # El día para el que ya se mandó el recordatorio de ese mismo día. Un
+    # reinicio no lo repite, y si la cita se mueve a otro día vuelve a avisar.
+    avisada_el = Column(Date, nullable=True)
 
     cliente = relationship("Cliente", back_populates="citas")
 
