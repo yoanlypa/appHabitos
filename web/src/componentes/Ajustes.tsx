@@ -1,8 +1,8 @@
 /**
  * Los avisos: a qué correo se mandan también los recordatorios de las citas.
  *
- * Por Telegram llegan siempre (el día antes a las 21:00 y una hora antes ese
- * mismo día). El correo es aparte, y lleva un botón de prueba porque es la
+ * Por Telegram llegan siempre (el día antes a las 21:00 y unas horas antes
+ * ese mismo día; cuántas lo dice el servidor). El correo es aparte, y lleva un botón de prueba porque es la
  * única forma de saber que funciona antes de que haga falta: si la clave de
  * Resend falta o está mal, mejor enterarse hoy que el día de la cita.
  */
@@ -12,6 +12,13 @@ import { guardarCorreo, leerAjustes, probarCorreo, TokenInvalido, type Ajustes a
 import { avisar } from '../ui/avisos'
 import { Modal } from '../ui/Modal'
 import { ErrorEnLinea, Esqueleto } from '../ui/piezas'
+
+/** 120 → "dos horas", 90 → "90 minutos". */
+function antelacion(minutos: number) {
+  const horas = ['', 'una hora', 'dos horas', 'tres horas', 'cuatro horas']
+  if (minutos % 60 === 0 && minutos / 60 < horas.length) return horas[minutos / 60]
+  return `${minutos} minutos`
+}
 
 type Props = {
   token: string
@@ -82,7 +89,8 @@ export function Ajustes({ token, onTokenInvalido, onCerrar }: Props) {
       ) : (
         <form className="formulario" onSubmit={guardar}>
           <p className="ayuda">
-            Por Telegram te aviso de tus citas la noche antes y una hora antes ese mismo día.
+            Por Telegram te aviso de tus citas la noche antes y {antelacion(ajustes.aviso_cita_minutos)}{' '}
+            antes ese mismo día.
             Pon tu correo y te llegará también ahí.
           </p>
           <label className="campo">

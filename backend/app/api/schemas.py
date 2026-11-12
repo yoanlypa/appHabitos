@@ -336,6 +336,8 @@ class AjustesSalida(BaseModel):
     correo: str | None
     # Si el servidor sabe mandar correos (está la clave de Resend).
     correo_disponible: bool
+    # Con cuántos minutos de antelación se avisa de una cita ese mismo día.
+    aviso_cita_minutos: int
 
 
 class AjustesCambios(BaseModel):

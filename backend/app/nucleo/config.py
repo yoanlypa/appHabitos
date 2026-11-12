@@ -87,5 +87,5 @@ CORREO_REMITENTE = os.getenv("CORREO_REMITENTE", "Parte del día <onboarding@res
 
 # Recordatorio de una cita el mismo día: cuántos minutos antes de su hora, y
 # a qué hora se avisa de las que no tienen hora.
-AVISO_CITA_MINUTOS = int(os.getenv("AVISO_CITA_MINUTOS", "60"))
+AVISO_CITA_MINUTOS = int(os.getenv("AVISO_CITA_MINUTOS", "120"))
 AVISO_CITA_SIN_HORA = os.getenv("AVISO_CITA_SIN_HORA", "08:00")

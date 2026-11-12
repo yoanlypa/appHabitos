@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencias import get_current_user_id
 from app.api.schemas import AjustesCambios, AjustesSalida
+from app.nucleo.config import AVISO_CITA_MINUTOS
 from app.nucleo.correo import CorreoNoDisponible, ErrorDeCorreo
 from app.nucleo.db import get_db
 from app.servicios.avisos import (
@@ -27,6 +28,7 @@ def _salida(db: Session, user_id: int) -> AjustesSalida:
         avisos_activos=avisos_activos(db, user_id),
         correo=correo_de(db, user_id),
         correo_disponible=correo_disponible(),
+        aviso_cita_minutos=AVISO_CITA_MINUTOS,
     )
 
 
