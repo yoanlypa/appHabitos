@@ -10,6 +10,7 @@ from app.api.schemas import (
     ApunteCreado,
     ApunteEntrada,
     ApunteSalida,
+    AsignarTrabajoEntrada,
     MovimientoEntrada,
 )
 from app.dominio.parsing import TextoNoInterpretable
@@ -18,6 +19,7 @@ from app.servicios.apuntes import (
     ApunteNoEncontrado,
     MovimientoNoValido,
     actualizar_apunte,
+    asignar_trabajo,
     crear_movimiento,
     anotar,
     borrar_apunte,
@@ -83,6 +85,21 @@ def nuevo_movimiento(
     """Un trabajo o gasto desde el formulario, con su fecha."""
     try:
         return crear_movimiento(db, user_id, **entrada.model_dump(), origen="web")
+    except MovimientoNoValido as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+
+
+@router.post("/trabajo", response_model=list[ApunteSalida])
+def a_un_trabajo(
+    entrada: AsignarTrabajoEntrada,
+    user_id: int = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Mete varios cobros o gastos en un trabajo de una vez. O todos o ninguno."""
+    try:
+        return asignar_trabajo(db, user_id, entrada.apunte_ids, entrada.trabajo_id)
+    except ApunteNoEncontrado as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except MovimientoNoValido as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 

@@ -108,3 +108,33 @@ def test_mover_una_cita_a_otro_trabajo_o_sacarla(c, cab):
     assert c.patch(f"/citas/{cita['id']}", headers=cab, json={"trabajo_id": obra["id"]}).json()["trabajo_id"] == obra["id"]
     assert c.patch(f"/citas/{cita['id']}", headers=cab, json={"trabajo_id": 99999}).status_code == 404
     assert c.patch(f"/citas/{cita['id']}", headers=cab, json={"trabajo_id": None}).json()["trabajo_id"] is None
+
+
+def test_meter_varios_en_un_trabajo_de_una_vez(c, cab, db):
+    obra = c.post("/trabajos", headers=cab, json={"titulo": "Cocina", "facturado": True}).json()
+    def gasto(concepto, **extra):
+        return c.post("/apuntes/movimiento", headers=cab, json={
+            "tipo": "gasto", "concepto": concepto, "importe": "2.75", **extra}).json()
+    a, b = gasto("Parking 1", para_gestoria=True), gasto("Parking 2")
+    nota = c.post("/notas", headers=cab, json={"texto": "Llamar"}).json()
+
+    r = c.post("/apuntes/trabajo", headers=cab, json={"apunte_ids": [a["id"], b["id"]], "trabajo_id": obra["id"]})
+    assert r.status_code == 200
+    assert [x["trabajo_id"] for x in r.json()] == [obra["id"], obra["id"]]
+    # Dentro del trabajo siguen al trabajo: la marca a mano se quita.
+    assert all(x["gestoria"] and not x["para_gestoria"] for x in r.json())
+
+    # O todos o ninguno: con una nota o uno ajeno en la tanda, no se toca nada.
+    assert c.post("/apuntes/trabajo", headers=cab, json={
+        "apunte_ids": [a["id"], nota["id"]], "trabajo_id": None}).status_code == 422
+    assert c.post("/apuntes/trabajo", headers=cab, json={
+        "apunte_ids": [a["id"], 99999], "trabajo_id": None}).status_code == 404
+    assert c.post("/apuntes/trabajo", headers=cab, json={
+        "apunte_ids": [a["id"]], "trabajo_id": 99999}).status_code == 422
+    ficha = c.get(f"/trabajos/{obra['id']}", headers=cab).json()
+    assert len(ficha["movimientos"]) == 2
+
+    # Y se sacan con null.
+    fuera = c.post("/apuntes/trabajo", headers=cab, json={"apunte_ids": [a["id"]], "trabajo_id": None}).json()
+    assert fuera[0]["trabajo_id"] is None
+    assert c.post("/apuntes/trabajo", json={"apunte_ids": [], "trabajo_id": None}).status_code == 401

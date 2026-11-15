@@ -575,6 +575,15 @@ parte-del-dia/
   - Cualquier cobro o gasto pregunta "¿De qué trabajo es?" al crearlo, al
     editarlo y **al confirmar un ticket escaneado**, que es cuando se tiene el
     papel delante (`DeQueTrabajo.tsx`).
+    **Y sin abrirlo** (`ElegirTrabajo.tsx`, `POST /apuntes/trabajo`): cada fila
+    de movimiento en Finanzas, Inicio y Gestoría lleva un botoncito con su
+    trabajo ("Asignar trabajo" si no tiene) y el **clic derecho** sobre la
+    fila hace lo mismo (en Android, mantener pulsado); el clic normal sigue
+    abriendo el movimiento. En Finanzas, "Seleccionar" marca varios y se les
+    asigna el trabajo de una vez: quince parkings de la misma obra no son
+    quince ventanas. La tanda va en una sola llamada y es **o todos o
+    ninguno**: con una nota o un apunte ajeno dentro no se toca nada. Si el
+    trabajo no existe, se crea desde la misma lista.
     Desde el bot solo se puede marcar un ticket suelto, escribiendo "para la
     gestoría" con la foto (`marca_gestoria`; la palabra suelta dentro del
     concepto no cuenta, o "Factura gestoría octubre" se quedaría en "Factura
@@ -627,7 +636,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-429 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+430 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

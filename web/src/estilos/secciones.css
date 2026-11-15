@@ -1802,3 +1802,152 @@ i.gastos,
 .base-pastillas .pastilla {
   vertical-align: middle;
 }
+
+/* ---------- Asignar trabajo sin abrir el movimiento ---------- */
+
+.chip-trabajo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  margin-top: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--borde-fuerte);
+  color: var(--texto-3);
+  font-size: 0.74rem;
+  font-weight: 550;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.12s, color 0.12s;
+}
+
+.chip-trabajo:hover {
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+  box-shadow: inset 0 0 0 1px var(--acento);
+}
+
+.chip-trabajo.puesto {
+  background: var(--acento-suave);
+  color: var(--acento-texto);
+  box-shadow: none;
+}
+
+/* Para que el dedo acierte en una fila apretada. */
+.chip-trabajo {
+  position: relative;
+}
+.chip-trabajo::after {
+  content: '';
+  position: absolute;
+  inset: -0.4rem -0.2rem;
+}
+
+.fila.seleccionada,
+.fila.seleccionada:hover {
+  background: var(--acento-suave);
+}
+
+.fila.seleccionada::before,
+.fila.seleccionada + .fila::before {
+  display: none;
+}
+
+.barra-seleccion {
+  position: fixed;
+  left: 50%;
+  bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: max-content;
+  max-width: calc(100vw - 1.5rem);
+  padding: 0.55rem 0.6rem 0.55rem 1rem;
+  border-radius: 14px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  box-shadow: var(--sombra-2);
+  font-size: 0.88rem;
+  font-weight: 550;
+  animation: crecer 0.15s ease-out;
+}
+
+@media (min-width: 900px) {
+  .barra-seleccion {
+    bottom: 1.5rem;
+    left: calc(50% + 7.5rem);
+  }
+}
+
+.elegir-trabajo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.elegir-trabajo .buscador {
+  margin: 0;
+}
+
+.opciones-trabajo {
+  display: flex;
+  flex-direction: column;
+  max-height: 50dvh;
+  overflow-y: auto;
+  margin: 0 -0.4rem;
+}
+
+.opciones-trabajo button {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 2.9rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radio-s);
+  text-align: left;
+  color: var(--texto);
+}
+
+.opciones-trabajo button:hover:not(:disabled) {
+  background: var(--relleno);
+}
+
+.opciones-trabajo button > svg:first-child {
+  color: var(--texto-3);
+}
+
+.opciones-trabajo button span {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.opciones-trabajo small {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--texto-3);
+}
+
+.opciones-trabajo .elegido {
+  color: var(--acento-texto);
+}
+
+.opciones-trabajo .crear,
+.opciones-trabajo .crear svg {
+  color: var(--acento-texto) !important;
+}
+
+.opciones-trabajo .quitar,
+.opciones-trabajo .quitar svg {
+  color: var(--texto-2);
+}
+
+.opciones-trabajo .ayuda {
+  padding: 0.5rem 0.6rem;
+}

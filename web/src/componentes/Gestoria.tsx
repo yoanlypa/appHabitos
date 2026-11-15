@@ -31,6 +31,7 @@ import {
 import { avisar } from '../ui/avisos'
 import { ErrorEnLinea, Esqueleto, Kpi, Vacio } from '../ui/piezas'
 import { euros, fechaCorta, iso, MESES } from '../utiles'
+import { ElegirTrabajo } from './ElegirTrabajo'
 import { EscanerFactura } from './EscanerFactura'
 import { FilaMovimiento } from './FilaMovimiento'
 
@@ -94,6 +95,7 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
   const [parte, setParte] = useState<ParteGestoria | null>(null)
   const [propios, setPropios] = useState(0)
   const [cargando, setCargando] = useState(true)
+  const [paraTrabajo, setParaTrabajo] = useState<Apunte[] | null>(null)
 
   const elegido = rangoDe(periodo, hoy)
   const desde = periodo === 'personalizado' ? propias[0] : elegido.desde
@@ -241,6 +243,7 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
                     apunte={a}
                     detalle={`${fechaCorta(a.fecha)} · ${a.pendiente ? 'pendiente de cobro' : 'cobrado'}`}
                     onAbrir={() => onAbrir(a)}
+                    onTrabajo={() => setParaTrabajo([a])}
                     onTicket={ticket(a)}
                   >
                     {!a.factura_id && <span className="pastilla pendiente">Sin factura</span>}
@@ -275,6 +278,7 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
                     apunte={a}
                     detalle={`${fechaCorta(a.fecha)} · ${a.trabajo_titulo ?? 'gasto general'}`}
                     onAbrir={() => onAbrir(a)}
+                    onTrabajo={() => setParaTrabajo([a])}
                     onTicket={ticket(a)}
                   >
                     {!a.factura_id && <span className="pastilla pendiente">Sin ticket</span>}
@@ -307,6 +311,7 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
                             : `${fechaCorta(a.fecha)} · suelto`
                         }
                         onAbrir={() => onAbrir(a)}
+                        onTrabajo={() => setParaTrabajo([a])}
                       >
                         <button
                           className="boton secundario pequeno"
@@ -337,6 +342,7 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
                             : `${fechaCorta(a.fecha)} · gasto general`
                         }
                         onAbrir={() => onAbrir(a)}
+                        onTrabajo={() => setParaTrabajo([a])}
                         onTicket={ticket(a)}
                       >
                         {/* El de un trabajo va con su trabajo: se factura el trabajo. */}
@@ -388,6 +394,14 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
             </div>
           </section>
         </>
+      )}
+      {paraTrabajo && (
+        <ElegirTrabajo
+          token={token}
+          apuntes={paraTrabajo}
+          onHecho={() => setPropios((n) => n + 1)}
+          onCerrar={() => setParaTrabajo(null)}
+        />
       )}
     </>
   )
