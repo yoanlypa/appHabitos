@@ -582,8 +582,11 @@ parte-del-dia/
     bot dice al anotar si el ticket va o no va.
   - **Pendiente**: la copia CSV del domingo no lleva los trabajos ni estas
     marcas. Restaurar una copia devuelve los apuntes, pero sueltos. Tampoco
-    se puede elegir el trabajo de una cita desde la Agenda (sí desde la
-    ficha), ni crear trabajos desde el bot.
+    se pueden crear trabajos desde el bot.
+  - **En la Agenda** la cita también dice de qué trabajo es (desplegable
+    "Trabajo" en `FormCita`; elegir uno pone su cliente si no había) y la
+    lista del día lo enseña. `FormCita` solo manda `trabajo_id` cuando se le
+    pasa la lista de trabajos: desde la ficha va aparte y no se pisa.
 
 - **Cada cita se recuerda también el mismo día, y por correo si se quiere.**
   Una cita a las 14:00 no avisó ese día: el aviso de las 21:00 solo contaba
