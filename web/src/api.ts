@@ -754,3 +754,12 @@ export function editarTrabajo(token: string, id: number, cambios: Partial<DatosT
 export async function borrarTrabajo(token: string, id: number) {
   await pedirSinCuerpo(token, `/trabajos/${id}`, { method: 'DELETE' })
 }
+
+/** Mete varios cobros o gastos en un trabajo de una vez (null: los saca). */
+export function asignarTrabajo(token: string, apunteIds: number[], trabajoId: number | null) {
+  return pedir<Apunte[]>(token, '/apuntes/trabajo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apunte_ids: apunteIds, trabajo_id: trabajoId }),
+  })
+}

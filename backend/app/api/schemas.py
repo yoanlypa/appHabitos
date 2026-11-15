@@ -70,6 +70,13 @@ class ApunteCambios(BaseModel):
     para_gestoria: bool | None = None
 
 
+class AsignarTrabajoEntrada(BaseModel):
+    """Varios cobros o gastos a un trabajo (o fuera de él, con null)."""
+
+    apunte_ids: list[int]
+    trabajo_id: int | None = None
+
+
 class MovimientoEntrada(BaseModel):
     """Un trabajo o gasto con los campos ya separados (formulario de Finanzas)."""
 

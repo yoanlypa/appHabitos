@@ -7,7 +7,7 @@
  * está por cobrar. Tocar la fila la abre para editarla; cobrar y ver el
  * ticket tienen su botón propio y no abren nada.
  */
-import { ArrowDownLeft, ArrowUpRight, Clock, Landmark, ReceiptText, StickyNote } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Check, Clock, Hammer, Landmark, ReceiptText, StickyNote } from 'lucide-react'
 import type { ReactNode } from 'react'
 import type { Apunte } from '../api'
 import { euros } from '../utiles'
@@ -19,14 +19,22 @@ type Props = {
   onAbrir?: () => void
   onCobrar?: () => void
   onTicket?: () => void
+  /**
+   * Elegir el trabajo sin abrir el movimiento: con el botoncito de debajo del
+   * concepto o con el clic derecho (mantener pulsado en Android).
+   */
+  onTrabajo?: () => void
+  /** Modo selección: la fila lleva casilla y tocarla la marca en vez de abrirla. */
+  seleccionado?: boolean
   /** Algo más a la derecha (el desplegable de cliente en "Por cobrar"). */
   children?: ReactNode
 }
 
-function estado(a: Apunte) {
+function estado(a: Apunte, conObra = true) {
   if (a.tipo === 'nota') return 'Nota'
   // De un trabajo, lo que más dice es de cuál.
-  const obra = a.trabajo_titulo ? ` · ${a.trabajo_titulo}` : ''
+  // Si la fila ya lleva el botón del trabajo, no se repite aquí.
+  const obra = conObra && a.trabajo_titulo ? ` · ${a.trabajo_titulo}` : ''
   if (a.tipo === 'gasto') return `${a.factura_id ? 'Gasto con ticket' : 'Gasto'}${obra}`
   const cobro = a.pendiente ? 'Pendiente de cobro' : 'Cobrado'
   return `${a.factura_emitida ? `${cobro} con factura` : cobro}${obra}`
@@ -43,30 +51,71 @@ function MarcaGestoria({ apunte: a }: { apunte: Apunte }) {
   )
 }
 
-export function FilaMovimiento({ apunte: a, detalle, onAbrir, onCobrar, onTicket, children }: Props) {
+export function FilaMovimiento({
+  apunte: a,
+  detalle,
+  onAbrir,
+  onCobrar,
+  onTicket,
+  onTrabajo,
+  seleccionado,
+  children,
+}: Props) {
   const clase = a.tipo === 'gasto' ? 'gasto' : a.tipo === 'nota' ? '' : a.pendiente ? 'pendiente' : 'trabajo'
   const Icono =
     a.tipo === 'gasto' ? ArrowUpRight : a.tipo === 'nota' ? StickyNote : a.pendiente ? Clock : ArrowDownLeft
 
   return (
     <li
-      className={onAbrir ? 'fila movimiento tocable' : 'fila movimiento'}
+      className={[
+        'fila movimiento',
+        onAbrir ? 'tocable' : '',
+        seleccionado ? 'seleccionada' : '',
+      ].join(' ')}
       onClick={onAbrir}
+      onContextMenu={
+        onTrabajo && a.tipo !== 'nota'
+          ? (e) => {
+              e.preventDefault()
+              onTrabajo()
+            }
+          : undefined
+      }
       role={onAbrir ? 'button' : undefined}
       tabIndex={onAbrir ? 0 : undefined}
       onKeyDown={(e) => {
         if (onAbrir && e.key === 'Enter' && e.target === e.currentTarget) onAbrir()
       }}
     >
-      <span className={`insignia ${clase}`}>
-        <Icono size={18} />
-      </span>
+      {seleccionado !== undefined ? (
+        <span className={seleccionado ? 'marca puesta' : 'marca'} aria-hidden="true">
+          <Check size={14} strokeWidth={3} />
+        </span>
+      ) : (
+        <span className={`insignia ${clase}`}>
+          <Icono size={18} />
+        </span>
+      )}
       <span className="principal">
         {a.concepto}
         <small>
-          {detalle ?? estado(a)}
+          {detalle ?? estado(a, !onTrabajo)}
           <MarcaGestoria apunte={a} />
         </small>
+        {onTrabajo && a.tipo !== 'nota' && seleccionado === undefined && (
+          <button
+            type="button"
+            className={a.trabajo_id ? 'chip-trabajo puesto' : 'chip-trabajo'}
+            title="Elegir el trabajo (o clic derecho en la fila)"
+            onClick={(e) => {
+              e.stopPropagation()
+              onTrabajo()
+            }}
+          >
+            <Hammer size={12} />
+            {a.trabajo_titulo ?? 'Asignar trabajo'}
+          </button>
+        )}
       </span>
       {children}
       {a.factura_id && onTicket && (

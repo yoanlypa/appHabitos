@@ -17,7 +17,7 @@
  * "Gestoría" es lo mismo mirado para mandarlo: solo lo que factura Yoa y
  * sus gastos, por mes o por trimestre (`Gestoria.tsx`).
  */
-import { Download, FileText, Plus } from 'lucide-react'
+import { CheckSquare, Download, FileText, Hammer, Plus, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   abrirFactura,
@@ -35,6 +35,7 @@ import { Segmentado } from '../ui/Segmentado'
 import { diaRelativo, euros, fechaCorta, iso, MESES } from '../utiles'
 import { Cobros } from './Cobros'
 import { EditorMovimiento } from './EditorMovimiento'
+import { ElegirTrabajo } from './ElegirTrabajo'
 import { EscanerFactura } from './EscanerFactura'
 import { FilaMovimiento } from './FilaMovimiento'
 import { Gestoria } from './Gestoria'
@@ -140,6 +141,10 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
   const [error, setError] = useState('')
   // undefined: cerrado · null: añadir uno nuevo · Apunte: editar ese
   const [editando, setEditando] = useState<Apunte | null | undefined>(undefined)
+  // Elegir el trabajo de uno o varios sin abrirlos.
+  const [paraTrabajo, setParaTrabajo] = useState<Apunte[] | null>(null)
+  // Modo selección: null es que no está activo.
+  const [seleccion, setSeleccion] = useState<Set<number> | null>(null)
 
   const [desde, hasta] = periodo === 'personalizado' ? propias : rangoDe(periodo, hoy)
   const rangoValido = desde <= hasta
@@ -292,6 +297,15 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
               <h2>
                 Movimientos <span className="apagado">· {nombre}</span>
               </h2>
+              {visibles.length > 0 && (
+                <button
+                  className={seleccion ? 'boton suave pequeno' : 'boton secundario pequeno'}
+                  onClick={() => setSeleccion(seleccion ? null : new Set())}
+                >
+                  {seleccion ? <X size={15} /> : <CheckSquare size={15} />}
+                  {seleccion ? 'Terminar' : 'Seleccionar'}
+                </button>
+              )}
             </div>
 
             <div className="chips" role="tablist" aria-label="Filtro">
@@ -335,9 +349,17 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
                       <FilaMovimiento
                         key={a.id}
                         apunte={a}
-                        onAbrir={() => setEditando(a)}
+                        seleccionado={seleccion ? seleccion.has(a.id) : undefined}
+                        onAbrir={() => {
+                          if (!seleccion) return setEditando(a)
+                          const otra = new Set(seleccion)
+                          if (otra.has(a.id)) otra.delete(a.id)
+                          else otra.add(a.id)
+                          setSeleccion(otra)
+                        }}
                         onCobrar={() => void accion(() => marcarCobrado(token, a.id))}
                         onTicket={() => void accion(() => abrirFactura(token, a.factura_id!))}
+                        onTrabajo={() => setParaTrabajo([a])}
                       />
                     ))}
                   </ul>
@@ -373,6 +395,48 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
             </div>
           </section>
         </>
+      )}
+
+      {seleccion && (
+        <div className="barra-seleccion" role="toolbar" aria-label="Seleccionados">
+          <span>
+            {seleccion.size === 0
+              ? 'Toca los movimientos'
+              : seleccion.size === 1
+                ? '1 seleccionado'
+                : `${seleccion.size} seleccionados`}
+          </span>
+          <button
+            className="enlace"
+            onClick={() =>
+              setSeleccion(
+                seleccion.size === visibles.length ? new Set() : new Set(visibles.map((a) => a.id)),
+              )
+            }
+          >
+            {seleccion.size === visibles.length ? 'Ninguno' : 'Todos'}
+          </button>
+          <button
+            className="boton pequeno"
+            disabled={seleccion.size === 0}
+            onClick={() => setParaTrabajo(visibles.filter((a) => seleccion.has(a.id)))}
+          >
+            <Hammer size={15} />
+            Asignar trabajo
+          </button>
+        </div>
+      )}
+
+      {paraTrabajo && (
+        <ElegirTrabajo
+          token={token}
+          apuntes={paraTrabajo}
+          onHecho={() => {
+            setSeleccion(null)
+            setRecargas((n) => n + 1)
+          }}
+          onCerrar={() => setParaTrabajo(null)}
+        />
       )}
 
       {editando !== undefined && (

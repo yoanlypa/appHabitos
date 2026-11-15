@@ -333,3 +333,33 @@ def anotar(
         apunte=apunte,
         candidatos=mencionados if len(mencionados) > 1 else [],
     )
+
+
+def asignar_trabajo(
+    db: Session, user_id: int, apunte_ids: list[int], trabajo_id: int | None
+) -> list[Apunte]:
+    """Mete varios cobros o gastos en un trabajo de una vez (o los saca, con None).
+
+    Para lo que se asigna en tanda: quince parkings de la misma obra no
+    deberían ser quince ventanas. O todos o ninguno: si uno no es suyo o es
+    una nota, no se toca ninguno, que una tanda a medias no se nota.
+    """
+    _comprobar_trabajo(db, user_id, trabajo_id)
+    ids = list(dict.fromkeys(apunte_ids))
+    if not ids:
+        return []
+    apuntes = (
+        db.query(Apunte)
+        .filter(Apunte.user_id == user_id, Apunte.id.in_(ids))
+        .all()
+    )
+    if len(apuntes) != len(ids):
+        raise ApunteNoEncontrado("alguno de esos apuntes no existe")
+    if any(a.tipo not in _TIPOS_DE_DINERO for a in apuntes):
+        raise MovimientoNoValido("solo se meten en un trabajo cobros y gastos")
+    for apunte in apuntes:
+        apunte.trabajo_id = trabajo_id
+        _ordenar_marcas(apunte)
+    db.commit()
+    por_id = {a.id: a for a in apuntes}
+    return [por_id[i] for i in ids]

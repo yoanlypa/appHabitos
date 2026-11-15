@@ -40,6 +40,7 @@ import { Segmentado } from '../ui/Segmentado'
 import { diaRelativo, euros, fechaLarga, hhmm, iso, MESES, saludo } from '../utiles'
 import { Captura } from './Captura'
 import { EditorMovimiento } from './EditorMovimiento'
+import { ElegirTrabajo } from './ElegirTrabajo'
 import { FilaMovimiento } from './FilaMovimiento'
 
 type Props = {
@@ -68,6 +69,7 @@ export function Inicio({ token, onTokenInvalido, onIr }: Props) {
   const [habitos, setHabitos] = useState<ResumenHabito[]>([])
   const [notas, setNotas] = useState<Nota[]>([])
   const [editando, setEditando] = useState<Apunte | null>(null)
+  const [paraTrabajo, setParaTrabajo] = useState<Apunte[] | null>(null)
   const [recargas, setRecargas] = useState(0)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
@@ -202,6 +204,7 @@ export function Inicio({ token, onTokenInvalido, onIr }: Props) {
                     onAbrir={a.tipo === 'nota' ? undefined : () => setEditando(a)}
                     onCobrar={() => void accion(() => marcarCobrado(token, a.id))}
                     onTicket={() => void accion(() => abrirFactura(token, a.factura_id!))}
+                  onTrabajo={() => setParaTrabajo([a])}
                   />
                 ))}
               </ul>
@@ -376,6 +379,15 @@ export function Inicio({ token, onTokenInvalido, onIr }: Props) {
           </section>
         </div>
       </div>
+
+      {paraTrabajo && (
+        <ElegirTrabajo
+          token={token}
+          apuntes={paraTrabajo}
+          onHecho={recargar}
+          onCerrar={() => setParaTrabajo(null)}
+        />
+      )}
 
       {editando && (
         <EditorMovimiento
