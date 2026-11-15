@@ -23,7 +23,7 @@ from app.servicios.apuntes import movimientos
 
 @dataclass
 class ParteGestoria:
-    # Lo que va: trabajos facturados y los gastos que los acompañan.
+    # Lo que va: cobros facturados y los gastos que los acompañan.
     emitidas: list
     recibidas: list
     # Lo que se queda fuera, para repasarlo: trabajos sin facturar y gastos
@@ -83,7 +83,7 @@ def csv_gestoria(db: Session, user_id: int, desde: date, hasta: date) -> str:
                 a.concepto,
                 # Dos decimales siempre, como en el otro CSV.
                 f"{a.importe:.2f}",
-                a.trabajo_concepto or "",
+                a.trabajo_titulo or "",
                 "si" if a.factura is not None else "no",
             ]
         )

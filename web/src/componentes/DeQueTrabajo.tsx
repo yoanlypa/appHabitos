@@ -1,18 +1,17 @@
 /**
- * De qué trabajo es un gasto, y si va a la gestoría.
+ * De qué trabajo (obra) es un cobro o un gasto, y si va a la gestoría.
  *
  * Lo comparten el formulario de movimientos y el del ticket escaneado: la
  * pregunta es la misma y tiene que hacerse igual en los dos.
  *
- * Un gasto de un trabajo no se marca aparte: sigue a su trabajo, y aquí se
- * dice qué le toca ("va" o "no va") para que no haya que adivinarlo. Solo el
- * gasto suelto lleva casilla, porque ahí no hay trabajo que decida por él.
+ * Lo de un trabajo no se marca aparte: sigue a su trabajo, y aquí se dice qué
+ * le toca ("va" o "no va") para que no haya que adivinarlo. Solo lo suelto
+ * lleva casilla, porque ahí no hay trabajo que decida por él.
  */
-import type { Apunte } from '../api'
-import { euros, fechaCorta } from '../utiles'
+import type { Trabajo } from '../api'
 
 type Props = {
-  trabajos: Apunte[]
+  trabajos: Trabajo[]
   trabajoId: number | null
   onTrabajo: (id: number | null) => void
   paraGestoria: boolean
@@ -30,10 +29,11 @@ export function DeQueTrabajo({ trabajos, trabajoId, onTrabajo, paraGestoria, onP
           value={trabajoId ?? ''}
           onChange={(e) => onTrabajo(e.target.value ? Number(e.target.value) : null)}
         >
-          <option value="">De ninguno (gasto general)</option>
+          <option value="">De ninguno (general)</option>
           {trabajos.map((t) => (
             <option key={t.id} value={t.id}>
-              {fechaCorta(t.fecha)} · {t.concepto} · {euros(t.importe)}
+              {t.titulo}
+              {t.cliente ? ` · ${t.cliente.nombre}` : ''}
               {t.facturado ? ' · facturado' : ''}
             </option>
           ))}

@@ -1395,3 +1395,410 @@ i.gastos,
     grid-column: 1 / -1;
   }
 }
+
+/* ---------- Trabajos: la base de datos ---------- */
+
+.barra-base {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.barra-base .buscador {
+  margin: 0;
+  background: var(--superficie);
+  box-shadow: inset 0 0 0 1px var(--borde-fuerte);
+}
+
+@media (min-width: 900px) {
+  .barra-base {
+    flex-direction: row;
+    align-items: center;
+  }
+  .barra-base .buscador {
+    flex: 0 0 18rem;
+  }
+}
+
+.base-datos {
+  padding: 0;
+  overflow: hidden;
+}
+
+.base-cabecera {
+  display: none;
+}
+
+.base-fila {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'titulo dinero'
+    'pastillas pastillas';
+  gap: 0.45rem 0.75rem;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.base-fila + .base-fila {
+  border-top: 1px solid var(--borde);
+}
+
+.base-fila:hover {
+  background: var(--relleno);
+}
+
+.base-titulo {
+  grid-area: titulo;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  padding-left: 1rem;
+  position: relative;
+}
+
+.base-titulo strong {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.base-titulo small {
+  font-size: 0.8rem;
+  color: var(--texto-3);
+}
+
+.base-extra {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.base-extra span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* El punto de estado: lleno en curso, vacío si ya terminó. */
+.estado-obra {
+  position: absolute;
+  left: 0;
+  top: 0.4rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--serie-cobrado);
+}
+
+.estado-obra.acabada {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--texto-3);
+}
+
+.base-celda {
+  min-width: 0;
+  font-size: 0.88rem;
+  color: var(--texto-2);
+}
+
+.base-celda i {
+  color: var(--texto-3);
+  font-style: normal;
+}
+
+.base-pastillas {
+  grid-area: pastillas;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding-left: 1rem;
+}
+
+.base-celda.derecha {
+  grid-area: dinero;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.base-celda.derecha b {
+  font-weight: 650;
+  color: var(--texto);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.base-celda.derecha b.gasto {
+  color: var(--gasto);
+}
+
+.base-celda.derecha small {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.base-flecha {
+  display: none;
+}
+
+.solo-pc {
+  display: none !important;
+}
+
+@media (min-width: 900px) {
+  .solo-pc {
+    display: initial !important;
+  }
+  .solo-movil {
+    display: none;
+  }
+
+  /* En el ordenador, una tabla: cada propiedad en su columna. */
+  .base-cabecera,
+  .base-fila {
+    display: grid;
+    grid-template-columns: minmax(14rem, 2fr) minmax(8rem, 1fr) 10rem 13rem 7rem 1.25rem;
+    grid-template-areas: none;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.7rem 1.1rem;
+  }
+
+  .base-fila {
+    grid-template-columns: minmax(14rem, 2fr) minmax(8rem, 1fr) 10rem 13rem 7rem 1.25rem;
+  }
+
+  .base-cabecera {
+    grid-template-columns: minmax(14rem, 2fr) minmax(8rem, 1fr) 10rem 13rem 7rem 1.25rem;
+    background: var(--relleno);
+    border-bottom: 1px solid var(--borde);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--texto-3);
+  }
+
+  /* La cabecera junta Facturado y Reseña en la columna de las pastillas. */
+  .base-cabecera span:nth-child(4) {
+    grid-column: 4;
+  }
+  .base-cabecera span:nth-child(5) {
+    display: none;
+  }
+  .base-cabecera span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .base-cabecera .derecha {
+    grid-column: 5;
+    justify-content: flex-end;
+  }
+
+  .base-titulo,
+  .base-pastillas,
+  .base-celda.derecha {
+    grid-area: auto;
+  }
+
+  .base-pastillas {
+    padding-left: 0;
+    flex-wrap: nowrap;
+  }
+
+  .base-flecha {
+    display: block;
+    color: var(--texto-3);
+  }
+}
+
+/* ---------- Trabajos: la ficha, como una página de Notion ---------- */
+
+.pagina-notion {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 52rem;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.pagina-arriba {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.titulo-pagina {
+  border: 0;
+  background: none;
+  padding: 0;
+  min-height: 0;
+  resize: none;
+  overflow: hidden;
+  font-size: 1.9rem;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+}
+
+.titulo-pagina:focus {
+  box-shadow: none;
+  border: 0;
+}
+
+.titulo-pagina:hover:not(:focus) {
+  background: var(--relleno);
+  border-radius: var(--radio-xs);
+}
+
+@media (min-width: 900px) {
+  .titulo-pagina {
+    font-size: 2.3rem;
+  }
+}
+
+.propiedades {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.propiedad {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+}
+
+.propiedad dt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  color: var(--texto-3);
+}
+
+.propiedad dd {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Los controles parecen texto hasta que se tocan, como las propiedades de Notion. */
+.propiedad select,
+.propiedad input {
+  width: auto;
+  max-width: 100%;
+  min-height: 2.25rem;
+  border-color: transparent;
+  background-color: transparent;
+  padding-left: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.propiedad select:hover,
+.propiedad input:hover {
+  background-color: var(--relleno);
+}
+
+.interruptor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 2.25rem;
+  padding: 0 0.5rem;
+  border-radius: var(--radio-xs);
+  font-size: 0.92rem;
+  color: var(--texto-2);
+  text-align: left;
+}
+
+.interruptor:hover {
+  background: var(--relleno);
+}
+
+.interruptor i {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.1rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: var(--relleno-2);
+  box-shadow: inset 0 0 0 1px var(--borde-fuerte);
+  transition: background 0.15s;
+}
+
+.interruptor i::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.25rem - 4px);
+  height: calc(1.25rem - 4px);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
+}
+
+.interruptor.activo {
+  color: var(--texto);
+}
+
+.interruptor.activo i {
+  background: var(--acento);
+  box-shadow: none;
+}
+
+.interruptor.activo i::after {
+  transform: translateX(0.85rem);
+}
+
+.descripcion-pagina {
+  min-height: 3rem;
+  padding: 0.6rem 0.5rem;
+  margin: 0 -0.5rem;
+  width: calc(100% + 1rem);
+  border: 0;
+  background: none;
+  resize: vertical;
+  line-height: 1.55;
+  color: var(--texto);
+}
+
+.descripcion-pagina:hover:not(:focus) {
+  background: var(--relleno);
+}
+
+.descripcion-pagina:focus {
+  background: var(--superficie);
+  box-shadow: 0 0 0 2px var(--acento);
+}
+
+.bloque-pagina .tarjeta-cabecera {
+  flex-wrap: wrap;
+}
+
+.bloque-acciones {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.bloque-pagina .nueva-tarjeta {
+  margin-bottom: 0.4rem;
+  box-shadow: inset 0 0 0 1px var(--borde-fuerte);
+}
+
+/* Dentro de un trabajo todo sigue a su trabajo: la marca por fila sobra. */
+.bloque-pagina .marca-gestoria {
+  display: none;
+}
+
+.base-pastillas .pastilla {
+  vertical-align: middle;
+}

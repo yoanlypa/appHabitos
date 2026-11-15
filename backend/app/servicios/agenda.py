@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.dominio.models import Cita, Cliente
 from app.nucleo.tiempo import hoy_local
+from app.servicios.trabajos import trabajo_suyo
 
 # El último día de una cita: el de fin si lo tiene, y si no el de inicio.
 # Sin esto, un trabajo del martes al jueves solo saldría el martes, que es
@@ -71,7 +72,13 @@ def crear_cita(
     cliente_id: int | None = None,
     notas: str | None = None,
     fecha_fin: date | None = None,
+    trabajo_id: int | None = None,
 ) -> Cita:
+    if trabajo_id is not None:
+        trabajo = trabajo_suyo(db, user_id, trabajo_id)
+        # Sin cliente dicho, el del trabajo: es a quien se va a ver.
+        if cliente_id is None:
+            cliente_id = trabajo.cliente_id
     if cliente_id is not None:
         existe = (
             db.query(Cliente)
@@ -90,6 +97,7 @@ def crear_cita(
         direccion=(direccion or None),
         cliente_id=cliente_id,
         notas=(notas or None),
+        trabajo_id=trabajo_id,
     )
     db.add(cita)
     db.commit()
@@ -155,6 +163,7 @@ def actualizar_cita(
     direccion=_SIN_TOCAR,
     notas=_SIN_TOCAR,
     cliente_id=_SIN_TOCAR,
+    trabajo_id=_SIN_TOCAR,
 ) -> Cita:
     """Corrige una cita: el texto, el día, el rango, la hora.
 
@@ -181,6 +190,10 @@ def actualizar_cita(
         cita.notas = notas or None
     if cliente_id is not _SIN_TOCAR:
         cita.cliente_id = cliente_id
+    if trabajo_id is not _SIN_TOCAR:
+        if trabajo_id is not None:
+            trabajo_suyo(db, user_id, trabajo_id)
+        cita.trabajo_id = trabajo_id
 
     # Se comprueba al final, con los dos valores ya puestos: mover solo el
     # día de inicio de una cita de varios días puede dejarla del revés.

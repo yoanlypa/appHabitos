@@ -29,7 +29,9 @@ def nueva(
     db: Session = Depends(get_db),
 ):
     try:
-        return crear(db, user_id, entrada.texto, origen="web")
+        return crear(db, user_id, entrada.texto, origen="web", trabajo_id=entrada.trabajo_id)
+    except LookupError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
 

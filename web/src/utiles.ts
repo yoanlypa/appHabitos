@@ -139,3 +139,18 @@ export function describir(a: { tipo: string; concepto: string; importe: string; 
   const clase = a.tipo === 'gasto' ? 'Gasto' : a.pendiente ? 'Pendiente de cobro' : 'Cobrado'
   return `${clase} · ${a.concepto} · ${euros(a.importe)}`
 }
+
+// ---------- Trabajos ----------
+
+/** Terminado es que tiene fecha de fin y ya pasó; sin fin, sigue en curso. */
+export function terminado(fechaFin: string | null) {
+  return fechaFin !== null && fechaFin < iso(new Date())
+}
+
+export function fechasDe(inicio: string | null, fin: string | null) {
+  if (!inicio && !fin) return 'Sin fechas'
+  if (inicio && !fin) return `Desde ${fechaCorta(inicio)}`
+  if (!inicio && fin) return `Hasta ${fechaCorta(fin)}`
+  return inicio === fin ? fechaCorta(inicio!) : `${fechaCorta(inicio!)} → ${fechaCorta(fin!)}`
+}
+

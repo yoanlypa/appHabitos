@@ -141,9 +141,10 @@ def borrar_importados(db: Session, user_id: int, ids: list[int]) -> int:
     )
     borrados = 0
     for apunte in apuntes:
-        # Lo importado no trae ticket ni gastos colgados; si desde entonces se
-        # le ha colgado algo, ya no es "lo recién importado": se deja.
-        if apunte.factura is not None or apunte.gastos:
+        # Lo importado no trae ticket ni trabajo; si desde entonces se le ha
+        # colgado un ticket o se ha metido en una obra, ya no es "lo recién
+        # importado": se deja.
+        if apunte.factura is not None or apunte.trabajo_id is not None:
             continue
         db.delete(apunte)
         borrados += 1

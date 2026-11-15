@@ -51,14 +51,14 @@ parte-del-dia/
 │   ├── app/
 │   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py,
 │   │   │                     transcripcion.py, correo.py
-│   │   ├── dominio/       ✅ models.py (Apunte, Cliente, Cita, Ajuste, TokenAcceso, Centimos),
+│   │   ├── dominio/       ✅ models.py (Apunte, Trabajo, Cliente, Cita, Ajuste, TokenAcceso, Centimos),
 │   │   │                     parsing.py, parsing_citas.py, habitos.py, copia_csv.py,
 │   │   │                     gestoria.py, recordatorios.py
 │   │   ├── servicios/     ✅ apuntes, resumen, export, auth, avisos, clientes,
 │   │   │                     agenda, trimestres, voz, notas, restauracion, habitos,
-│   │   │                     gestoria
+│   │   │                     gestoria, trabajos
 │   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export,
-│   │   │                     clientes, agenda, notas, habitos, gestoria, ajustes
+│   │   │                     clientes, agenda, notas, habitos, gestoria, ajustes, trabajos
 │   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py,
 │   │                         copias.py, alarma.py, restaurar.py, habitos.py, citas.py,
 │   │                         menu.py, acciones.py, importar.py
@@ -466,9 +466,9 @@ parte-del-dia/
     `lucide-react` y la letra Inter servida desde el propio bundle
     (`@fontsource-variable/inter`): nada se pide a servidores de terceros.
   - **Menú lateral en el ordenador, barra abajo en el móvil** (`App.tsx`,
-    `estilos/marco.css`, corte en 900 px). Abajo caben cinco: Inicio, Notas,
-    Agenda, Finanzas y Hábitos, que son las de cada día; Clientes, el tema y
-    salir van en el menú de arriba. La sección va en la dirección
+    `estilos/marco.css`, corte en 900 px). Abajo caben seis: Inicio, Trabajos,
+    Notas, Agenda, Finanzas y Hábitos, que son las de cada día; Clientes, los
+    avisos, el tema y salir van en el menú de arriba. La sección va en la dirección
     (`#/agenda`) para que el botón de atrás del móvil vuelva a la pantalla
     anterior en vez de cerrar la app.
   - **Inicio junta el día** (`componentes/Inicio.tsx`): la caja de anotar
@@ -510,34 +510,42 @@ parte-del-dia/
   - Los importes llevan el punto de los miles también en cuatro cifras
     (`1.234,50 €`, `useGrouping: 'always'` en `utiles.ts`), como en el bot.
 
-- **Un trabajo tiene sus gastos, y no todo va a la gestoría.** Yoa no
-  factura todo lo que trabaja: hay trabajos que factura otra empresa, que le
-  paga por contrato (eso lo lleva él aparte). En la app sigue todo junto,
-  porque es su día a día, pero a la gestoría solo va lo suyo: las facturas
-  que emite y los gastos que les corresponden (las facturas recibidas).
-  Decisiones, las dos primeras tomadas por él:
-  - **El trabajo es la línea que ya se anotaba**, no una tabla nueva. Un
-    gasto cuelga de un trabajo con `Apunte.trabajo_id`, que apunta a otro
-    apunte. Así lo que ya había sirve de trabajo sin migrar nada, y no hay
-    dos cosas llamadas "trabajo". El precio: un trabajo que factura otra
-    empresa, para tener gastos colgados, tiene que estar anotado con su
-    importe y cuenta en los resúmenes de Yoa.
+- **Un trabajo es una ficha propia, como una página de Notion, y no todo va
+  a la gestoría.** Yoa no factura todo lo que trabaja: hay trabajos que
+  factura otra empresa, que le paga por contrato (eso lo lleva él aparte). En
+  la app sigue todo junto, porque es su día a día, pero a la gestoría solo va
+  lo suyo: las facturas que emite y los gastos que les corresponden.
+  - **Historia**: primero el trabajo fue "la línea que ya se anotaba" (un
+    gasto colgaba de un cobro con `Apunte.trabajo_id`), por elección de Yoa.
+    Al usarlo pidió otra cosa: una lista de trabajos tipo Notion, cada uno con
+    cliente, fecha de inicio y de fin, facturado o no, reseña o no, y dentro
+    sus cobros, gastos, notas y citas. Ahora hay tabla `trabajos`
+    (`Trabajo`) y `Apunte.trabajo_id` y `Cita.trabajo_id` apuntan a ella. La
+    migración `c9e6a4b2d7f1` convirtió cada cobro que tenía gastos colgados
+    en un trabajo (con él y sus gastos dentro), pasó a "marcado a mano" los
+    cobros facturados sueltos sin factura, y quitó `apuntes.facturado`. En
+    producción no había ningún gasto colgado: no se creó ninguno.
+  - **La ficha** (`servicios/trabajos.py`, `GET /trabajos/{id}`): el trabajo,
+    sus cuentas (cobrado, por cobrar, gastos y lo que queda: ingresos menos
+    gastos, cobrados o no), sus movimientos, notas y citas. La resta la hace
+    el backend. Una nota o una cita creada dentro **hereda el cliente** del
+    trabajo, y agendar una nota de la obra deja la cita en la obra.
+  - **Borrar un trabajo no borra nada de dentro**: cobros, gastos, notas y
+    citas se quedan sueltos, y lo que iba a la gestoría por ser de un trabajo
+    facturado queda marcado a mano (`borrar_trabajo`). Un gasto que
+    justificaba una factura no puede desaparecer porque se borró la carpeta.
   - **Qué va a la gestoría** (`dominio/gestoria.va_a_gestoria`, la regla en un
     solo sitio para que listado, CSV y PDF no puedan decir cosas distintas):
-    un trabajo va si está **facturado** (`Apunte.facturado`); un gasto de un
-    trabajo **sigue a su trabajo** y no se marca aparte, así que si el
-    trabajo se factura mañana el gasto entra solo; un **gasto suelto**
+    un cobro con **factura emitida colgada va siempre** (el papel manda); lo
+    de un trabajo **sigue a su trabajo** (`Trabajo.facturado`) y no se marca
+    aparte, así que si el trabajo se factura mañana entra solo; lo **suelto**
     (gasolina, el seguro, autónomos) va solo si se marca a mano
     (`Apunte.para_gestoria`). Nunca se decide por él: aquí no se sabe qué es
     deducible. Todo empieza en "no".
-  - **El papel manda.** Colgarle a un trabajo una factura emitida lo deja
-    facturado (bot y web), y con la factura colgada no se puede desmarcar. La
-    migración `a7c4e2d9b1f5` marcó así los que ya la tenían.
-  - **Nada se cae de la gestoría sin que se vea.** Si se borra un trabajo
-    facturado (o se convierte en gasto), sus gastos se quedan sueltos pero
-    marcados a mano (`_soltar_gastos`): conservan lo que valían. Al revés, un
-    gasto que se cuelga de un trabajo pierde su marca a mano, para que no
-    reaparezca sola el día que se descuelgue.
+  - **El papel manda también hacia arriba**: colgar una factura emitida a un
+    cobro de un trabajo deja el trabajo facturado. Al revés, un apunte que se
+    mete en un trabajo pierde su marca a mano, para que no reaparezca sola el
+    día que se saque.
   - **Los resúmenes no cambian**: cobrado, gastos, neto, trimestre y el
     gráfico siguen contando todo. Lo de la gestoría es otra vista
     (`servicios/gestoria.parte_gestoria`, `GET /gestoria`), en Finanzas →
@@ -554,18 +562,31 @@ parte-del-dia/
   - **Para mandar**: `GET /gestoria/csv` (con BOM, lo abre Excel) y los PDF de
     emitidas y recibidas con `gestoria=true`. El CSV y los PDF de
     "Movimientos" siguen llevándolo todo.
-  - En la web, el gasto pregunta "¿De qué trabajo es?" al crearlo, al
+  - **En la web** (`Trabajos.tsx`, `FichaTrabajo.tsx`), sección propia en la
+    barra: la lista es una base de datos (tabla en el ordenador, tarjetas en
+    el móvil) con filtros En curso / Terminados / Sin facturar / Sin reseña
+    y buscador. "Terminado" es tener fecha de fin y que ya haya pasado. La
+    ficha es una página: nombre grande editable, propiedades que se cambian
+    al tocarlas (cliente, inicio, fin, facturado y reseña con interruptor),
+    descripción, cuentas, y tres bloques con su botón de añadir (cobros y
+    gastos, notas, citas). Va en la dirección (`#/trabajos/12`). Nombre y
+    descripción se leen del servidor solo al abrir: al recargar por otro
+    cambio pisarían lo que se está escribiendo.
+  - Cualquier cobro o gasto pregunta "¿De qué trabajo es?" al crearlo, al
     editarlo y **al confirmar un ticket escaneado**, que es cuando se tiene el
-    papel delante (`DeQueTrabajo.tsx`). Al abrir un trabajo se ven sus gastos
-    y lo que queda (`GET /apuntes/{id}/ficha`; la resta la hace el backend).
+    papel delante (`DeQueTrabajo.tsx`).
     Desde el bot solo se puede marcar un ticket suelto, escribiendo "para la
     gestoría" con la foto (`marca_gestoria`; la palabra suelta dentro del
     concepto no cuenta, o "Factura gestoría octubre" se quedaría en "Factura
-    octubre"). Colgar un gasto de un trabajo desde el bot no está hecho. El
+    octubre"). Meter un gasto en un trabajo desde el bot no está hecho. El
     bot dice al anotar si el ticket va o no va.
-  - **Pendiente**: la copia CSV del domingo no lleva estas marcas (ni de qué
-    trabajo es cada gasto). Restaurar una copia devuelve los apuntes, pero
-    habría que volver a marcarlos.
+  - **Pendiente**: la copia CSV del domingo no lleva los trabajos ni estas
+    marcas. Restaurar una copia devuelve los apuntes, pero sueltos. Tampoco
+    se pueden crear trabajos desde el bot.
+  - **En la Agenda** la cita también dice de qué trabajo es (desplegable
+    "Trabajo" en `FormCita`; elegir uno pone su cliente si no había) y la
+    lista del día lo enseña. `FormCita` solo manda `trabajo_id` cuando se le
+    pasa la lista de trabajos: desde la ficha va aparte y no se pisa.
 
 - **Cada cita se recuerda también el mismo día, y por correo si se quiere.**
   Una cita a las 14:00 no avisó ese día: el aviso de las 21:00 solo contaba
@@ -606,7 +627,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-428 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+429 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

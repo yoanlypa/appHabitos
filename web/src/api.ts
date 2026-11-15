@@ -23,9 +23,8 @@ export type Apunte = {
   factura_emitida: boolean
   // De qué trabajo es este gasto (otro apunte), y cómo se llama.
   trabajo_id: number | null
-  trabajo_concepto: string | null
+  trabajo_titulo: string | null
   // Solo trabajos: si lo factura Yoa. Solo gastos sueltos: marcado a mano.
-  facturado: boolean
   para_gestoria: boolean
   // Lo que cuenta: si sale en lo que se manda a la gestoría. Lo decide el
   // backend; aquí solo se pinta.
@@ -218,6 +217,7 @@ export type Cita = {
   hecha: boolean
   cliente_id: number | null
   cliente: Cliente | null
+  trabajo_id: number | null
 }
 
 export function listarClientes(token: string, buscar?: string) {
@@ -283,6 +283,7 @@ export function crearCita(
     direccion?: string | null
     cliente_id?: number | null
     notas?: string | null
+    trabajo_id?: number | null
   },
 ) {
   return pedir<Cita>(token, '/citas', {
@@ -303,6 +304,7 @@ export function editarCita(
     direccion?: string | null
     notas?: string | null
     cliente_id?: number | null
+    trabajo_id?: number | null
   },
 ) {
   return pedir<Cita>(token, `/citas/${id}`, {
@@ -326,29 +328,10 @@ export type DatosMovimiento = {
   importe: string
   fecha: string
   pendiente: boolean
-  /** Solo gastos: el trabajo para el que se hizo. */
+  /** El trabajo (obra) al que pertenece, si es de uno. */
   trabajo_id: number | null
-  /** Solo trabajos: lo factura Yoa. */
-  facturado: boolean
-  /** Solo gastos sin trabajo: va a la gestoría. */
+  /** Solo si es suelto (sin trabajo): va a la gestoría. */
   para_gestoria: boolean
-}
-
-/** Los trabajos entre los que elegir al decir de cuál es un gasto. */
-export function trabajosParaElegir(token: string) {
-  return pedir<Apunte[]>(token, '/apuntes/trabajos')
-}
-
-export type FichaTrabajo = {
-  trabajo: Apunte
-  gastos: Apunte[]
-  total_gastos: string
-  beneficio: string
-}
-
-/** Un trabajo con sus gastos y lo que queda. La suma la hace el backend. */
-export function fichaTrabajo(token: string, id: number) {
-  return pedir<FichaTrabajo>(token, `/apuntes/${id}/ficha`)
 }
 
 /** Lo de un periodo repartido en lo que va a la gestoría y lo que no. */
@@ -391,7 +374,6 @@ export function editarApunte(
     fecha?: string
     tipo?: 'trabajo' | 'gasto'
     trabajo_id?: number | null
-    facturado?: boolean
     para_gestoria?: boolean
   },
 ) {
@@ -434,6 +416,7 @@ export type Nota = {
   creado: string
   cliente_id: number | null
   cliente: Cliente | null
+  trabajo_id: number | null
 }
 
 /** Por defecto, lo que queda por hacer; con `hechas`, las ya cumplidas. */
@@ -445,11 +428,12 @@ export function marcarNotaHecha(token: string, id: number, hecha = true) {
   return pedir<Nota>(token, `/notas/${id}/hecha?hecha=${hecha}`, { method: 'POST' })
 }
 
-export function crearNota(token: string, texto: string) {
+/** Con `trabajoId`, la nota es de ese trabajo (y de su cliente). */
+export function crearNota(token: string, texto: string, trabajoId?: number) {
   return pedir<Nota>(token, '/notas', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ texto }),
+    body: JSON.stringify({ texto, trabajo_id: trabajoId ?? null }),
   })
 }
 
@@ -688,4 +672,85 @@ export function guardarCorreo(token: string, correo: string | null) {
 
 export function probarCorreo(token: string) {
   return pedir<{ enviado_a: string }>(token, '/ajustes/correo/prueba', { method: 'POST' })
+}
+
+// ---------- Trabajos (obras) ----------
+
+/** Una obra: la ficha que junta cobros, gastos, notas y citas de un trabajo. */
+export type Trabajo = {
+  id: number
+  titulo: string
+  descripcion: string | null
+  cliente_id: number | null
+  cliente: Cliente | null
+  fecha_inicio: string | null
+  fecha_fin: string | null
+  /** Lo factura Yoa: sus cobros y gastos van a la gestoría. */
+  facturado: boolean
+  /** El cliente dejó reseña. */
+  resena: boolean
+}
+
+/** Las cuentas de un trabajo. Las hace el backend. */
+export type Cuentas = {
+  cobrado: string
+  pendiente: string
+  gastos: string
+  ingresos: string
+  beneficio: string
+}
+
+export type TrabajoListado = {
+  trabajo: Trabajo
+  cuentas: Cuentas
+  notas_pendientes: number
+  proxima_cita: Cita | null
+}
+
+export type FichaDeTrabajo = {
+  trabajo: Trabajo
+  cuentas: Cuentas
+  movimientos: Apunte[]
+  notas: Nota[]
+  citas: Cita[]
+}
+
+export type DatosTrabajo = {
+  titulo: string
+  cliente_id: number | null
+  fecha_inicio: string | null
+  fecha_fin: string | null
+  facturado: boolean
+  resena: boolean
+  descripcion: string | null
+}
+
+export function listarTrabajos(token: string) {
+  return pedir<TrabajoListado[]>(token, '/trabajos')
+}
+
+export function fichaDeTrabajo(token: string, id: number) {
+  return pedir<FichaDeTrabajo>(token, `/trabajos/${id}`)
+}
+
+export function crearTrabajo(token: string, datos: Partial<DatosTrabajo> & { titulo: string }) {
+  return pedir<Trabajo>(token, '/trabajos', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos),
+  })
+}
+
+/** Solo cambia lo que se manda; null en cliente o fechas lo vacía. */
+export function editarTrabajo(token: string, id: number, cambios: Partial<DatosTrabajo>) {
+  return pedir<Trabajo>(token, `/trabajos/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cambios),
+  })
+}
+
+/** Borra la ficha; lo que tenía dentro se queda, suelto. */
+export async function borrarTrabajo(token: string, id: number) {
+  await pedirSinCuerpo(token, `/trabajos/${id}`, { method: 'DELETE' })
 }

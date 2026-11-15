@@ -23,6 +23,7 @@ import {
   abrirFacturasDelPeriodo,
   descargarCsvGestoria,
   editarApunte,
+  editarTrabajo,
   parteGestoria,
   type Apunte,
   type ParteGestoria,
@@ -135,11 +136,19 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
     }
   }
 
-  /** Meter en la gestoría con un toque lo que se había quedado fuera. */
+  /**
+   * Meter en la gestoría con un toque lo que se había quedado fuera.
+   * Lo de un trabajo va con su trabajo: se marca el trabajo como facturado.
+   */
   function incluir(a: Apunte) {
     void accion(async () => {
-      await editarApunte(token, a.id, a.tipo === 'trabajo' ? { facturado: true } : { para_gestoria: true })
-      avisar(`Va a la gestoría · ${a.concepto}`)
+      if (a.trabajo_id !== null) {
+        await editarTrabajo(token, a.trabajo_id, { facturado: true })
+        avisar(`Facturado · ${a.trabajo_titulo ?? a.concepto}`)
+      } else {
+        await editarApunte(token, a.id, { para_gestoria: true })
+        avisar(`Va a la gestoría · ${a.concepto}`)
+      }
     })
   }
 
@@ -222,7 +231,7 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
             </div>
             {parte.emitidas.length === 0 ? (
               <Vacio icono={Landmark} titulo={`Nada facturado en ${nombre}`}>
-                Marca «Lo facturo yo» en un trabajo, o sube el PDF de tu factura.
+                Marca un trabajo como facturado, o sube el PDF de tu factura.
               </Vacio>
             ) : (
               <ul className="lista">
@@ -264,7 +273,7 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
                   <FilaMovimiento
                     key={a.id}
                     apunte={a}
-                    detalle={`${fechaCorta(a.fecha)} · ${a.trabajo_concepto ?? 'gasto general'}`}
+                    detalle={`${fechaCorta(a.fecha)} · ${a.trabajo_titulo ?? 'gasto general'}`}
                     onAbrir={() => onAbrir(a)}
                     onTicket={ticket(a)}
                   >
@@ -286,13 +295,17 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
 
               {parte.trabajos_fuera.length > 0 && (
                 <>
-                  <h3>Trabajos sin facturar</h3>
+                  <h3>Cobros</h3>
                   <ul className="lista">
                     {parte.trabajos_fuera.map((a) => (
                       <FilaMovimiento
                         key={a.id}
                         apunte={a}
-                        detalle={fechaCorta(a.fecha)}
+                        detalle={
+                          a.trabajo_titulo
+                            ? `${fechaCorta(a.fecha)} · de «${a.trabajo_titulo}», sin facturar`
+                            : `${fechaCorta(a.fecha)} · suelto`
+                        }
                         onAbrir={() => onAbrir(a)}
                       >
                         <button
@@ -302,7 +315,7 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
                             incluir(a)
                           }}
                         >
-                          Lo facturo yo
+                          {a.trabajo_id !== null ? 'Facturar trabajo' : 'Incluir'}
                         </button>
                       </FilaMovimiento>
                     ))}
@@ -319,25 +332,23 @@ export function Gestoria({ token, recargas, onAbrir, onFallo }: Props) {
                         key={a.id}
                         apunte={a}
                         detalle={
-                          a.trabajo_concepto
-                            ? `${fechaCorta(a.fecha)} · de «${a.trabajo_concepto}», sin facturar`
+                          a.trabajo_titulo
+                            ? `${fechaCorta(a.fecha)} · de «${a.trabajo_titulo}», sin facturar`
                             : `${fechaCorta(a.fecha)} · gasto general`
                         }
                         onAbrir={() => onAbrir(a)}
                         onTicket={ticket(a)}
                       >
-                        {/* El de un trabajo sigue a su trabajo: no se marca aparte. */}
-                        {a.trabajo_id === null && (
-                          <button
-                            className="boton secundario pequeno"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              incluir(a)
-                            }}
-                          >
-                            Incluir
-                          </button>
-                        )}
+                        {/* El de un trabajo va con su trabajo: se factura el trabajo. */}
+                        <button
+                          className="boton secundario pequeno"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            incluir(a)
+                          }}
+                        >
+                          {a.trabajo_id !== null ? 'Facturar trabajo' : 'Incluir'}
+                        </button>
                       </FilaMovimiento>
                     ))}
                   </ul>

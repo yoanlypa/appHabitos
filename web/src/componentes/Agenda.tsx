@@ -19,10 +19,12 @@ import {
   crearCita,
   editarCita,
   listarClientes,
+  listarTrabajos,
   marcarCitaHecha,
   TokenInvalido,
   type Cita,
   type ClienteListado,
+  type Trabajo,
 } from '../api'
 import { confirmar } from '../ui/avisos'
 import { Calendario } from '../ui/Calendario'
@@ -49,6 +51,7 @@ export function Agenda({ token, onTokenInvalido, diaInicial }: Props) {
   const [delMes, setDelMes] = useState<Cita[]>([])
   const [delDia, setDelDia] = useState<Cita[]>([])
   const [clientes, setClientes] = useState<ClienteListado[]>([])
+  const [trabajos, setTrabajos] = useState<Trabajo[]>([])
   const [recargas, setRecargas] = useState(0)
   const [error, setError] = useState('')
   // undefined: cerrado · null: una nueva · Cita: editar esa
@@ -66,15 +69,18 @@ export function Agenda({ token, onTokenInvalido, diaInicial }: Props) {
     let cancelado = false
     async function cargar() {
       try {
-        const [mesCitas, diaCitas, cli] = await Promise.all([
+        const [mesCitas, diaCitas, cli, obras] = await Promise.all([
           citasDelMes(token, anio, mes),
           citasDelDia(token, diaElegido),
           listarClientes(token),
+          // Si la lista de trabajos falla, la agenda sigue: solo falta el desplegable.
+          listarTrabajos(token).catch(() => []),
         ])
         if (cancelado) return
         setDelMes(mesCitas)
         setDelDia(diaCitas)
         setClientes(cli)
+        setTrabajos(obras.map((t) => t.trabajo))
         setError('')
       } catch (e) {
         if (!cancelado) fallo(e)
@@ -224,12 +230,13 @@ export function Agenda({ token, onTokenInvalido, diaInicial }: Props) {
                   </button>
                   <span className="principal">
                     {c.titulo}
-                    {(c.cliente || c.direccion || c.fecha_fin) && (
+                    {(c.cliente || c.direccion || c.fecha_fin || c.trabajo_id) && (
                       <small>
                         {[
                           c.fecha_fin
                             ? `${fechaCorta(c.fecha)} → ${fechaCorta(c.fecha_fin)}`
                             : null,
+                          trabajos.find((t) => t.id === c.trabajo_id)?.titulo,
                           c.cliente?.nombre,
                           c.direccion,
                         ]
@@ -251,6 +258,7 @@ export function Agenda({ token, onTokenInvalido, diaInicial }: Props) {
           cita={formulario}
           dia={diaElegido}
           clientes={clientes}
+          trabajos={trabajos}
           onGuardar={guardar}
           onBorrar={formulario ? borrar : undefined}
           onCerrar={() => setFormulario(undefined)}
@@ -260,7 +268,9 @@ export function Agenda({ token, onTokenInvalido, diaInicial }: Props) {
   )
 }
 
-type DatosCita = {
+export type DatosCita = {
+  /** Solo si el formulario deja elegirlo (desde la Agenda). */
+  trabajo_id?: number | null
   titulo: string
   fecha: string
   fecha_fin: string | null
@@ -269,11 +279,13 @@ type DatosCita = {
   cliente_id: number | null
 }
 
-/** Una cita nueva o una ya puesta: el mismo formulario para las dos. */
-function FormCita({
+/** Una cita nueva o una ya puesta: el mismo formulario para las dos. La usa también la ficha de un trabajo. */
+export function FormCita({
   cita,
   dia,
   clientes,
+  clienteInicial = null,
+  trabajos,
   onGuardar,
   onBorrar,
   onCerrar,
@@ -281,6 +293,10 @@ function FormCita({
   cita: Cita | null
   dia: string
   clientes: ClienteListado[]
+  /** Para una cita nueva desde un trabajo: el cliente del trabajo. */
+  clienteInicial?: number | null
+  /** Con la lista, se puede elegir de qué trabajo es la cita (desde la Agenda). */
+  trabajos?: Trabajo[]
   onGuardar: (datos: DatosCita) => Promise<void>
   onBorrar?: () => Promise<void>
   onCerrar: () => void
@@ -290,9 +306,19 @@ function FormCita({
   const [variosDias, setVariosDias] = useState(Boolean(cita?.fecha_fin))
   const [hasta, setHasta] = useState(cita?.fecha_fin ?? cita?.fecha ?? dia)
   const [hora, setHora] = useState(hhmm(cita?.hora ?? null) ?? '')
-  const [cliente, setCliente] = useState(cita?.cliente_id ? String(cita.cliente_id) : '')
+  const [cliente, setCliente] = useState(
+    cita?.cliente_id ? String(cita.cliente_id) : clienteInicial ? String(clienteInicial) : '',
+  )
   const [direccion, setDireccion] = useState(cita?.direccion ?? '')
+  const [trabajo, setTrabajo] = useState(cita?.trabajo_id ? String(cita.trabajo_id) : '')
   const [ocupado, setOcupado] = useState(false)
+
+  /** Al elegir un trabajo, si no hay cliente puesto, se pone el suyo: es a quien se va a ver. */
+  function elegirTrabajo(id: string) {
+    setTrabajo(id)
+    const elegido = trabajos?.find((t) => String(t.id) === id)
+    if (elegido?.cliente_id && !cliente) setCliente(String(elegido.cliente_id))
+  }
   const [error, setError] = useState('')
 
   const finValido = !variosDias || hasta >= fecha
@@ -320,6 +346,8 @@ function FormCita({
         hora: hora || null,
         direccion: direccion.trim() || null,
         cliente_id: cliente ? Number(cliente) : null,
+        // Solo se manda si se ha podido elegir: desde la ficha va aparte.
+        ...(trabajos ? { trabajo_id: trabajo ? Number(trabajo) : null } : {}),
       }),
     )
   }
@@ -385,6 +413,21 @@ function FormCita({
           <label className="campo">
             Hasta
             <input type="date" value={hasta} min={fecha} onChange={(e) => setHasta(e.target.value)} />
+          </label>
+        )}
+
+        {trabajos && (
+          <label className="campo">
+            Trabajo
+            <select value={trabajo} onChange={(e) => elegirTrabajo(e.target.value)}>
+              <option value="">De ningún trabajo</option>
+              {trabajos.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.titulo}
+                  {t.cliente ? ` · ${t.cliente.nombre}` : ''}
+                </option>
+              ))}
+            </select>
           </label>
         )}
 

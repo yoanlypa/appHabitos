@@ -66,35 +66,30 @@ class Apunte(Base):
     # elegir cliente. Se asocia después, o nunca.
     cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
 
-    # Solo aplica a tipo="gasto": el trabajo para el que se hizo ese gasto.
-    # El trabajo es otro apunte (la línea "Reforma baño Luis 980" que ya se
-    # anotaba), no una tabla nueva: así lo que hay hoy ya sirve de trabajo.
-    trabajo_id = Column(Integer, ForeignKey("apuntes.id"), nullable=True, index=True)
-    # Solo aplica a tipo="trabajo": si lo factura Yoa. Los que factura otra
-    # empresa (le paga por contrato) no van a la gestoría, ni sus gastos.
-    facturado = Column(Boolean, nullable=False, default=False, server_default=text("0"))
-    # Solo aplica a un gasto sin trabajo: marcado a mano para la gestoría.
+    # El trabajo (la obra) al que pertenece: un cobro, un gasto o una nota.
+    trabajo_id = Column(Integer, ForeignKey("trabajos.id"), nullable=True, index=True)
+    # Solo aplica a un cobro o gasto suelto (sin trabajo): marcado a mano
+    # para la gestoría. Los de un trabajo siguen a su trabajo.
     para_gestoria = Column(Boolean, nullable=False, default=False, server_default=text("0"))
 
     cliente = relationship("Cliente", back_populates="apuntes")
     # La foto del ticket, si el gasto salió de escanearlo. Una por apunte.
     factura = relationship("Factura", back_populates="apunte", uselist=False)
-    trabajo = relationship("Apunte", remote_side=[id], back_populates="gastos")
-    gastos = relationship("Apunte", back_populates="trabajo", order_by="Apunte.fecha")
+    trabajo = relationship("Trabajo", back_populates="apuntes")
 
     @property
     def gestoria(self) -> bool:
         """Si este apunte sale en lo que se manda a la gestoría."""
         return va_a_gestoria(
             self.tipo,
-            self.facturado,
             self.para_gestoria,
             self.trabajo.facturado if self.trabajo is not None else None,
+            self.factura_emitida,
         )
 
     @property
-    def trabajo_concepto(self) -> str | None:
-        return self.trabajo.concepto if self.trabajo is not None else None
+    def trabajo_titulo(self) -> str | None:
+        return self.trabajo.titulo if self.trabajo is not None else None
 
     @property
     def factura_id(self) -> int | None:
@@ -175,8 +170,11 @@ class Cita(Base):
     # El día para el que ya se mandó el recordatorio de ese mismo día. Un
     # reinicio no lo repite, y si la cita se mueve a otro día vuelve a avisar.
     avisada_el = Column(Date, nullable=True)
+    # El trabajo al que pertenece la cita, si es de uno.
+    trabajo_id = Column(Integer, ForeignKey("trabajos.id"), nullable=True, index=True)
 
     cliente = relationship("Cliente", back_populates="citas")
+    trabajo = relationship("Trabajo", back_populates="citas")
 
 
 class Habito(Base):
@@ -278,3 +276,32 @@ class EmisorPropio(Base):
     # la IA cruce emisor y cliente.
     iban = Column(String, nullable=True)
     creado = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Trabajo(Base):
+    """Una obra: la ficha que junta todo lo de un trabajo.
+
+    Sus cobros, sus gastos, sus notas y sus citas cuelgan de ella. Es lo que
+    Yoa abre para ver cómo va una obra, como una página de Notion.
+
+    `facturado` dice si la factura la hace Yoa: si no (la factura otra empresa,
+    que le paga por contrato), ni sus cobros ni sus gastos van a la gestoría.
+    `resena` es si el cliente dejó reseña: pedirla al acabar es fácil de olvidar.
+    """
+
+    __tablename__ = "trabajos"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    titulo = Column(String, nullable=False)
+    descripcion = Column(Text, nullable=True)
+    cliente_id = Column(Integer, ForeignKey("clientes.id"), nullable=True, index=True)
+    fecha_inicio = Column(Date, nullable=True)
+    fecha_fin = Column(Date, nullable=True)
+    facturado = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    resena = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    creado = Column(DateTime(timezone=True), server_default=func.now())
+
+    cliente = relationship("Cliente")
+    apuntes = relationship("Apunte", back_populates="trabajo", order_by="Apunte.fecha")
+    citas = relationship("Cita", back_populates="trabajo", order_by="Cita.fecha")

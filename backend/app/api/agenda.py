@@ -62,6 +62,7 @@ def crear(
             cliente_id=entrada.cliente_id,
             notas=entrada.notas,
             fecha_fin=entrada.fecha_fin,
+            trabajo_id=entrada.trabajo_id,
         )
     except RangoAlReves as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
@@ -83,7 +84,7 @@ def editar(
     """
     try:
         return actualizar_cita(db, user_id, cita_id, **cambios.model_dump(exclude_unset=True))
-    except CitaNoEncontrada as exc:
+    except LookupError as exc:  # la cita, o el trabajo al que se quiere pasar
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     except RangoAlReves as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc

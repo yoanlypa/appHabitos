@@ -46,7 +46,8 @@ from app.nucleo.paginas_pdf import paginas as paginas_pdf
 from app.nucleo.pdf import PaginaDeDatos, imagenes_a_pdf
 from app.nucleo.tiempo import hoy_local
 from app.dominio.gestoria import marca_gestoria
-from app.servicios.apuntes import MovimientoNoValido, crear_nota, trabajo_de_gasto
+from app.servicios.apuntes import crear_nota
+from app.servicios.trabajos import TrabajoNoEncontrado, trabajo_suyo
 
 
 def _propios(db: Session, user_id: int) -> Propios:
@@ -259,9 +260,9 @@ def anotar_gasto(
     concepto = (concepto or "").strip() or "Ticket escaneado"
     if trabajo_id is not None:
         try:
-            trabajo_de_gasto(db, user_id, trabajo_id)
-        except MovimientoNoValido as exc:
-            raise GastoNoValido(str(exc)) from exc
+            trabajo_suyo(db, user_id, trabajo_id)
+        except TrabajoNoEncontrado as exc:
+            raise GastoNoValido("ese trabajo no existe") from exc
 
     apunte = Apunte(
         user_id=user_id,
@@ -679,8 +680,6 @@ def anotar_emitida(
         pendiente=not cobrada,
         origen=origen,
         cliente_id=cliente.id if cliente else None,
-        # Lleva colgada una factura de Yoa: está facturado, y va a la gestoría.
-        facturado=True,
     )
     db.add(apunte)
     db.flush()
@@ -789,8 +788,6 @@ def _nuevo_trabajo(db, user_id, factura, datos, cliente, importe, cobrada, conce
         pendiente=not cobrada,
         origen=origen,
         cliente_id=cliente.id if cliente else None,
-        # Lleva colgada una factura de Yoa: está facturado, y va a la gestoría.
-        facturado=True,
     )
     db.add(apunte)
     db.flush()
@@ -824,7 +821,9 @@ def vincular_emitida(
     if apunte is None or apunte.factura is not None:
         raise GastoNoValido("ese trabajo no existe o ya tiene factura")
     factura.apunte_id = apunte.id
-    apunte.facturado = True
+    # El papel manda: si el cobro es de un trabajo, ese trabajo está facturado.
+    if apunte.trabajo is not None:
+        apunte.trabajo.facturado = True
     if cobrada:
         apunte.pendiente = False
     db.commit()
@@ -858,10 +857,11 @@ def convertir_en_emitida(db: Session, user_id: int, apunte_id: int, cobrada: boo
     anterior = apunte.cliente
     factura.emitida = True
     apunte.tipo = "trabajo"
-    apunte.facturado = True
-    # Era un gasto: lo que tuviera de gasto ya no aplica.
-    apunte.trabajo_id = None
+    # Era un gasto mal entrado: lo que tuviera de gasto ya no aplica. Si era
+    # de un trabajo, sigue en él, y ese trabajo queda facturado.
     apunte.para_gestoria = False
+    if apunte.trabajo is not None:
+        apunte.trabajo.facturado = True
     if not ya_era or cobrada:
         apunte.pendiente = not cobrada
     apunte.cliente_id = cliente.id if cliente else apunte.cliente_id

@@ -25,13 +25,11 @@ type Props = {
 
 function estado(a: Apunte) {
   if (a.tipo === 'nota') return 'Nota'
-  if (a.tipo === 'gasto') {
-    // De un trabajo, lo que más dice es de cuál; del suelto, que es un gasto.
-    const que = a.trabajo_concepto ?? 'Gasto'
-    return a.factura_id ? `${que} · con ticket` : que
-  }
+  // De un trabajo, lo que más dice es de cuál.
+  const obra = a.trabajo_titulo ? ` · ${a.trabajo_titulo}` : ''
+  if (a.tipo === 'gasto') return `${a.factura_id ? 'Gasto con ticket' : 'Gasto'}${obra}`
   const cobro = a.pendiente ? 'Pendiente de cobro' : 'Cobrado'
-  return a.factura_emitida ? `${cobro} · con factura` : cobro
+  return `${a.factura_emitida ? `${cobro} con factura` : cobro}${obra}`
 }
 
 /** La marca de lo que va a la gestoría: "Facturado" en un trabajo, "Gestoría" en un gasto. */
@@ -40,7 +38,7 @@ function MarcaGestoria({ apunte: a }: { apunte: Apunte }) {
   return (
     <span className="marca-gestoria" title="Va a la gestoría">
       <Landmark size={11} />
-      {a.tipo === 'trabajo' ? 'Facturado' : 'Gestoría'}
+      Gestoría
     </span>
   )
 }

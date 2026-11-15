@@ -22,6 +22,7 @@ from app.dominio.models import Apunte, Cita
 from app.servicios.agenda import crear_cita
 from app.servicios.apuntes import ApunteNoEncontrado, crear_nota
 from app.servicios.clientes import clientes_mencionados
+from app.servicios.trabajos import trabajo_suyo
 
 
 def _suya(db: Session, user_id: int, nota_id: int) -> Apunte:
@@ -67,7 +68,9 @@ def marcar_hecha(db: Session, user_id: int, nota_id: int, hecha: bool = True) ->
     return nota
 
 
-def crear(db: Session, user_id: int, texto: str, origen: str) -> Apunte:
+def crear(
+    db: Session, user_id: int, texto: str, origen: str, trabajo_id: int | None = None
+) -> Apunte:
     """Una nota escrita a mano en el buzón.
 
     Aquí no se interpreta ningún importe aunque el texto acabe en número:
@@ -76,6 +79,12 @@ def crear(db: Session, user_id: int, texto: str, origen: str) -> Apunte:
     """
     if not texto.strip():
         raise ValueError("una nota en blanco no es nada")
+    if trabajo_id is not None:
+        # Una nota de un trabajo es del cliente de ese trabajo.
+        trabajo = trabajo_suyo(db, user_id, trabajo_id)
+        return crear_nota(
+            db, user_id, texto, origen, cliente_id=trabajo.cliente_id, trabajo_id=trabajo.id
+        )
     mencionados = clientes_mencionados(db, user_id, texto)
     unico = mencionados[0].id if len(mencionados) == 1 else None
     return crear_nota(db, user_id, texto, origen, cliente_id=unico)
@@ -124,6 +133,8 @@ def agendar(
         hora=hora,
         cliente_id=nota.cliente_id,
         fecha_fin=fecha_fin,
+        # Y el trabajo: la cita de una nota de la obra sigue siendo de la obra.
+        trabajo_id=nota.trabajo_id,
     )
     db.delete(nota)
     db.commit()
