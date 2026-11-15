@@ -21,6 +21,7 @@
  */
 import {
   CalendarDays,
+  Hammer,
   Flame,
   House,
   LogOut,
@@ -43,6 +44,7 @@ import { Entrada } from './componentes/Entrada'
 import { Finanzas } from './componentes/Finanzas'
 import { Habitos } from './componentes/Habitos'
 import { Inicio } from './componentes/Inicio'
+import { Trabajos } from './componentes/Trabajos'
 import { Logo } from './componentes/Logo'
 import { Notas } from './componentes/Notas'
 import { Avisos } from './ui/Avisos'
@@ -55,6 +57,7 @@ const CLAVE = 'parte-del-dia:token'
 
 const ICONOS = {
   inicio: House,
+  trabajos: Hammer,
   notas: SquareKanban,
   agenda: CalendarDays,
   finanzas: Wallet,
@@ -92,7 +95,8 @@ function tokenInicial(): string {
 }
 
 function seccionDeLaDireccion(): Seccion {
-  const id = window.location.hash.replace(/^#\/?/, '')
+  // "#/trabajos/12" es la sección "trabajos": lo de detrás lo lee la pantalla.
+  const id = window.location.hash.replace(/^#\/?/, '').split('/')[0]
   return SECCIONES.find((s) => s.id === id)?.id ?? 'inicio'
 }
 
@@ -148,7 +152,8 @@ export default function App() {
     setDiaAgenda(destino === 'agenda' ? dia : undefined)
     setMenu(false)
     setSeccion(destino)
-    if (seccionDeLaDireccion() !== destino) window.location.hash = `/${destino}`
+    // Comparando la dirección entera: tocar "Trabajos" desde la ficha de uno vuelve a la lista.
+    if (window.location.hash !== `#/${destino}`) window.location.hash = `/${destino}`
     window.scrollTo(0, 0)
   }, [])
 
@@ -256,6 +261,7 @@ export default function App() {
         <main className="contenido">
           <div className={`pagina pagina-${seccion}`}>
             {seccion === 'inicio' && <Inicio {...comunes} onIr={ir} />}
+            {seccion === 'trabajos' && <Trabajos {...comunes} />}
             {seccion === 'notas' && <Notas {...comunes} onIr={ir} />}
             {seccion === 'agenda' && <Agenda key={diaAgenda} {...comunes} diaInicial={diaAgenda} />}
             {seccion === 'finanzas' && <Finanzas {...comunes} />}
@@ -266,7 +272,7 @@ export default function App() {
       </div>
 
       <nav className="barra" aria-label="Secciones">
-        {SECCIONES.slice(0, 5).map((s) => {
+        {SECCIONES.slice(0, 6).map((s) => {
           const Icono = ICONOS[s.id]
           return (
             <button

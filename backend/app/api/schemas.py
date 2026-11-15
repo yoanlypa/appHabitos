@@ -30,11 +30,10 @@ class ApunteSalida(BaseModel):
     cliente_id: int | None = None
     factura_id: int | None = None
     factura_emitida: bool = False
-    # De qué trabajo es este gasto, y cómo se llama (para no pedirlo aparte).
+    # De qué trabajo (obra) es, y cómo se llama (para no pedirlo aparte).
     trabajo_id: int | None = None
-    trabajo_concepto: str | None = None
-    # Solo trabajos: si lo factura Yoa. Solo gastos sueltos: marcado a mano.
-    facturado: bool = False
+    trabajo_titulo: str | None = None
+    # Solo cobros y gastos sueltos: marcado a mano para la gestoría.
     para_gestoria: bool = False
     # Lo que cuenta: si sale en lo que se manda a la gestoría. Lo decide el
     # backend (dominio/gestoria.py); la web solo lo pinta.
@@ -67,8 +66,7 @@ class ApunteCambios(BaseModel):
     pendiente: bool | None = None
     fecha: date | None = None
     tipo: str | None = None  # "trabajo" | "gasto"
-    trabajo_id: int | None = None  # mandar null lo desasigna
-    facturado: bool | None = None
+    trabajo_id: int | None = None  # mandar null lo saca del trabajo
     para_gestoria: bool | None = None
 
 
@@ -81,19 +79,7 @@ class MovimientoEntrada(BaseModel):
     fecha: date | None = None
     pendiente: bool = False
     trabajo_id: int | None = None
-    facturado: bool = False
     para_gestoria: bool = False
-
-
-class FichaTrabajoSalida(BaseModel):
-    """Un trabajo con lo que ha costado: sus gastos, el total y lo que queda."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    trabajo: ApunteSalida
-    gastos: list[ApunteSalida]
-    total_gastos: Importe
-    beneficio: Importe
 
 
 class ParteGestoriaSalida(BaseModel):
@@ -171,6 +157,7 @@ class CitaEntrada(BaseModel):
     direccion: str | None = None
     cliente_id: int | None = None
     notas: str | None = None
+    trabajo_id: int | None = None
 
 
 class CitaCambios(BaseModel):
@@ -183,6 +170,7 @@ class CitaCambios(BaseModel):
     direccion: str | None = None
     notas: str | None = None
     cliente_id: int | None = None
+    trabajo_id: int | None = None
 
 
 class CitaSalida(BaseModel):
@@ -198,10 +186,12 @@ class CitaSalida(BaseModel):
     hecha: bool
     cliente_id: int | None
     cliente: ClienteSalida | None = None
+    trabajo_id: int | None = None
 
 
 class NotaEntrada(BaseModel):
     texto: str
+    trabajo_id: int | None = None  # solo al crearla: la nota de una obra
 
 
 class NotaSalida(BaseModel):
@@ -217,6 +207,7 @@ class NotaSalida(BaseModel):
     creado: datetime
     cliente_id: int | None = None
     cliente: ClienteSalida | None = None
+    trabajo_id: int | None = None
 
 
 class AgendarNota(BaseModel):
@@ -342,3 +333,71 @@ class AjustesSalida(BaseModel):
 
 class AjustesCambios(BaseModel):
     correo: str | None = None  # null o vacío lo quita
+
+
+# ---------- Trabajos (obras) ----------
+
+
+class TrabajoEntrada(BaseModel):
+    titulo: str
+    cliente_id: int | None = None
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+    facturado: bool = False
+    resena: bool = False
+    descripcion: str | None = None
+
+
+class TrabajoCambios(BaseModel):
+    """Solo cambia lo que se manda; null en cliente o fechas lo vacía."""
+
+    titulo: str | None = None
+    cliente_id: int | None = None
+    fecha_inicio: date | None = None
+    fecha_fin: date | None = None
+    facturado: bool | None = None
+    resena: bool | None = None
+    descripcion: str | None = None
+
+
+class TrabajoSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    titulo: str
+    descripcion: str | None
+    cliente_id: int | None
+    cliente: ClienteSalida | None = None
+    fecha_inicio: date | None
+    fecha_fin: date | None
+    facturado: bool
+    resena: bool
+
+
+class CuentasSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    cobrado: Importe
+    pendiente: Importe
+    gastos: Importe
+    ingresos: Importe
+    beneficio: Importe
+
+
+class TrabajoListadoSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    trabajo: TrabajoSalida
+    cuentas: CuentasSalida
+    notas_pendientes: int
+    proxima_cita: CitaSalida | None
+
+
+class FichaTrabajoSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    trabajo: TrabajoSalida
+    cuentas: CuentasSalida
+    movimientos: list[ApunteSalida]
+    notas: list[NotaSalida]
+    citas: list[CitaSalida]

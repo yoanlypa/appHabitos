@@ -260,7 +260,7 @@ export function Agenda({ token, onTokenInvalido, diaInicial }: Props) {
   )
 }
 
-type DatosCita = {
+export type DatosCita = {
   titulo: string
   fecha: string
   fecha_fin: string | null
@@ -269,11 +269,12 @@ type DatosCita = {
   cliente_id: number | null
 }
 
-/** Una cita nueva o una ya puesta: el mismo formulario para las dos. */
-function FormCita({
+/** Una cita nueva o una ya puesta: el mismo formulario para las dos. La usa también la ficha de un trabajo. */
+export function FormCita({
   cita,
   dia,
   clientes,
+  clienteInicial = null,
   onGuardar,
   onBorrar,
   onCerrar,
@@ -281,6 +282,8 @@ function FormCita({
   cita: Cita | null
   dia: string
   clientes: ClienteListado[]
+  /** Para una cita nueva desde un trabajo: el cliente del trabajo. */
+  clienteInicial?: number | null
   onGuardar: (datos: DatosCita) => Promise<void>
   onBorrar?: () => Promise<void>
   onCerrar: () => void
@@ -290,7 +293,9 @@ function FormCita({
   const [variosDias, setVariosDias] = useState(Boolean(cita?.fecha_fin))
   const [hasta, setHasta] = useState(cita?.fecha_fin ?? cita?.fecha ?? dia)
   const [hora, setHora] = useState(hhmm(cita?.hora ?? null) ?? '')
-  const [cliente, setCliente] = useState(cita?.cliente_id ? String(cita.cliente_id) : '')
+  const [cliente, setCliente] = useState(
+    cita?.cliente_id ? String(cita.cliente_id) : clienteInicial ? String(clienteInicial) : '',
+  )
   const [direccion, setDireccion] = useState(cita?.direccion ?? '')
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState('')

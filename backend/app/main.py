@@ -20,6 +20,7 @@ from app.api import (
     habitos,
     notas,
     resumen,
+    trabajos,
 )
 from app.nucleo.almacenamiento import avisar_si_es_efimera, estado as estado_almacenamiento
 from app.nucleo.config import CORS_ORIGENES
@@ -60,6 +61,7 @@ def crear_api(con_bot: bool = False) -> FastAPI:
     api.include_router(export.router)
     api.include_router(gestoria.router)
     api.include_router(ajustes.router)
+    api.include_router(trabajos.router)
 
     @api.get("/salud")
     def salud():

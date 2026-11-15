@@ -9,29 +9,30 @@ que no es suyo; mandar de menos, perder un gasto deducible.
 La regla, en un solo sitio para que el listado, el CSV y el PDF no puedan
 decidir cosas distintas:
 
-- Un **trabajo** va si está marcado como facturado.
-- Un **gasto de un trabajo** va si ese trabajo está facturado. No se marca
-  aparte: sigue a su trabajo, y si mañana se factura, el gasto entra solo.
-- Un **gasto suelto** (gasolina, el seguro, la cuota de autónomos) va si
-  se ha marcado a mano. Nunca se decide por él: aquí no se sabe qué es
-  deducible.
+- **El papel manda**: un cobro con una factura emitida por Yoa colgada va
+  siempre.
+- Un cobro o un gasto **de un trabajo** va si el trabajo está facturado. No
+  se marca aparte: sigue a su trabajo, y si mañana se factura, entra solo.
+- Un cobro o un gasto **suelto** (gasolina, el seguro, la cuota de
+  autónomos) va si se ha marcado a mano. Nunca se decide por él: aquí no se
+  sabe qué es deducible.
 """
 import re
 
 
 def va_a_gestoria(
     tipo: str,
-    facturado: bool,
     para_gestoria: bool,
     trabajo_facturado: bool | None,
+    factura_emitida: bool = False,
 ) -> bool:
-    """`trabajo_facturado` es None si el gasto no cuelga de ningún trabajo."""
-    if tipo == "trabajo":
-        return bool(facturado)
-    if tipo != "gasto":
+    """`trabajo_facturado` es None si el apunte no es de ningún trabajo."""
+    if tipo not in ("trabajo", "gasto"):
         return False  # una nota no es dinero
+    if tipo == "trabajo" and factura_emitida:
+        return True
     if trabajo_facturado is not None:
-        return trabajo_facturado
+        return bool(trabajo_facturado)
     return bool(para_gestoria)
 
 

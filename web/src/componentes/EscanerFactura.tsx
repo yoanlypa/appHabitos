@@ -19,8 +19,8 @@ import {
   confirmarFacturaEmitida,
   confirmarGastoDeFactura,
   escanearFactura,
-  trabajosParaElegir,
-  type Apunte,
+  listarTrabajos,
+  type Trabajo,
   type TicketLeido,
 } from '../api'
 import { Modal } from '../ui/Modal'
@@ -67,7 +67,7 @@ export function EscanerFactura({ token, onGuardado, onError, paraGestoria = fals
   const [cobrada, setCobrada] = useState(false)
   const [trabajo, setTrabajo] = useState('')
   // Solo para tickets de gasto: de qué trabajo es y si va a la gestoría.
-  const [trabajos, setTrabajos] = useState<Apunte[]>([])
+  const [trabajos, setTrabajos] = useState<Trabajo[]>([])
   const [deTrabajo, setDeTrabajo] = useState<number | null>(null)
   const [vaAGestoria, setVaAGestoria] = useState(paraGestoria)
 
@@ -88,7 +88,7 @@ export function EscanerFactura({ token, onGuardado, onError, paraGestoria = fals
       const imagen = esPdf ? new Blob([fichero], { type: 'application/pdf' }) : await reducir(fichero)
       const resultado = await escanearFactura(token, imagen)
       // Si la lista no llega se anota igual, sin trabajo: no se pierde el ticket.
-      setTrabajos(await trabajosParaElegir(token).catch(() => []))
+      setTrabajos(await listarTrabajos(token).then((l) => l.map((t) => t.trabajo)).catch(() => []))
       setDeTrabajo(null)
       setVaAGestoria(paraGestoria)
       setVista(esPdf ? null : URL.createObjectURL(imagen))

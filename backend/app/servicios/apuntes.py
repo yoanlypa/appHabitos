@@ -16,6 +16,7 @@ from app.dominio.parsing import TextoNoInterpretable, interpretar_con_fecha
 from app.dominio.tickets import fecha_escrita
 from app.nucleo.tiempo import hoy_local
 from app.servicios.clientes import clientes_mencionados
+from app.servicios.trabajos import TrabajoNoEncontrado, trabajo_suyo
 
 
 class ApunteNoEncontrado(LookupError):
@@ -45,7 +46,12 @@ def crear_apunte(
 
 
 def crear_nota(
-    db: Session, user_id: int, texto: str, origen: str, cliente_id: int | None = None
+    db: Session,
+    user_id: int,
+    texto: str,
+    origen: str,
+    cliente_id: int | None = None,
+    trabajo_id: int | None = None,
 ) -> Apunte:
     """Un apunte sin dinero: "llamar a Ana el martes".
 
@@ -62,6 +68,7 @@ def crear_nota(
         pendiente=False,
         origen=origen,
         cliente_id=cliente_id,
+        trabajo_id=trabajo_id,
     )
     db.add(apunte)
     db.commit()
@@ -129,7 +136,6 @@ def borrar_apunte(db: Session, user_id: int, apunte_id: int) -> Apunte:
     para siempre.
     """
     apunte = _suyo(db, user_id, apunte_id)
-    _soltar_gastos(db, apunte)
     # Un gasto escaneado se lleva su foto: dejarla sería una factura suelta
     # que ya no justifica nada, y la fila apuntaría a un apunte que no existe.
     if apunte.factura is not None:
@@ -159,58 +165,26 @@ def _validar(tipo: str | None, concepto: str | None, importe: Decimal | None, fe
         raise MovimientoNoValido("la fecha no puede ser futura")
 
 
-_SIN_TOCAR = object()  # None es un valor válido: "este gasto ya no es de ningún trabajo"
+_SIN_TOCAR = object()  # None es un valor válido: "ya no es de ningún trabajo"
 
 
-def _trabajo_suyo(db: Session, user_id: int, trabajo_id: int, salvo: int | None = None) -> Apunte:
-    """El trabajo del que se quiere colgar un gasto: tiene que existir, ser suyo y ser un trabajo."""
-    trabajo = (
-        db.query(Apunte)
-        .filter(Apunte.id == trabajo_id, Apunte.user_id == user_id, Apunte.tipo == "trabajo")
-        .first()
-    )
-    if trabajo is None or trabajo.id == salvo:
-        raise MovimientoNoValido("ese trabajo no existe")
-    return trabajo
+def _comprobar_trabajo(db: Session, user_id: int, trabajo_id: int | None) -> None:
+    """El trabajo del que se quiere colgar algo tiene que existir y ser suyo."""
+    if trabajo_id is None:
+        return
+    try:
+        trabajo_suyo(db, user_id, trabajo_id)
+    except TrabajoNoEncontrado as exc:
+        raise MovimientoNoValido("ese trabajo no existe") from exc
 
 
-def trabajo_de_gasto(db: Session, user_id: int, trabajo_id: int) -> Apunte:
-    """Para quien cuelga un gasto de un trabajo desde otro servicio (los tickets)."""
-    return _trabajo_suyo(db, user_id, trabajo_id)
+def _ordenar_marcas(apunte: Apunte) -> None:
+    """La marca a mano de la gestoría solo vale para un cobro o gasto suelto.
 
-
-def _soltar_gastos(db: Session, trabajo: Apunte) -> None:
-    """Deja sueltos los gastos de un trabajo que va a dejar de serlo (se borra o pasa a gasto).
-
-    Cada gasto conserva lo que valía para la gestoría: si el trabajo estaba
-    facturado, sus gastos quedan marcados a mano. Borrar un trabajo por
-    error no puede sacar sus gastos de lo que se manda sin que nadie lo vea.
+    Uno de un trabajo sigue a su trabajo: si la marca se quedara puesta,
+    reaparecería sola el día que se sacara del trabajo.
     """
-    for gasto in list(trabajo.gastos):
-        gasto.para_gestoria = bool(trabajo.facturado)
-        gasto.trabajo_id = None
-
-
-def _ordenar_marcas(db: Session, apunte: Apunte) -> None:
-    """Cada marca solo vale para su tipo; lo que no aplica se limpia.
-
-    Un gasto no está "facturado" y un trabajo no cuelga de otro trabajo. Y un
-    trabajo con una factura emitida colgada está facturado se diga lo que se
-    diga: el papel manda.
-    """
-    if apunte.tipo != "gasto":
-        apunte.trabajo_id = None
-        apunte.para_gestoria = False
-    if apunte.tipo != "trabajo":
-        # Antes de quitarle la marca: los gastos se sueltan con lo que valían.
-        if apunte.id is not None:
-            _soltar_gastos(db, apunte)
-        apunte.facturado = False
-    elif apunte.factura_emitida:
-        apunte.facturado = True
-    if apunte.trabajo_id is not None:
-        # Sigue a su trabajo: la marca a mano ya no pinta nada, y si se
-        # quedara puesta reaparecería sola el día que se desasigne.
+    if apunte.tipo not in _TIPOS_DE_DINERO or apunte.trabajo_id is not None:
         apunte.para_gestoria = False
 
 
@@ -224,7 +198,6 @@ def crear_movimiento(
     pendiente: bool,
     origen: str,
     trabajo_id: int | None = None,
-    facturado: bool = False,
     para_gestoria: bool = False,
 ) -> Apunte:
     """Un trabajo o un gasto con sus datos ya separados, desde un formulario.
@@ -235,8 +208,7 @@ def crear_movimiento(
     trabajo es un gasto, o si un trabajo lo factura Yoa.
     """
     _validar(tipo, concepto, importe, fecha)
-    if trabajo_id is not None and tipo == "gasto":
-        _trabajo_suyo(db, user_id, trabajo_id)
+    _comprobar_trabajo(db, user_id, trabajo_id)
     apunte = Apunte(
         user_id=user_id,
         fecha=fecha or hoy_local(),
@@ -247,10 +219,9 @@ def crear_movimiento(
         pendiente=pendiente and tipo == "trabajo",
         origen=origen,
         trabajo_id=trabajo_id,
-        facturado=facturado,
         para_gestoria=para_gestoria,
     )
-    _ordenar_marcas(db, apunte)
+    _ordenar_marcas(apunte)
     db.add(apunte)
     db.commit()
     db.refresh(apunte)
@@ -267,7 +238,6 @@ def actualizar_apunte(
     fecha: date | None = None,
     tipo: str | None = None,
     trabajo_id=_SIN_TOCAR,
-    facturado: bool | None = None,
     para_gestoria: bool | None = None,
 ) -> Apunte:
     """Corrige un apunte ya escrito. Sólo cambia lo que se le pase.
@@ -293,63 +263,14 @@ def actualizar_apunte(
     if fecha is not None:
         apunte.fecha = fecha
     if trabajo_id is not _SIN_TOCAR:
-        if trabajo_id is not None and apunte.tipo == "gasto":
-            _trabajo_suyo(db, user_id, trabajo_id, salvo=apunte.id)
+        _comprobar_trabajo(db, user_id, trabajo_id)
         apunte.trabajo_id = trabajo_id
-    if facturado is not None:
-        apunte.facturado = facturado
     if para_gestoria is not None:
         apunte.para_gestoria = para_gestoria
-    _ordenar_marcas(db, apunte)
+    _ordenar_marcas(apunte)
     db.commit()
     db.refresh(apunte)
     return apunte
-
-
-def trabajos_para_elegir(db: Session, user_id: int, limite: int = 200) -> list[Apunte]:
-    """Los trabajos entre los que elegir al decir de cuál es un gasto.
-
-    El más reciente primero: un gasto casi siempre es de un trabajo de estos
-    días. Con tope, porque esto alimenta un desplegable y no un listado.
-    """
-    return (
-        db.query(Apunte)
-        .filter(Apunte.user_id == user_id, Apunte.tipo == "trabajo")
-        .order_by(Apunte.fecha.desc(), Apunte.id.desc())
-        .limit(limite)
-        .all()
-    )
-
-
-@dataclass
-class FichaTrabajo:
-    """Un trabajo con lo que ha costado hacerlo."""
-
-    trabajo: Apunte
-    gastos: list[Apunte]
-    total_gastos: Decimal
-
-    @property
-    def beneficio(self) -> Decimal:
-        return self.trabajo.importe - self.total_gastos
-
-
-def ficha_trabajo(db: Session, user_id: int, apunte_id: int) -> FichaTrabajo:
-    """El trabajo, sus gastos y lo que queda. La suma se hace aquí, no en la web."""
-    trabajo = _suyo(db, user_id, apunte_id)
-    if trabajo.tipo != "trabajo":
-        raise ApunteNoEncontrado(f"el apunte {apunte_id} no es un trabajo")
-    gastos = (
-        db.query(Apunte)
-        .filter(Apunte.user_id == user_id, Apunte.trabajo_id == trabajo.id, Apunte.tipo == "gasto")
-        .order_by(Apunte.fecha, Apunte.id)
-        .all()
-    )
-    return FichaTrabajo(
-        trabajo=trabajo,
-        gastos=gastos,
-        total_gastos=sum((g.importe for g in gastos), Decimal("0")),
-    )
 
 
 class FechaNoValida(ValueError):

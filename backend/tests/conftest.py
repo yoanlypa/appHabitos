@@ -24,6 +24,7 @@ from app.dominio.models import (  # noqa: E402
     Habito,
     HabitoHecho,
     TokenAcceso,
+    Trabajo,
 )
 from app.nucleo.db import sesion  # noqa: E402
 from app.nucleo.migraciones import migrar  # noqa: E402
@@ -41,6 +42,6 @@ def db():
     """Una sesión limpia por test: lo que escriba uno no lo ve el siguiente."""
     with sesion() as s:
         yield s
-        for modelo in (EmisorPropio, Factura, HabitoHecho, Habito, Apunte, Cita, Cliente, Ajuste, TokenAcceso):
+        for modelo in (EmisorPropio, Factura, HabitoHecho, Habito, Apunte, Cita, Trabajo, Cliente, Ajuste, TokenAcceso):
             s.query(modelo).delete()
         s.commit()

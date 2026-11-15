@@ -1,6 +1,7 @@
 /** Las pantallas de la app, en el orden en que salen en el menú. */
 export const SECCIONES = [
   { id: 'inicio', nombre: 'Inicio' },
+  { id: 'trabajos', nombre: 'Trabajos' },
   { id: 'notas', nombre: 'Notas' },
   { id: 'agenda', nombre: 'Agenda' },
   { id: 'finanzas', nombre: 'Finanzas' },
