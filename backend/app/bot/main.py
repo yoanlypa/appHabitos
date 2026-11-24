@@ -18,7 +18,7 @@ from telegram.ext import (
     filters,
 )
 
-from app.bot import acciones, alarma, avisos, citas, copias, habitos, handlers, importar, menu, restaurar
+from app.bot import acciones, alarma, avisos, casa, citas, copias, habitos, handlers, importar, menu, restaurar
 from app.nucleo.config import TELEGRAM_BOT_TOKEN
 from app.nucleo.migraciones import migrar
 
@@ -35,6 +35,9 @@ def construir_app() -> Application:
     # Antes que nada: si los datos no se guardan, que se diga en el chat.
     alarma.programar(app)
 
+    # Casa va primero: lo que manda quien solo es de Casa, o lo que empieza
+    # por "casa", no puede caer en los handlers del negocio.
+    casa.registrar(app)
     # /start, /menu y los botones del teclado de abajo.
     menu.registrar(app)
     app.add_handler(CommandHandler("hoy", handlers.hoy))

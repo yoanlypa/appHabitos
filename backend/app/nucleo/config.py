@@ -62,6 +62,7 @@ URL_WEB = os.getenv("URL_WEB", "").strip().rstrip("/") or next(
 # foto por menos de un céntimo, y acierta mucho más que un OCR clásico con
 # un ticket arrugado o fotografiado de lado.
 MODELO_TICKETS = os.getenv("MODELO_TICKETS", "gpt-4o-mini")
+MODELO_RECETAS = os.getenv("MODELO_RECETAS", "gpt-4o-mini")
 # Dónde se guardan las imágenes. Vacío = junto a la base SQLite (en Railway,
 # dentro del volumen /data), que es justo donde tienen que estar para no
 # perderse en un redespliegue.

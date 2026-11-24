@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     agenda,
+    casa,
     ajustes,
     apuntes,
     clientes,
@@ -62,6 +63,7 @@ def crear_api(con_bot: bool = False) -> FastAPI:
     api.include_router(gestoria.router)
     api.include_router(ajustes.router)
     api.include_router(trabajos.router)
+    api.include_router(casa.router)
 
     @api.get("/salud")
     def salud():

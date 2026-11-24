@@ -260,7 +260,7 @@ class TestVales:
             {"tipo": "cheque", "descripcion": "Cheque devolución", "importe": "25,34",
              "codigo": "9926 8349 94302", "caduca": "2029-10-23"},
             {"tipo": "cupon", "descripcion": "Cupón lavado gratis", "codigo": "1573193622",
-             "caduca": "2026-11-22"},
+             "caduca": "2036-11-22"},
             {"tipo": "cupon", "descripcion": "Caducado", "caduca": "2020-01-01"},
             {"tipo": "regalo", "descripcion": "tipo raro"},
         ],

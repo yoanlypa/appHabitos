@@ -305,3 +305,89 @@ class Trabajo(Base):
     cliente = relationship("Cliente")
     apuntes = relationship("Apunte", back_populates="trabajo", order_by="Apunte.fecha")
     citas = relationship("Cita", back_populates="trabajo", order_by="Cita.fecha")
+
+
+# --- Casa -------------------------------------------------------------------
+#
+# El dinero y la compra del hogar, compartidos entre varias personas. Van en
+# tablas propias y no en `apuntes` a propósito: así ningún resumen del
+# negocio, ni el trimestre, ni la gestoría pueden contar un gasto del súper.
+
+
+class Hogar(Base):
+    __tablename__ = "hogares"
+
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String, nullable=False, default="Casa")
+    creado = Column(DateTime(timezone=True), server_default=func.now())
+
+    miembros = relationship("MiembroHogar", back_populates="hogar", order_by="MiembroHogar.id")
+
+
+class MiembroHogar(Base):
+    """Quién vive en la casa. Un `user_id` es de una sola casa.
+
+    El titular es quien la creó (Yoa). Los demás entran con una invitación y
+    solo ven Casa: el negocio no es cosa suya. Quien entra solo por la web
+    no tiene id de Telegram y recibe uno negativo, que nunca choca con uno
+    de verdad.
+    """
+
+    __tablename__ = "hogar_miembros"
+
+    id = Column(Integer, primary_key=True)
+    hogar_id = Column(Integer, ForeignKey("hogares.id"), nullable=False, index=True)
+    user_id = Column(BigInteger, nullable=False, unique=True)
+    nombre = Column(String, nullable=False)
+    titular = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    creado = Column(DateTime(timezone=True), server_default=func.now())
+
+    hogar = relationship("Hogar", back_populates="miembros")
+
+
+class InvitacionHogar(Base):
+    """Un código para entrar en una casa. Vale una vez y caduca a los 7 días."""
+
+    __tablename__ = "hogar_invitaciones"
+
+    id = Column(Integer, primary_key=True)
+    hogar_id = Column(Integer, ForeignKey("hogares.id"), nullable=False, index=True)
+    codigo = Column(String, nullable=False, unique=True)
+    creado = Column(DateTime(timezone=True), server_default=func.now())
+    usada_por = Column(BigInteger, nullable=True)
+
+
+class GastoCasa(Base):
+    """Un gasto de la casa: quién lo pagó, cuándo, en qué y cuánto."""
+
+    __tablename__ = "gastos_casa"
+
+    id = Column(Integer, primary_key=True)
+    hogar_id = Column(Integer, ForeignKey("hogares.id"), nullable=False, index=True)
+    user_id = Column(BigInteger, nullable=False)
+    fecha = Column(Date, nullable=False, index=True)
+    concepto = Column(String, nullable=False)
+    importe = Column(Centimos, nullable=False)
+    categoria = Column(String, nullable=False, default="Otros")
+    origen = Column(String, nullable=False, default="web")
+    creado = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ArticuloCompra(Base):
+    """Una cosa de la lista de la compra o de la despensa.
+
+    Es la misma fila en los dos sitios: `hay` falso es que falta (lista de la
+    compra); al comprarla pasa a `hay` (despensa, que es lo que se usa para
+    pensar qué hacer de comer), y "se acabó" la devuelve a la lista con un
+    toque, sin volver a escribirla.
+    """
+
+    __tablename__ = "compra_articulos"
+
+    id = Column(Integer, primary_key=True)
+    hogar_id = Column(Integer, ForeignKey("hogares.id"), nullable=False, index=True)
+    texto = Column(String, nullable=False)
+    hay = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    anadido_por = Column(BigInteger, nullable=True)
+    creado = Column(DateTime(timezone=True), server_default=func.now())
+    cambiado = Column(DateTime(timezone=True), server_default=func.now())

@@ -763,3 +763,134 @@ export function asignarTrabajo(token: string, apunteIds: number[], trabajoId: nu
     body: JSON.stringify({ apunte_ids: apunteIds, trabajo_id: trabajoId }),
   })
 }
+
+// --- Casa ---------------------------------------------------------------------
+
+export type Miembro = { id: number; user_id: number; nombre: string; titular: boolean }
+
+export type MiCasa = {
+  hogar_id: number
+  nombre: string
+  yo: Miembro
+  miembros: Miembro[]
+  /** Quien no es titular solo ve Casa: el negocio no es cosa suya. */
+  solo_casa: boolean
+  categorias: string[]
+  hay_recetas: boolean
+}
+
+export type GastoCasa = {
+  id: number
+  user_id: number
+  fecha: string
+  concepto: string
+  importe: string
+  categoria: string
+  origen: string
+}
+
+export type ResumenCasa = {
+  total: string
+  anterior: string
+  por_categoria: { nombre: string; total: string }[]
+  por_persona: { nombre: string; total: string }[]
+}
+
+export type Articulo = { id: number; texto: string; hay: boolean; anadido_por: number | null }
+
+export type Receta = {
+  nombre: string
+  minutos: number | null
+  usa: string[]
+  falta: string[]
+  pasos: string[]
+}
+
+export type DatosGastoCasa = {
+  concepto: string
+  importe: string
+  fecha: string
+  categoria: string
+  pagado_por: number
+}
+
+const JSON_CAB = { 'Content-Type': 'application/json' }
+
+export function miCasa(token: string) {
+  return pedir<MiCasa>(token, '/casa')
+}
+
+export function cambiarMiNombre(token: string, nombre: string) {
+  return pedir<Miembro>(token, '/casa/yo', { method: 'PATCH', headers: JSON_CAB, body: JSON.stringify({ nombre }) })
+}
+
+export function crearInvitacion(token: string) {
+  return pedir<{ codigo: string; dias: number }>(token, '/casa/invitacion', { method: 'POST' })
+}
+
+export function quitarMiembro(token: string, id: number) {
+  return pedirSinCuerpo(token, `/casa/miembros/${id}`, { method: 'DELETE' })
+}
+
+/** Sin token: quien llega con el enlace todavía no tiene. */
+export async function verInvitacion(codigo: string): Promise<{ casa: string; miembros: string[] }> {
+  const r = await fetch(`${BASE}/casa/invitacion/${encodeURIComponent(codigo)}`)
+  const cuerpo = await r.json().catch(() => null)
+  if (!r.ok) throw new ErrorDeApi(cuerpo?.detail ?? `Error ${r.status}`)
+  return cuerpo
+}
+
+export async function unirseACasa(codigo: string, nombre: string): Promise<string> {
+  const r = await fetch(`${BASE}/casa/unirse`, {
+    method: 'POST',
+    headers: JSON_CAB,
+    body: JSON.stringify({ codigo, nombre }),
+  })
+  const cuerpo = await r.json().catch(() => null)
+  if (!r.ok) throw new ErrorDeApi(cuerpo?.detail ?? `Error ${r.status}`)
+  return cuerpo.token as string
+}
+
+export function gastosCasa(token: string, desde: string, hasta: string) {
+  return pedir<GastoCasa[]>(token, `/casa/gastos?desde=${desde}&hasta=${hasta}`)
+}
+
+export function resumenCasa(token: string, desde: string, hasta: string) {
+  return pedir<ResumenCasa>(token, `/casa/resumen?desde=${desde}&hasta=${hasta}`)
+}
+
+export function anotarGastoCasa(token: string, texto: string) {
+  return pedir<GastoCasa>(token, '/casa/gastos/texto', { method: 'POST', headers: JSON_CAB, body: JSON.stringify({ texto }) })
+}
+
+export function crearGastoCasa(token: string, datos: DatosGastoCasa) {
+  return pedir<GastoCasa>(token, '/casa/gastos', { method: 'POST', headers: JSON_CAB, body: JSON.stringify(datos) })
+}
+
+export function editarGastoCasa(token: string, id: number, cambios: Partial<DatosGastoCasa>) {
+  return pedir<GastoCasa>(token, `/casa/gastos/${id}`, { method: 'PATCH', headers: JSON_CAB, body: JSON.stringify(cambios) })
+}
+
+export function borrarGastoCasa(token: string, id: number) {
+  return pedirSinCuerpo(token, `/casa/gastos/${id}`, { method: 'DELETE' })
+}
+
+export function listaCompra(token: string) {
+  return pedir<Articulo[]>(token, '/casa/lista')
+}
+
+export function anadirALista(token: string, texto: string) {
+  return pedir<Articulo[]>(token, '/casa/lista', { method: 'POST', headers: JSON_CAB, body: JSON.stringify({ texto }) })
+}
+
+export function cambiarArticulo(token: string, id: number, cambios: { hay?: boolean; texto?: string }) {
+  return pedir<Articulo>(token, `/casa/lista/${id}`, { method: 'PATCH', headers: JSON_CAB, body: JSON.stringify(cambios) })
+}
+
+export function borrarArticulo(token: string, id: number) {
+  return pedirSinCuerpo(token, `/casa/lista/${id}`, { method: 'DELETE' })
+}
+
+export function pedirRecetas(token: string, preferencias: string) {
+  return pedir<Receta[]>(token, '/casa/recetas', { method: 'POST', headers: JSON_CAB, body: JSON.stringify({ preferencias }) })
+}

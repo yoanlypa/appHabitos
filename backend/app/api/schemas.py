@@ -408,3 +408,128 @@ class FichaTrabajoSalida(BaseModel):
     movimientos: list[ApunteSalida]
     notas: list[NotaSalida]
     citas: list[CitaSalida]
+
+
+# --- Casa -------------------------------------------------------------------
+
+
+class MiembroSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    nombre: str
+    titular: bool
+
+
+class CasaSalida(BaseModel):
+    """Quién soy en la casa y quién más hay. `solo_casa`: la web enseña solo Casa."""
+
+    hogar_id: int
+    nombre: str
+    yo: MiembroSalida
+    miembros: list[MiembroSalida]
+    solo_casa: bool
+    categorias: list[str]
+    hay_recetas: bool
+
+
+class InvitacionSalida(BaseModel):
+    codigo: str
+    dias: int
+
+
+class InvitacionVista(BaseModel):
+    casa: str
+    miembros: list[str]
+
+
+class UnirseEntrada(BaseModel):
+    codigo: str
+    nombre: str
+
+
+class UnirseSalida(BaseModel):
+    token: str
+
+
+class NombreEntrada(BaseModel):
+    nombre: str
+
+
+class GastoCasaEntrada(BaseModel):
+    concepto: str
+    importe: Decimal
+    fecha: date | None = None
+    categoria: str | None = None
+    pagado_por: int | None = None
+
+
+class GastoCasaTexto(BaseModel):
+    texto: str
+
+
+class GastoCasaCambios(BaseModel):
+    concepto: str | None = None
+    importe: Decimal | None = None
+    fecha: date | None = None
+    categoria: str | None = None
+    pagado_por: int | None = None
+
+
+class GastoCasaSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    fecha: date
+    concepto: str
+    importe: Importe
+    categoria: str
+    origen: str
+
+
+class ParteSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    nombre: str
+    total: Importe
+
+
+class ResumenCasaSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    total: Importe
+    anterior: Importe
+    por_categoria: list[ParteSalida]
+    por_persona: list[ParteSalida]
+
+
+class ArticuloEntrada(BaseModel):
+    texto: str
+
+
+class ArticuloCambios(BaseModel):
+    hay: bool | None = None
+    texto: str | None = None
+
+
+class ArticuloSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    texto: str
+    hay: bool
+    anadido_por: int | None
+
+
+class RecetasEntrada(BaseModel):
+    preferencias: str = ""
+
+
+class RecetaSalida(BaseModel):
+    nombre: str
+    minutos: int | None
+    usa: list[str]
+    falta: list[str]
+    pasos: list[str]

@@ -56,9 +56,9 @@ parte-del-dia/
 │   │   │                     gestoria.py, recordatorios.py
 │   │   ├── servicios/     ✅ apuntes, resumen, export, auth, avisos, clientes,
 │   │   │                     agenda, trimestres, voz, notas, restauracion, habitos,
-│   │   │                     gestoria, trabajos
+│   │   │                     gestoria, trabajos, casa
 │   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export,
-│   │   │                     clientes, agenda, notas, habitos, gestoria, ajustes, trabajos
+│   │   │                     clientes, agenda, notas, habitos, gestoria, ajustes, trabajos, casa
 │   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py,
 │   │                         copias.py, alarma.py, restaurar.py, habitos.py, citas.py,
 │   │                         menu.py, acciones.py, importar.py
@@ -622,6 +622,54 @@ parte-del-dia/
   - Un canal que falla no tira el otro: si Telegram falla, el correo sale; si
     el correo falla, se apunta en el log y Telegram ya salió.
 
+- **Casa: el dinero y la compra del hogar, aparte del negocio y compartidos.**
+  Yoa quería llevar lo de casa aparte y que su esposa fuera anotando lo que
+  gasta. Decisiones:
+  - **Tablas propias** (`Hogar`, `MiembroHogar`, `InvitacionHogar`,
+    `GastoCasa`, `ArticuloCompra`, migración `a1b2c3d4e5f6`) y no `Apunte`:
+    así ningún resumen del negocio, ni el trimestre, ni la gestoría pueden
+    contar un gasto del súper. Hay test de eso.
+  - **La casa aparece sola** la primera vez que Yoa usa Casa, con él de
+    titular. Los demás entran con un **código de invitación** (8 letras sin
+    0/O/1/I/L, una vez, 7 días): por Telegram `/unirme CODIGO`, o por el
+    enlace `#invitacion=CODIGO` de la web, que pide solo el nombre y da un
+    token. Quien entra solo por la web recibe un `user_id` **negativo**: los
+    de Telegram son positivos y no pueden chocar. Si ya había anotado algo
+    sola, se lo trae. Quien no es titular **solo ve Casa** (`solo_casa`), en
+    la web y en el bot: el negocio no es cosa suya.
+  - **Todo es de la casa**: cualquiera ve, anota, corrige y borra; cada gasto
+    guarda quién pagó para el reparto del mes.
+  - **En el bot, para ella todo es Casa**; para Yoa solo lo que empieza por
+    "casa" ("casa -45 súper", foto con "casa" de texto). Los handlers de
+    `bot/casa.py` van antes que los del negocio y con un filtro que solo se
+    queda lo de Casa: si no, su "45 súper" sería un cobro de 45 € de Yoa.
+    Hay test del orden. La voz de Yoa con "casa" delante aún no va a Casa.
+  - **Qué es gasto y qué es lista** (`servicios/casa.anotar_libre`, la regla
+    en un sitio): "comprar …"/"… a la lista" va a la lista aunque lleve
+    números; con importe es un gasto, **también sin guion** (en casa no se
+    cobra a nadie); sin importe son cosas que faltan, partidas por comas y
+    "y". "pagué 60 de luz" y "ayer 12,50 farmacia" valen, pero "2 kilos de
+    tomates" o "6 huevos" no son dinero (`dominio/casa.interpretar_gasto`:
+    el número en medio solo es dinero si algo lo dice; delante, desde 10).
+  - **La categoría se adivina** por palabras y tiendas (`categoria_de`) y se
+    cambia con un toque; ante la duda, "Otros".
+  - **Lista y despensa son la misma fila** (`ArticuloCompra.hay`): se tacha
+    al comprar y pasa a "En casa"; "se acabó" la devuelve a la lista sin
+    escribirla otra vez, y añadir algo que ya está no lo repite. La foto del
+    ticket del súper tacha lo comprado (`coincide`: todas las palabras de la
+    lista en la línea, plurales incluidos) y anota el total; la foto no se
+    guarda, que en casa no hay gestoría.
+  - **Qué hago de comer** (`nucleo/recetas.py`, `/recetas` y pestaña
+    Cocinar): lo que hay "En casa" más lo que se escriba va al modelo (misma
+    `OPENAI_API_KEY`, `MODELO_RECETAS`), que devuelve JSON; se filtran las
+    recetas sin nombre o sin pasos. Lo que falta de una receta va a la lista
+    con un toque.
+  - En la web, `componentes/Casa.tsx` (Gastos, Compra, Cocinar, Personas) y
+    `Unirse.tsx`. Casa va en el menú lateral y en el de arriba del móvil: la
+    barra de abajo ya tiene seis.
+  - Pendiente: si quien entró solo por la web cierra sesión, necesita otra
+    invitación (y saldría dos veces en Personas hasta que Yoa quite una).
+
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
   usuario/contraseña. Falta que el bot lo genere con `/web`
@@ -636,7 +684,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-430 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+468 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
