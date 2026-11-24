@@ -29,6 +29,7 @@ import {
   Menu,
   Monitor,
   Moon,
+  Sofa,
   SquareKanban,
   Sun,
   TriangleAlert,
@@ -36,8 +37,10 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { salud } from './api'
+import { miCasa, salud, TokenInvalido } from './api'
 import { Agenda } from './componentes/Agenda'
+import { Casa } from './componentes/Casa'
+import { Unirse } from './componentes/Unirse'
 import { Ajustes } from './componentes/Ajustes'
 import { Clientes } from './componentes/Clientes'
 import { Entrada } from './componentes/Entrada'
@@ -62,6 +65,7 @@ const ICONOS = {
   agenda: CalendarDays,
   finanzas: Wallet,
   habitos: Flame,
+  casa: Sofa,
   clientes: Users,
 } as const
 
@@ -94,6 +98,17 @@ function tokenInicial(): string {
   }
 }
 
+/**
+ * El enlace de invitación a Casa (`#invitacion=CODIGO`): se lee y se borra
+ * de la barra, como el token.
+ */
+function invitacionInicial(): string {
+  const codigo = new URLSearchParams(window.location.hash.slice(1)).get('invitacion')?.trim()
+  if (!codigo) return ''
+  window.history.replaceState(null, '', window.location.pathname + window.location.search)
+  return codigo
+}
+
 function seccionDeLaDireccion(): Seccion {
   // "#/trabajos/12" es la sección "trabajos": lo de detrás lo lee la pantalla.
   const id = window.location.hash.replace(/^#\/?/, '').split('/')[0]
@@ -121,7 +136,10 @@ function SelectorDeTema({ tema, onCambio }: { tema: Tema; onCambio: (t: Tema) =>
 }
 
 export default function App() {
+  const [invitacion, setInvitacion] = useState(invitacionInicial)
   const [token, setToken] = useState(tokenInicial)
+  // Quien solo es de Casa (la pareja) no ve el negocio. null: aún no se sabe.
+  const [soloCasa, setSoloCasa] = useState<boolean | null>(null)
   const [error, setError] = useState('')
   const [seccion, setSeccion] = useState<Seccion>(seccionDeLaDireccion)
   // El día que tiene que enseñar la agenda al llegar desde otra pantalla.
@@ -167,6 +185,7 @@ export default function App() {
     localStorage.removeItem(CLAVE)
     setError(motivo)
     setToken('')
+    setSoloCasa(null)
     setMenu(false)
     window.history.replaceState(null, '', window.location.pathname + window.location.search)
     setSeccion('inicio')
@@ -177,10 +196,28 @@ export default function App() {
     [salir],
   )
 
+  useEffect(() => {
+    if (!token) return
+    let vivo = true
+    miCasa(token).then(
+      (c) => vivo && setSoloCasa(c.solo_casa),
+      (e) => {
+        if (!vivo) return
+        if (e instanceof TokenInvalido) invalido()
+        else setSoloCasa(false) // si no se sabe, se enseña la app de siempre
+      },
+    )
+    return () => {
+      vivo = false
+    }
+  }, [token, invalido])
+
   async function pedirSalir() {
     const si = await confirmar({
       titulo: '¿Cerrar la sesión?',
-      texto: 'Para volver a entrar tendrás que pedirle otro enlace al bot con /web.',
+      texto: soloCasa
+        ? 'Para volver a entrar necesitarás otra invitación, o pedírselo al bot con /web si usas Telegram.'
+        : 'Para volver a entrar tendrás que pedirle otro enlace al bot con /web.',
       aceptar: 'Salir',
     })
     if (si) salir()
@@ -197,6 +234,21 @@ export default function App() {
     </div>
   )
 
+  if (invitacion && !token)
+    return (
+      <>
+        {franja}
+        <Unirse
+          codigo={invitacion}
+          onDentro={(nuevo) => {
+            setInvitacion('')
+            entrar(nuevo)
+          }}
+          onCancelar={() => setInvitacion('')}
+        />
+      </>
+    )
+
   if (!token)
     return (
       <>
@@ -206,6 +258,33 @@ export default function App() {
     )
 
   const comunes = { token, onTokenInvalido: invalido }
+
+  if (soloCasa === null) return <div className="app">{franja}</div>
+
+  if (soloCasa)
+    return (
+      <div className="app">
+        {franja}
+        <div className="solo-casa">
+          <div className="solo-casa-arriba">
+            <div className="marca-app">
+              <Logo />
+              Casa
+            </div>
+            <span>
+              <SelectorDeTema tema={tema} onCambio={setTema} />
+              <button className="boton-icono" onClick={() => void pedirSalir()} aria-label="Salir" title="Salir">
+                <LogOut size={18} />
+              </button>
+            </span>
+          </div>
+          <div className="pagina pagina-casa">
+            <Casa {...comunes} />
+          </div>
+        </div>
+        <Avisos />
+      </div>
+    )
 
   return (
     <div className="app">
@@ -266,6 +345,7 @@ export default function App() {
             {seccion === 'agenda' && <Agenda key={diaAgenda} {...comunes} diaInicial={diaAgenda} />}
             {seccion === 'finanzas' && <Finanzas {...comunes} />}
             {seccion === 'habitos' && <Habitos {...comunes} />}
+            {seccion === 'casa' && <Casa {...comunes} />}
             {seccion === 'clientes' && <Clientes {...comunes} />}
           </div>
         </main>
@@ -291,6 +371,10 @@ export default function App() {
       {menu && (
         <Modal titulo="Menú" onCerrar={() => setMenu(false)} estrecha>
           <div className="menu-movil">
+            <button className="nav-item" onClick={() => ir('casa')}>
+              <Sofa size={20} />
+              Casa
+            </button>
             <button className="nav-item" onClick={() => ir('clientes')}>
               <Users size={20} />
               Clientes

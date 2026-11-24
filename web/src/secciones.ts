@@ -6,6 +6,7 @@ export const SECCIONES = [
   { id: 'agenda', nombre: 'Agenda' },
   { id: 'finanzas', nombre: 'Finanzas' },
   { id: 'habitos', nombre: 'Hábitos' },
+  { id: 'casa', nombre: 'Casa' },
   { id: 'clientes', nombre: 'Clientes' },
 ] as const
 

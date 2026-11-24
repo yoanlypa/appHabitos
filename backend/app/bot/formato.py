@@ -665,3 +665,82 @@ def estado_correo(correo: str | None, disponible: bool) -> str:
             "Railway. Hasta entonces, solo por aquí."
         )
     return texto
+
+
+# --- Casa ---------------------------------------------------------------------
+
+
+def gasto_casa(gasto, quien: str | None = None) -> str:
+    dia = "" if gasto.fecha == hoy_local() else f" · {dia_con_nombre(gasto.fecha)}"
+    por = f" · pagó {quien}" if quien else ""
+    return f"🏠 Gasto de casa: {gasto.concepto} · {euros(gasto.importe)}\n{gasto.categoria}{dia}{por}"
+
+
+def articulos_anadidos(articulos) -> str:
+    if len(articulos) == 1:
+        return f"🛒 A la lista: {articulos[0].texto}"
+    return "🛒 A la lista:\n" + "\n".join(f"• {a.texto}" for a in articulos)
+
+
+def lista_compra(articulos) -> str:
+    faltan = [a for a in articulos if not a.hay]
+    hay = [a for a in articulos if a.hay]
+    if not faltan:
+        texto = "🛒 La lista está vacía. Escríbeme lo que falte: «leche, huevos y pan»."
+    else:
+        texto = "🛒 Falta comprar (toca para tacharlo):"
+    if hay:
+        texto += f"\n\n🧺 En casa: {', '.join(a.texto for a in hay[:30])}"
+    return texto
+
+
+def resumen_casa(titulo: str, r) -> str:
+    lineas = [f"🏠 {titulo}: {euros(r.total)}"]
+    if r.por_categoria:
+        lineas.append("")
+        lineas += [f"• {p.nombre}: {euros(p.total)}" for p in r.por_categoria]
+    if len(r.por_persona) > 1:
+        lineas.append("")
+        lineas += [f"👤 {p.nombre}: {euros(p.total)}" for p in r.por_persona]
+    return "\n".join(lineas)
+
+
+def ayuda_casa(titular: bool) -> str:
+    if titular:
+        return (
+            "🏠 Casa va aparte del negocio: nada de aquí cuenta en tus cuentas.\n\n"
+            "• «casa -45 súper» anota un gasto de casa\n"
+            "• «casa leche, huevos y pan» lo pone en la lista\n"
+            "• Una foto con «casa» de texto: el ticket va a casa\n"
+            "• /lista la lista de la compra\n"
+            "• /casa lo gastado este mes\n"
+            "• /recetas qué hacer de comer con lo que hay\n"
+            "• /invitar para que tu pareja anote también"
+        )
+    return (
+        "🏠 Estás en Casa. Escríbeme como quieras:\n\n"
+        "• «45 súper» o «pagué 60 de luz» anota un gasto\n"
+        "• «leche, huevos y pan» lo pone en la lista de la compra\n"
+        "• Una foto del ticket lo anota y tacha lo comprado\n"
+        "• También vale un audio\n"
+        "• /lista la lista de la compra\n"
+        "• /casa lo gastado este mes\n"
+        "• /recetas qué hacer de comer con lo que hay\n"
+        "• /web para verlo todo en el móvil"
+    )
+
+
+def recetas(lista: list[dict]) -> str:
+    if not lista:
+        return "No se me ocurre nada con eso. Dime algo más que tengas."
+    bloques = []
+    for r in lista:
+        cab = f"🍳 {r['nombre']}" + (f" · {r['minutos']} min" if r.get("minutos") else "")
+        partes = [cab]
+        if r.get("usa"):
+            partes.append("Usa: " + ", ".join(r["usa"]))
+        if r.get("falta"):
+            partes.append("Faltaría: " + ", ".join(r["falta"]))
+        partes += [f"{i}. {p}" for i, p in enumerate(r["pasos"], 1)]
+        bloques.append("\n".join(partes))
+    return "\n\n".join(bloques)

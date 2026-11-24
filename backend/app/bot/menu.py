@@ -37,6 +37,10 @@ COMANDOS = [
     ("correo", "Avisos de citas también por correo"),
     ("copia", "Copia de todo en CSV"),
     ("menu", "Sacar los botones de abajo"),
+    ("lista", "Casa: la lista de la compra"),
+    ("casa", "Casa: lo gastado este mes"),
+    ("recetas", "Casa: qué hago de comer con lo que hay"),
+    ("invitar", "Casa: invitar a tu pareja"),
     ("start", "Ayuda: todo lo que entiendo"),
 ]
 

@@ -1951,3 +1951,183 @@ i.gastos,
 .opciones-trabajo .ayuda {
   padding: 0.5rem 0.6rem;
 }
+
+/* ---------- Casa ---------- */
+
+.casa {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.casa-mes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.casa-mes strong {
+  min-width: 9rem;
+  text-align: center;
+  font-size: 1.05rem;
+}
+
+.casa-mes strong::first-letter {
+  text-transform: uppercase;
+}
+
+/* Las barras de "en qué se va": un solo color y la cifra escrita al lado,
+   que es lo que se lee; la barra solo dice de un vistazo qué pesa más. */
+.barras-casa {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.barras-casa li {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.barras-pista {
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--relleno);
+  overflow: hidden;
+}
+
+.barras-pista i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--serie-gastos, var(--gasto));
+}
+
+.barras-valor {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.casa .chips {
+  flex-wrap: wrap;
+  overflow: visible;
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+
+.casa .chips li {
+  display: inline-flex;
+  align-items: center;
+}
+
+.casa .chip {
+  border-radius: 999px 0 0 999px;
+}
+
+.chip-quitar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.1rem;
+  width: 2rem;
+  border-radius: 0 999px 999px 0;
+  background: var(--superficie);
+  box-shadow: inset 0 0 0 1px var(--borde-fuerte);
+  margin-left: -1px;
+  color: var(--texto-3);
+}
+
+.chip-quitar:hover {
+  background: var(--relleno);
+  color: var(--gasto);
+}
+
+.receta h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+}
+
+.receta h3 small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--texto-3);
+  font-weight: 500;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.receta ol {
+  margin: 0.6rem 0 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  line-height: 1.45;
+}
+
+.receta-falta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.88rem;
+  color: var(--pendiente, var(--texto-2));
+}
+
+.invitacion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.invitacion p {
+  margin: 0;
+}
+
+.invitacion-enlace {
+  display: block;
+  padding: 0.75rem;
+  border-radius: var(--radio, 10px);
+  background: var(--relleno);
+  word-break: break-all;
+  font-size: 0.85rem;
+}
+
+/* Quien solo es de Casa no ve el menú del negocio: una cabecera sencilla. */
+.solo-casa {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 1rem 1rem calc(2rem + env(safe-area-inset-bottom));
+}
+
+.solo-casa-arriba {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.casa .tarjeta > .ayuda {
+  margin: 0 0 0.75rem;
+}
+
+.invitacion .botones a.boton {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
