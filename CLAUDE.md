@@ -669,6 +669,32 @@ parte-del-dia/
     barra de abajo ya tiene seis.
   - Pendiente: si quien entró solo por la web cierra sesión, necesita otra
     invitación (y saldría dos veces en Personas hasta que Yoa quite una).
+  - **El efectivo se cuenta, no se apunta billete a billete** (migración
+    `b2c3d4e5f6a7`). Pagan mucho en efectivo y eso no dejaba rastro. Cada uno
+    tiene su cartera (`MovimientoCartera`): se apunta lo que entra ("saco
+    200") y de vez en cuando lo que queda ("me quedan 35"). Lo que falta y
+    nadie apuntó entra como gasto "Efectivo sin detallar" (`origen =
+    "recuento"`), así el total del mes es verdadero. Reglas:
+    - **El primer recuento es solo el punto de partida**: no hay con qué
+      comparar y se inventaría un gasto.
+    - **Si sobra no se inventa nada**: se dice (¿entró dinero sin apuntar?).
+    - **Qué cuenta para lo que debería haber**: lo de después del último
+      recuento por fecha, y lo del mismo día solo si se apuntó después
+      (`hasta_gasto_id`: lo de antes ya estaba en lo contado).
+    - **Lo apuntado tarde no cuenta dos veces**: un gasto en efectivo con
+      fecha anterior a un recuento se descuenta de su "sin detallar"
+      (`_detallar`), que ya lo incluía.
+    - **Sin decir cómo se pagó, va como paga casi siempre esa persona**
+      (`MiembroHogar.efectivo`, empieza en sí; se cambia en Personas). "con
+      tarjeta"/"en efectivo" en el texto manda y se quita del concepto; en el
+      ticket, la forma de pago leída. Botón 💶/💳 bajo cada gasto en el bot.
+    - **"me quedan 35" y "saco 200" van a la cartera también para Yoa**, sin
+      "casa" delante: en el negocio serían un cobro de 35 €. "quedan 3
+      huevos" no es un recuento: tiene que ser la frase entera.
+    - **El domingo a las 20:00** (`HORA_CARTERA`) el bot pregunta a quien usa
+      su cartera cuánto le queda, con lo que debería haber y un botón "Sí,
+      me quedan X" para cuando cuadra. Solo a quien ya la usa, y `/avisos
+      off` lo calla. Recuentos y entradas tienen "Deshacer".
 
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
@@ -684,7 +710,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-468 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+483 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

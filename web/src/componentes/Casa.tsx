@@ -24,6 +24,7 @@ import {
   Copy,
   CornerDownLeft,
   Crown,
+  Banknote,
   HeartPulse,
   type LucideIcon,
   Popcorn,
@@ -45,6 +46,11 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import {
+  type Cartera,
+  cambiarPagoHabitual,
+  carteras as pedirCarteras,
+  contarCartera,
+  meterEnCartera,
   anadirALista,
   anotarGastoCasa,
   borrarArticulo,
@@ -314,7 +320,16 @@ function Gastos({ token, casa, onFallo }: Hijo & { casa: MiCasa }) {
             />
             {variasPersonas &&
               resumen.por_persona.map((p) => <Kpi key={p.nombre} nombre={p.nombre} valor={euros(p.total)} />)}
+            {Number(resumen.efectivo) > 0 && (
+              <Kpi
+                nombre="En efectivo"
+                valor={euros(resumen.efectivo)}
+                nota={Number(resumen.sin_detallar) > 0 ? `${euros(resumen.sin_detallar)} sin detallar` : 'Todo detallado'}
+              />
+            )}
           </dl>
+
+          <Carteras token={token} casa={casa} recargas={recargas} onCambio={recargar} onFallo={onFallo} />
 
           {resumen.por_categoria.length > 0 && (
             <section className="tarjeta">
@@ -355,6 +370,7 @@ function Gastos({ token, casa, onFallo }: Hijo & { casa: MiCasa }) {
                       <span className="principal">
                         {g.concepto}
                         <small>
+                          {g.efectivo ? '💶 ' : '💳 '}
                           {g.categoria}
                           {variasPersonas && ` · ${nombres.get(g.user_id) ?? 'Otra persona'}`}
                         </small>
@@ -413,6 +429,7 @@ function FormGastoCasa({
     fecha: string
     categoria: string
     pagado_por: number
+    efectivo: boolean
   }) => Promise<void>
   onBorrar?: () => Promise<void>
 }) {
@@ -421,6 +438,7 @@ function FormGastoCasa({
   const [fecha, setFecha] = useState(gasto?.fecha ?? iso(new Date()))
   const [categoria, setCategoria] = useState(gasto?.categoria ?? 'Otros')
   const [quien, setQuien] = useState(gasto?.user_id ?? casa.yo.user_id)
+  const [efectivo, setEfectivo] = useState(gasto?.efectivo ?? casa.yo.efectivo)
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const limpio = aImporte(importe)
@@ -455,7 +473,7 @@ function FormGastoCasa({
           e.preventDefault()
           if (!limpio || !concepto.trim()) return
           void hacer(() =>
-            onGuardar({ concepto: concepto.trim(), importe: limpio, fecha, categoria, pagado_por: quien }),
+            onGuardar({ concepto: concepto.trim(), importe: limpio, fecha, categoria, pagado_por: quien, efectivo }),
           )
         }}
       >
@@ -495,6 +513,16 @@ function FormGastoCasa({
             </label>
           )}
         </div>
+        <Segmentado
+          opciones={[
+            { id: 'efectivo', nombre: '💶 Efectivo' },
+            { id: 'tarjeta', nombre: '💳 Tarjeta' },
+          ]}
+          valor={efectivo ? 'efectivo' : 'tarjeta'}
+          onCambio={(v) => setEfectivo(v === 'efectivo')}
+          ancho
+          etiqueta="Cómo se pagó"
+        />
         {importe && !limpio && <ErrorEnLinea>El importe no se entiende: escribe 45 o 45,50.</ErrorEnLinea>}
         <ErrorEnLinea>{error}</ErrorEnLinea>
         <div className="botones">
@@ -521,6 +549,142 @@ function FormGastoCasa({
         </div>
       </form>
     </Modal>
+  )
+}
+
+// --- Carteras -----------------------------------------------------------------
+
+/**
+ * El efectivo no deja rastro: se apunta lo que entra y se cuenta lo que queda.
+ * La diferencia que nadie apuntó la anota el backend como "sin detallar".
+ */
+function Carteras({
+  token,
+  casa,
+  recargas,
+  onCambio,
+  onFallo,
+}: Hijo & { casa: MiCasa; recargas: number; onCambio: () => void }) {
+  const [lista, setLista] = useState<Cartera[]>([])
+  const [accion, setAccion] = useState<'entrada' | 'recuento' | null>(null)
+  const [importe, setImporte] = useState('')
+  const [ocupado, setOcupado] = useState(false)
+
+  useEffect(() => {
+    let vivo = true
+    pedirCarteras(token).then((c) => vivo && setLista(c), onFallo)
+    return () => {
+      vivo = false
+    }
+  }, [token, recargas, onFallo])
+
+  const mia = lista.find((c) => c.user_id === casa.yo.user_id)
+  const limpio = aImporte(importe) ?? (importe.trim() === '0' ? '0' : null)
+
+  function abrir(tipo: 'entrada' | 'recuento') {
+    setImporte(tipo === 'recuento' && mia?.esperado && Number(mia.esperado) >= 0 ? mia.esperado.replace('.', ',') : '')
+    setAccion(tipo)
+  }
+
+  async function guardar(e: React.FormEvent) {
+    e.preventDefault()
+    if (!limpio || !accion) return
+    setOcupado(true)
+    try {
+      if (accion === 'entrada') {
+        await meterEnCartera(token, limpio)
+        avisar(`A tu cartera: +${euros(limpio)}`)
+      } else {
+        const r = await contarCartera(token, limpio)
+        if (r.esperado === null) avisar(`Punto de partida: ${euros(r.contado)}`)
+        else if (Number(r.sin_detallar) > 0) avisar(`Faltan ${euros(r.sin_detallar)}: anotados como efectivo sin detallar`)
+        else if (Number(r.sobra) > 0) avisar(`Sobran ${euros(r.sobra)}: ¿entró dinero sin apuntar?`)
+        else avisar('Cuadra al céntimo')
+      }
+      setAccion(null)
+      onCambio()
+    } catch (err) {
+      onFallo(err)
+    } finally {
+      setOcupado(false)
+    }
+  }
+
+  return (
+    <section className="tarjeta">
+      <div className="tarjeta-cabecera">
+        <h2>
+          <Banknote size={18} />
+          Carteras
+        </h2>
+      </div>
+      <ul className="lista">
+        {lista.map((c) => (
+          <li key={c.user_id} className="fila">
+            <Avatar nombre={c.nombre} />
+            <span className="principal">
+              {c.nombre}
+              <small>
+                {c.contado_el
+                  ? [
+                      `Contada ${diaRelativo(c.contado_el).toLowerCase()}`,
+                      Number(c.entradas) > 0 && `+${euros(c.entradas)} entrado`,
+                      Number(c.gastado) > 0 && `−${euros(c.gastado)} apuntado`,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                  : 'Sin contar todavía'}
+              </small>
+            </span>
+            <span className="importe">{c.esperado !== null ? euros(c.esperado) : '—'}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="botones cartera-botones">
+        <button className="boton suave pequeno" onClick={() => abrir('entrada')}>
+          <Plus size={16} /> Saqué dinero
+        </button>
+        <button className="boton pequeno" onClick={() => abrir('recuento')}>
+          <Banknote size={16} /> Contar mi cartera
+        </button>
+      </div>
+      <p className="ayuda">
+        No hace falta apuntar cada billete: apunta lo que sacas y cuenta de vez en cuando. Lo que falte y nadie apuntó
+        entra como «Efectivo sin detallar».
+      </p>
+
+      {accion && (
+        <Modal
+          titulo={accion === 'entrada' ? 'Dinero a tu cartera' : '¿Cuánto te queda?'}
+          onCerrar={() => setAccion(null)}
+          estrecha
+        >
+          <form className="formulario" onSubmit={guardar}>
+            {accion === 'recuento' && (
+              <p className="ayuda">
+                {mia?.esperado != null
+                  ? `Debería haber ${euros(mia.esperado)}. Cuenta los billetes y monedas y pon lo que hay.`
+                  : 'Es la primera vez: lo que pongas será el punto de partida.'}
+              </p>
+            )}
+            <label className="campo">
+              {accion === 'entrada' ? 'Lo que has sacado o te han dado (€)' : 'Lo que hay ahora (€)'}
+              <input inputMode="decimal" value={importe} onChange={(e) => setImporte(e.target.value)} autoFocus />
+            </label>
+            <div className="botones">
+              <span className="derecha">
+                <button type="button" className="boton secundario" onClick={() => setAccion(null)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="boton" disabled={!limpio || ocupado}>
+                  {accion === 'entrada' ? 'Añadir' : 'Contado'}
+                </button>
+              </span>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </section>
   )
 }
 
@@ -872,6 +1036,28 @@ function Personas({ token, casa, onCambio, onFallo }: Hijo & { casa: MiCasa; onC
           )}
         </section>
       )}
+
+      <section className="tarjeta">
+        <div className="tarjeta-cabecera">
+          <h2>Cómo pagas casi siempre</h2>
+        </div>
+        <p className="ayuda">
+          Lo que anotes sin decir cómo lo pagaste va así. Si es en efectivo, sale de tu cartera. Siempre puedes decirlo:
+          «45 súper con tarjeta».
+        </p>
+        <Segmentado
+          opciones={[
+            { id: 'efectivo', nombre: '💶 Efectivo' },
+            { id: 'tarjeta', nombre: '💳 Tarjeta' },
+          ]}
+          valor={casa.yo.efectivo ? 'efectivo' : 'tarjeta'}
+          onCambio={(v) =>
+            void cambiarPagoHabitual(token, v === 'efectivo').then(onCambio, onFallo)
+          }
+          ancho
+          etiqueta="Cómo pagas casi siempre"
+        />
+      </section>
 
       <section className="tarjeta">
         <form className="formulario" onSubmit={guardarNombre}>

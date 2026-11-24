@@ -24,6 +24,7 @@ DATABASE_URL = _normalizar_database_url(
 TZ_LOCAL = os.getenv("TZ_LOCAL", "Europe/Madrid")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 HORA_AVISO = os.getenv("HORA_AVISO", "21:00")  # "HH:MM", hora local
+HORA_CARTERA = os.getenv("HORA_CARTERA", "20:00")  # el domingo: ¿cuánto queda en la cartera?
 
 # Transcripción de las notas de voz del bot. Sin clave, el bot lo dice y no
 # se pierde nada: el audio sigue estando en el chat de Telegram.

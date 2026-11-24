@@ -15,7 +15,11 @@ from app.api.schemas import (
     ArticuloCambios,
     ArticuloEntrada,
     ArticuloSalida,
+    CarteraSalida,
     CasaSalida,
+    ImporteEntrada,
+    MovimientoCarteraSalida,
+    RecuentoSalida,
     GastoCasaCambios,
     GastoCasaEntrada,
     GastoCasaSalida,
@@ -65,9 +69,13 @@ def mi_casa(user_id: int = Depends(get_current_user_id), db: Session = Depends(g
 
 @router.patch("/yo", response_model=MiembroSalida)
 def mi_nombre(entrada: NombreEntrada, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
-    casa.asegurar_casa(db, user_id)
+    yo = casa.asegurar_casa(db, user_id)
     try:
-        return casa.cambiar_nombre(db, user_id, entrada.nombre)
+        if entrada.nombre is not None:
+            yo = casa.cambiar_nombre(db, user_id, entrada.nombre)
+        if entrada.efectivo is not None:
+            yo = casa.pago_habitual(db, user_id, entrada.efectivo)
+        return yo
     except _ERRORES as exc:
         raise _error(exc) from exc
 
@@ -227,3 +235,44 @@ async def recetas(entrada: RecetasEntrada, user_id: int = Depends(get_current_us
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "las recetas necesitan la clave de OpenAI") from exc
     except cocina.ErrorDeRecetas as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "no he podido pensar recetas ahora, prueba otra vez") from exc
+
+
+# --- Carteras ---------------------------------------------------------------
+
+
+@router.get("/carteras", response_model=list[CarteraSalida])
+def carteras(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    """La de cada uno: lo que debería haber desde que se contó."""
+    return casa.carteras(db, user_id)
+
+
+@router.get("/cartera/movimientos", response_model=list[MovimientoCarteraSalida])
+def movimientos(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    casa.asegurar_casa(db, user_id)
+    return casa.movimientos_cartera(db, user_id)
+
+
+@router.post("/cartera/entrada", response_model=MovimientoCarteraSalida, status_code=status.HTTP_201_CREATED)
+def entrada(datos: ImporteEntrada, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    """Lo que entra en tu cartera: lo que sacas del cajero, lo que te dan."""
+    try:
+        return casa.meter_en_cartera(db, user_id, datos.importe)
+    except _ERRORES as exc:
+        raise _error(exc) from exc
+
+
+@router.post("/cartera/recuento", response_model=RecuentoSalida, status_code=status.HTTP_201_CREATED)
+def recuento(datos: ImporteEntrada, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    """Lo que te queda al contar. Lo que falte sin apuntar entra como "Efectivo sin detallar"."""
+    try:
+        return casa.contar_cartera(db, user_id, datos.importe)
+    except _ERRORES as exc:
+        raise _error(exc) from exc
+
+
+@router.delete("/cartera/{movimiento_id}", status_code=status.HTTP_204_NO_CONTENT)
+def deshacer(movimiento_id: int, user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    try:
+        casa.deshacer_movimiento(db, user_id, movimiento_id)
+    except _ERRORES as exc:
+        raise _error(exc) from exc

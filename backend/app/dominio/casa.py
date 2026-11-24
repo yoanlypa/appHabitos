@@ -173,3 +173,45 @@ def coincide(articulo: str, linea_ticket: str) -> bool:
         return False
     linea = {_raiz(p) for p in re.findall(r"[a-zñ]{3,}", sin_tildes(linea_ticket))}
     return all(p in linea for p in palabras)
+
+
+# --- Efectivo y cartera -------------------------------------------------------
+
+_RE_EFECTIVO = re.compile(r"\s*\b(?:en\s+)?(?:efectivo|met[aá]lico|cash|en\s+mano)\b\s*", re.I)
+_RE_TARJETA = re.compile(r"\s*\b(?:con\s+|por\s+)?(?:tarjeta|bizum|transferencia|domiciliad[oa])\b\s*", re.I)
+
+
+def forma_de_pago(texto: str) -> tuple[bool | None, str]:
+    """"45 súper en efectivo" → (True, "45 súper"). Sin decirlo, None.
+
+    Se quita la palabra del texto para que no acabe en el concepto.
+    """
+    if _RE_EFECTIVO.search(texto):
+        return True, _RE_EFECTIVO.sub(" ", texto).strip()
+    if _RE_TARJETA.search(texto):
+        return False, _RE_TARJETA.sub(" ", texto).strip()
+    return None, texto
+
+
+_IMPORTE = r"(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)?"
+_RE_ENTRADA = re.compile(
+    rf"^\s*(?:he\s+)?(?:saco|saqu[eé]|sacado|retiro|retir[eé]|cajero|meto|met[ií]|me\s+dieron|me\s+han\s+dado)"
+    rf"\s+(?:de\s+)?{_IMPORTE}(?:\s+(?:del\s+cajero|en\s+la\s+cartera|a\s+la\s+cartera))?\s*\.?\s*$",
+    re.I,
+)
+_RE_RECUENTO = re.compile(
+    rf"^\s*(?:me\s+)?(?:quedan|queda|tengo|hay|cartera:?)\s+{_IMPORTE}(?:\s+en\s+la\s+cartera)?\s*\.?\s*$",
+    re.I,
+)
+
+
+def interpretar_cartera(texto: str) -> tuple[str, Decimal] | None:
+    """"saco 200" → ("entrada", 200); "me quedan 35" → ("recuento", 35).
+
+    Tiene que ser la frase entera: "quedan 3 huevos" no es un recuento.
+    """
+    for tipo, patron in (("entrada", _RE_ENTRADA), ("recuento", _RE_RECUENTO)):
+        m = patron.match(texto or "")
+        if m:
+            return tipo, Decimal(m.group(1).replace(",", "."))
+    return None
