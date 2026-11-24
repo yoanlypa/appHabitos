@@ -420,6 +420,7 @@ class MiembroSalida(BaseModel):
     user_id: int
     nombre: str
     titular: bool
+    efectivo: bool
 
 
 class CasaSalida(BaseModel):
@@ -454,7 +455,8 @@ class UnirseSalida(BaseModel):
 
 
 class NombreEntrada(BaseModel):
-    nombre: str
+    nombre: str | None = None
+    efectivo: bool | None = None  # cómo paga casi siempre
 
 
 class GastoCasaEntrada(BaseModel):
@@ -463,6 +465,7 @@ class GastoCasaEntrada(BaseModel):
     fecha: date | None = None
     categoria: str | None = None
     pagado_por: int | None = None
+    efectivo: bool | None = None
 
 
 class GastoCasaTexto(BaseModel):
@@ -475,6 +478,7 @@ class GastoCasaCambios(BaseModel):
     fecha: date | None = None
     categoria: str | None = None
     pagado_por: int | None = None
+    efectivo: bool | None = None
 
 
 class GastoCasaSalida(BaseModel):
@@ -487,6 +491,7 @@ class GastoCasaSalida(BaseModel):
     importe: Importe
     categoria: str
     origen: str
+    efectivo: bool
 
 
 class ParteSalida(BaseModel):
@@ -503,6 +508,42 @@ class ResumenCasaSalida(BaseModel):
     anterior: Importe
     por_categoria: list[ParteSalida]
     por_persona: list[ParteSalida]
+    efectivo: Importe
+    sin_detallar: Importe
+
+
+class CarteraSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: int
+    nombre: str
+    esperado: Importe | None
+    contado_el: date | None
+    entradas: Importe
+    gastado: Importe
+
+
+class ImporteEntrada(BaseModel):
+    importe: Decimal
+
+
+class MovimientoCarteraSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    fecha: date
+    tipo: str
+    importe: Importe
+    gasto_id: int | None
+
+
+class RecuentoSalida(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    esperado: Importe | None
+    contado: Importe
+    sin_detallar: Importe
+    sobra: Importe
 
 
 class ArticuloEntrada(BaseModel):

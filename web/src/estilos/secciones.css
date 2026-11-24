@@ -2131,3 +2131,8 @@ i.gastos,
   align-items: center;
   text-decoration: none;
 }
+
+.cartera-botones {
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}

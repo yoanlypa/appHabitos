@@ -673,7 +673,8 @@ def estado_correo(correo: str | None, disponible: bool) -> str:
 def gasto_casa(gasto, quien: str | None = None) -> str:
     dia = "" if gasto.fecha == hoy_local() else f" · {dia_con_nombre(gasto.fecha)}"
     por = f" · pagó {quien}" if quien else ""
-    return f"🏠 Gasto de casa: {gasto.concepto} · {euros(gasto.importe)}\n{gasto.categoria}{dia}{por}"
+    pago = "💶 efectivo" if gasto.efectivo else "💳 tarjeta"
+    return f"🏠 Gasto de casa: {gasto.concepto} · {euros(gasto.importe)}\n{gasto.categoria} · {pago}{dia}{por}"
 
 
 def articulos_anadidos(articulos) -> str:
@@ -702,6 +703,11 @@ def resumen_casa(titulo: str, r) -> str:
     if len(r.por_persona) > 1:
         lineas.append("")
         lineas += [f"👤 {p.nombre}: {euros(p.total)}" for p in r.por_persona]
+    if r.efectivo:
+        lineas.append("")
+        lineas.append(f"💶 En efectivo: {euros(r.efectivo)}")
+        if r.sin_detallar:
+            lineas.append(f"   de ello sin detallar: {euros(r.sin_detallar)}")
     return "\n".join(lineas)
 
 
@@ -714,6 +720,7 @@ def ayuda_casa(titular: bool) -> str:
             "• Una foto con «casa» de texto: el ticket va a casa\n"
             "• /lista la lista de la compra\n"
             "• /casa lo gastado este mes\n"
+            "• /cartera tu efectivo: «saco 200», «me quedan 35»\n"
             "• /recetas qué hacer de comer con lo que hay\n"
             "• /invitar para que tu pareja anote también"
         )
@@ -723,6 +730,7 @@ def ayuda_casa(titular: bool) -> str:
         "• «leche, huevos y pan» lo pone en la lista de la compra\n"
         "• Una foto del ticket lo anota y tacha lo comprado\n"
         "• También vale un audio\n"
+        "• «saco 200» cuando saques efectivo, «me quedan 35» al contar la cartera\n"
         "• /lista la lista de la compra\n"
         "• /casa lo gastado este mes\n"
         "• /recetas qué hacer de comer con lo que hay\n"
@@ -744,3 +752,50 @@ def recetas(lista: list[dict]) -> str:
         partes += [f"{i}. {p}" for i, p in enumerate(r["pasos"], 1)]
         bloques.append("\n".join(partes))
     return "\n\n".join(bloques)
+
+
+def entrada_cartera(mov, cartera) -> str:
+    texto = f"💶 A tu cartera: +{euros(mov.importe)}"
+    if cartera.esperado is not None:
+        texto += f"\nDebería haber {euros(cartera.esperado)}."
+    else:
+        texto += "\nCuando puedas, cuenta lo que llevas: «me quedan 35». Desde ahí te llevo la cuenta."
+    return texto
+
+
+def recuento(r) -> str:
+    if r.esperado is None:
+        return (
+            f"💶 Apuntado: llevas {euros(r.contado)}. Es el punto de partida.\n"
+            "Desde ahora apunta lo que saques («saco 200») y, cuando vuelvas a contar, "
+            "lo que falte y no esté apuntado entra solo como «Efectivo sin detallar»."
+        )
+    texto = f"💶 Contado: {euros(r.contado)} (debería haber {euros(r.esperado)})."
+    if r.sin_detallar:
+        texto += (
+            f"\nFaltan {euros(r.sin_detallar)} que nadie apuntó: van a Casa como «Efectivo sin detallar». "
+            "Si te acuerdas de algo, apúntalo con su día y se descuenta de ahí."
+        )
+    elif r.sobra:
+        texto += f"\nSobran {euros(r.sobra)}: ¿entró dinero sin apuntar? Escribe «meto {r.sobra:.2f}» si quieres."
+    else:
+        texto += "\nCuadra al céntimo. 👌"
+    return texto
+
+
+def carteras(lista) -> str:
+    lineas = ["💶 Carteras:"]
+    for c in lista:
+        if c.esperado is None:
+            lineas.append(f"• {c.nombre}: sin contar todavía")
+        else:
+            lineas.append(f"• {c.nombre}: debería haber {euros(c.esperado)} (contado el {c.contado_el:%d/%m})")
+    lineas.append("\nPara contar: «me quedan 35». Para lo que sacas: «saco 200».")
+    return "\n".join(lineas)
+
+
+def pregunta_cartera(c) -> str:
+    return (
+        f"💶 ¿Cuánto te queda en la cartera? Debería haber {euros(c.esperado)}.\n"
+        "Si cuadra, toca el botón. Si no, escríbeme lo que te queda: «me quedan 35»."
+    )

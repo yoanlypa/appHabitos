@@ -23,7 +23,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.dominio import casa as reglas
-from app.dominio.models import ArticuloCompra, GastoCasa, Hogar, InvitacionHogar, MiembroHogar
+from app.dominio.models import ArticuloCompra, GastoCasa, Hogar, InvitacionHogar, MiembroHogar, MovimientoCartera
 from app.nucleo import recetas as cocina
 from app.nucleo.tiempo import hoy_local
 from app.servicios.auth import generar_token
@@ -228,7 +228,9 @@ def crear_gasto(
     categoria: str | None = None,
     origen: str = "web",
     pagado_por: int | None = None,
+    efectivo: bool | None = None,
 ) -> GastoCasa:
+    """Sin decir cómo se pagó, sale como paga casi siempre quien lo pagó."""
     yo = asegurar_casa(db, user_id)
     fecha = fecha or hoy_local()
     concepto = _validar_gasto(concepto, Decimal(importe), fecha)
@@ -238,6 +240,9 @@ def crear_gasto(
         if not otro or otro.hogar_id != yo.hogar_id:
             raise DatoNoValido("esa persona no es de tu casa")
         quien = pagado_por
+    if efectivo is None:
+        pagador = miembro_de(db, quien)
+        efectivo = bool(pagador and pagador.efectivo)
     gasto = GastoCasa(
         hogar_id=yo.hogar_id,
         user_id=quien,
@@ -246,19 +251,24 @@ def crear_gasto(
         importe=Decimal(importe),
         categoria=categoria if categoria in reglas.CATEGORIAS else reglas.categoria_de(concepto),
         origen=origen,
+        efectivo=efectivo,
     )
     db.add(gasto)
+    db.flush()
+    if efectivo and origen != "recuento":
+        _detallar(db, gasto)
     db.commit()
     db.refresh(gasto)
     return gasto
 
 
 def anotar_texto(db: Session, user_id: int, texto: str, origen: str = "bot") -> GastoCasa | None:
-    """"-45 súper", "pagué 60 de luz": un gasto. Sin importe, None."""
+    """"-45 súper", "pagué 60 de luz en efectivo": un gasto. Sin importe, None."""
+    efectivo, texto = reglas.forma_de_pago(texto)
     leido = reglas.interpretar_gasto(texto, hoy_local())
     if not leido:
         return None
-    return crear_gasto(db, user_id, leido.concepto, leido.importe, leido.fecha, origen=origen)
+    return crear_gasto(db, user_id, leido.concepto, leido.importe, leido.fecha, origen=origen, efectivo=efectivo)
 
 
 def _gasto(db: Session, user_id: int, gasto_id: int) -> GastoCasa:
@@ -281,6 +291,8 @@ def actualizar_gasto(db: Session, user_id: int, gasto_id: int, cambios: dict) ->
         if cambios["categoria"] not in reglas.CATEGORIAS:
             raise DatoNoValido("esa categoría no existe")
         gasto.categoria = cambios["categoria"]
+    if cambios.get("efectivo") is not None:
+        gasto.efectivo = bool(cambios["efectivo"])
     if cambios.get("pagado_por") is not None:
         otro = miembro_de(db, cambios["pagado_por"])
         if not otro or otro.hogar_id != gasto.hogar_id:
@@ -291,8 +303,19 @@ def actualizar_gasto(db: Session, user_id: int, gasto_id: int, cambios: dict) ->
     return gasto
 
 
+def cambiar_pago(db: Session, user_id: int, gasto_id: int) -> GastoCasa:
+    """Efectivo ↔ tarjeta, el botón de debajo de cada gasto en el bot."""
+    gasto = _gasto(db, user_id, gasto_id)
+    gasto.efectivo = not gasto.efectivo
+    db.commit()
+    db.refresh(gasto)
+    return gasto
+
+
 def borrar_gasto(db: Session, user_id: int, gasto_id: int) -> None:
-    db.delete(_gasto(db, user_id, gasto_id))
+    gasto = _gasto(db, user_id, gasto_id)
+    db.query(MovimientoCartera).filter(MovimientoCartera.gasto_id == gasto.id).update({"gasto_id": None})
+    db.delete(gasto)
     db.commit()
 
 
@@ -318,6 +341,8 @@ class ResumenCasa:
     por_categoria: list[Parte]
     por_persona: list[Parte]
     anterior: Decimal  # el mismo número de días justo antes, para comparar
+    efectivo: Decimal = Decimal(0)  # de todo el total, lo pagado en efectivo
+    sin_detallar: Decimal = Decimal(0)  # efectivo que faltó al contar y nadie apuntó
 
 
 def resumen(db: Session, user_id: int, desde: date, hasta: date) -> ResumenCasa:
@@ -348,7 +373,11 @@ def resumen(db: Session, user_id: int, desde: date, hasta: date) -> ResumenCasa:
     if fuera:
         por_persona.append(Parte("Otros", fuera))
     dias = (hasta - desde).days + 1
+    efectivo = en_rango.filter(GastoCasa.efectivo.is_(True)).with_entities(func.sum(GastoCasa.importe)).scalar()
+    sin_detallar = en_rango.filter(GastoCasa.origen == "recuento").with_entities(func.sum(GastoCasa.importe)).scalar()
     return ResumenCasa(
+        efectivo=Decimal(efectivo or 0),
+        sin_detallar=Decimal(sin_detallar or 0),
         total=suma(desde, hasta),
         por_categoria=sorted((Parte(c, Decimal(t or 0)) for c, t in cats), key=lambda p: -p.total),
         por_persona=por_persona,
@@ -476,6 +505,8 @@ class Anotado:
 
     gasto: GastoCasa | None = None
     articulos: list[ArticuloCompra] | None = None
+    entrada: MovimientoCartera | None = None
+    recuento: "Recuento | None" = None
 
 
 def anotar_libre(db: Session, user_id: int, texto: str, origen: str = "bot") -> Anotado:
@@ -490,6 +521,12 @@ def anotar_libre(db: Session, user_id: int, texto: str, origen: str = "bot") -> 
     texto = (texto or "").strip()
     if not texto:
         raise DatoNoValido("no has escrito nada")
+    cartera = reglas.interpretar_cartera(texto)
+    if cartera:
+        tipo, importe = cartera
+        if tipo == "entrada":
+            return Anotado(entrada=meter_en_cartera(db, user_id, importe))
+        return Anotado(recuento=contar_cartera(db, user_id, importe))
     if not reglas.es_para_la_lista(texto):
         gasto = anotar_texto(db, user_id, texto, origen)
         if gasto:
@@ -526,7 +563,11 @@ async def escanear_ticket(db: Session, user_id: int, imagen: bytes, mime: str, t
     tachados = tachar_comprado(db, user_id, lineas)
     if leido.total is None:
         return TicketDeCasa(gasto=None, tachados=tachados, fecha_supuesta=False)
-    concepto = (texto or "").strip() or leido.comercio or leido.concepto_sugerido
+    efectivo, texto = reglas.forma_de_pago(texto or "")
+    if efectivo is None:
+        pago = reglas.sin_tildes(str(leido.detalle.get("forma_pago") or ""))
+        efectivo = True if "efectivo" in pago or "contado" in pago else False if pago else None
+    concepto = texto.strip() or leido.comercio or leido.concepto_sugerido
     gasto = crear_gasto(
         db,
         user_id,
@@ -535,5 +576,184 @@ async def escanear_ticket(db: Session, user_id: int, imagen: bytes, mime: str, t
         leido.fecha or hoy_local(),
         categoria=reglas.categoria_de(f"{concepto} {leido.comercio or ''}"),
         origen="ticket",
+        efectivo=efectivo,
     )
     return TicketDeCasa(gasto=gasto, tachados=tachados, fecha_supuesta=leido.fecha is None)
+
+
+# --- Carteras ---------------------------------------------------------------
+#
+# Cada uno su cartera. No se apunta cada billete: se apunta lo que entra
+# ("saco 200") y de vez en cuando se cuenta lo que queda. La diferencia con
+# lo que debería haber, si nadie la apuntó, entra como "Efectivo sin
+# detallar": el total del mes es verdadero aunque no se sepa en qué se fue.
+
+SIN_DETALLAR = "Efectivo sin detallar"
+
+
+def _ultimo_recuento(db: Session, user_id: int) -> MovimientoCartera | None:
+    return (
+        db.query(MovimientoCartera)
+        .filter(MovimientoCartera.user_id == user_id, MovimientoCartera.tipo == "recuento")
+        .order_by(MovimientoCartera.fecha.desc(), MovimientoCartera.id.desc())
+        .first()
+    )
+
+
+def _despues_de(r: MovimientoCartera):
+    """Lo que pasó después de contar: de un día posterior, o del mismo día pero
+    apuntado después (por id: lo de antes ya estaba en lo contado)."""
+    entradas = (MovimientoCartera.fecha > r.fecha) | ((MovimientoCartera.fecha == r.fecha) & (MovimientoCartera.id > r.id))
+    gastos = (GastoCasa.fecha > r.fecha) | ((GastoCasa.fecha == r.fecha) & (GastoCasa.id > (r.hasta_gasto_id or 0)))
+    return entradas, gastos
+
+
+@dataclass
+class Cartera:
+    user_id: int
+    nombre: str
+    esperado: Decimal | None  # None: aún no se ha contado nunca
+    contado_el: date | None
+    entradas: Decimal  # lo que entró desde que se contó
+    gastado: Decimal  # lo apuntado en efectivo desde que se contó
+
+
+def cartera_de(db: Session, user_id: int) -> Cartera:
+    yo = _miembro(db, user_id)
+    r = _ultimo_recuento(db, user_id)
+    entradas_q = db.query(func.sum(MovimientoCartera.importe)).filter(
+        MovimientoCartera.user_id == user_id, MovimientoCartera.tipo == "entrada"
+    )
+    gastos_q = db.query(func.sum(GastoCasa.importe)).filter(
+        GastoCasa.user_id == user_id, GastoCasa.efectivo.is_(True), GastoCasa.hogar_id == yo.hogar_id
+    )
+    if r:
+        f_entradas, f_gastos = _despues_de(r)
+        entradas_q, gastos_q = entradas_q.filter(f_entradas), gastos_q.filter(f_gastos)
+    entradas = Decimal(entradas_q.scalar() or 0)
+    gastado = Decimal(gastos_q.scalar() or 0)
+    esperado = r.importe + entradas - gastado if r else None
+    return Cartera(user_id, yo.nombre, esperado, r.fecha if r else None, entradas, gastado)
+
+
+def carteras(db: Session, user_id: int) -> list[Cartera]:
+    yo = asegurar_casa(db, user_id)
+    return [cartera_de(db, m.user_id) for m in miembros(db, yo.hogar_id)]
+
+
+def meter_en_cartera(db: Session, user_id: int, importe: Decimal, fecha: date | None = None) -> MovimientoCartera:
+    yo = asegurar_casa(db, user_id)
+    importe = Decimal(importe)
+    if importe <= 0 or importe >= 100000:
+        raise DatoNoValido("el importe tiene que ser mayor que cero")
+    fecha = fecha or hoy_local()
+    if fecha > hoy_local():
+        raise DatoNoValido("la fecha no puede ser futura")
+    mov = MovimientoCartera(hogar_id=yo.hogar_id, user_id=user_id, fecha=fecha, tipo="entrada", importe=importe)
+    db.add(mov)
+    db.commit()
+    db.refresh(mov)
+    return mov
+
+
+@dataclass
+class Recuento:
+    movimiento: MovimientoCartera
+    esperado: Decimal | None  # None: era la primera vez, el punto de partida
+    contado: Decimal
+    sin_detallar: Decimal  # lo que faltaba y se ha anotado como gasto
+    sobra: Decimal  # había más de lo esperado (alguna entrada sin apuntar)
+
+
+def contar_cartera(db: Session, user_id: int, contado: Decimal) -> Recuento:
+    """"Me quedan 35". La primera vez solo es el punto de partida."""
+    yo = asegurar_casa(db, user_id)
+    contado = Decimal(contado)
+    if contado < 0 or contado >= 100000:
+        raise DatoNoValido("eso no puede quedar en una cartera")
+    esperado = cartera_de(db, user_id).esperado
+    falta = (esperado - contado) if esperado is not None else Decimal(0)
+    gasto = None
+    if falta > 0:
+        gasto = GastoCasa(
+            hogar_id=yo.hogar_id, user_id=user_id, fecha=hoy_local(), concepto=SIN_DETALLAR,
+            importe=falta, categoria="Otros", origen="recuento", efectivo=True,
+        )
+        db.add(gasto)
+        db.flush()
+    ultimo = db.query(func.max(GastoCasa.id)).scalar()
+    mov = MovimientoCartera(
+        hogar_id=yo.hogar_id, user_id=user_id, fecha=hoy_local(), tipo="recuento", importe=contado,
+        gasto_id=gasto.id if gasto else None, hasta_gasto_id=ultimo,
+    )
+    db.add(mov)
+    db.commit()
+    db.refresh(mov)
+    return Recuento(mov, esperado, contado, max(falta, Decimal(0)), max(-falta, Decimal(0)))
+
+
+def _detallar(db: Session, gasto: GastoCasa) -> None:
+    """Un gasto en efectivo apuntado tarde, de antes de un recuento, ya estaba
+    dentro de lo "sin detallar" de ese recuento: se le descuenta, o contaría
+    dos veces."""
+    r = (
+        db.query(MovimientoCartera)
+        .filter(
+            MovimientoCartera.user_id == gasto.user_id,
+            MovimientoCartera.tipo == "recuento",
+            MovimientoCartera.fecha > gasto.fecha,
+            MovimientoCartera.gasto_id.is_not(None),
+        )
+        .order_by(MovimientoCartera.fecha, MovimientoCartera.id)
+        .first()
+    )
+    if not r:
+        return
+    hueco = db.get(GastoCasa, r.gasto_id)
+    if not hueco:
+        return
+    if hueco.importe <= gasto.importe:
+        r.gasto_id = None
+        db.delete(hueco)
+    else:
+        hueco.importe = hueco.importe - gasto.importe
+
+
+def movimientos_cartera(db: Session, user_id: int, limite: int = 20) -> list[MovimientoCartera]:
+    _miembro(db, user_id)
+    return (
+        db.query(MovimientoCartera)
+        .filter(MovimientoCartera.user_id == user_id)
+        .order_by(MovimientoCartera.fecha.desc(), MovimientoCartera.id.desc())
+        .limit(limite)
+        .all()
+    )
+
+
+def deshacer_movimiento(db: Session, user_id: int, movimiento_id: int) -> None:
+    """Quita una entrada o un recuento propio; el recuento se lleva su "sin detallar"."""
+    mov = db.get(MovimientoCartera, movimiento_id)
+    if not mov or mov.user_id != user_id:
+        raise NoEncontrado("eso no está en tu cartera")
+    if mov.gasto_id:
+        gasto = db.get(GastoCasa, mov.gasto_id)
+        mov.gasto_id = None
+        db.flush()
+        if gasto:
+            db.delete(gasto)
+    db.delete(mov)
+    db.commit()
+
+
+def pago_habitual(db: Session, user_id: int, efectivo: bool) -> MiembroHogar:
+    yo = _miembro(db, user_id)
+    yo.efectivo = efectivo
+    db.commit()
+    return yo
+
+
+def por_contar(db: Session) -> list[Cartera]:
+    """A quién preguntar el domingo: quien usa su cartera (tiene algo apuntado
+    en ella) y tiene Telegram (id positivo). Al resto no se le molesta."""
+    ids = [u for (u,) in db.query(MovimientoCartera.user_id).distinct() if u > 0]
+    return [cartera_de(db, u) for u in ids if miembro_de(db, u)]

@@ -766,7 +766,7 @@ export function asignarTrabajo(token: string, apunteIds: number[], trabajoId: nu
 
 // --- Casa ---------------------------------------------------------------------
 
-export type Miembro = { id: number; user_id: number; nombre: string; titular: boolean }
+export type Miembro = { id: number; user_id: number; nombre: string; titular: boolean; efectivo: boolean }
 
 export type MiCasa = {
   hogar_id: number
@@ -787,11 +787,14 @@ export type GastoCasa = {
   importe: string
   categoria: string
   origen: string
+  efectivo: boolean
 }
 
 export type ResumenCasa = {
   total: string
   anterior: string
+  efectivo: string
+  sin_detallar: string
   por_categoria: { nombre: string; total: string }[]
   por_persona: { nombre: string; total: string }[]
 }
@@ -812,7 +815,20 @@ export type DatosGastoCasa = {
   fecha: string
   categoria: string
   pagado_por: number
+  efectivo: boolean
 }
+
+/** Lo que debería haber en la cartera de alguien desde que la contó. */
+export type Cartera = {
+  user_id: number
+  nombre: string
+  esperado: string | null
+  contado_el: string | null
+  entradas: string
+  gastado: string
+}
+
+export type Recuento = { esperado: string | null; contado: string; sin_detallar: string; sobra: string }
 
 const JSON_CAB = { 'Content-Type': 'application/json' }
 
@@ -822,6 +838,22 @@ export function miCasa(token: string) {
 
 export function cambiarMiNombre(token: string, nombre: string) {
   return pedir<Miembro>(token, '/casa/yo', { method: 'PATCH', headers: JSON_CAB, body: JSON.stringify({ nombre }) })
+}
+
+export function cambiarPagoHabitual(token: string, efectivo: boolean) {
+  return pedir<Miembro>(token, '/casa/yo', { method: 'PATCH', headers: JSON_CAB, body: JSON.stringify({ efectivo }) })
+}
+
+export function carteras(token: string) {
+  return pedir<Cartera[]>(token, '/casa/carteras')
+}
+
+export function meterEnCartera(token: string, importe: string) {
+  return pedir<{ id: number }>(token, '/casa/cartera/entrada', { method: 'POST', headers: JSON_CAB, body: JSON.stringify({ importe }) })
+}
+
+export function contarCartera(token: string, importe: string) {
+  return pedir<Recuento>(token, '/casa/cartera/recuento', { method: 'POST', headers: JSON_CAB, body: JSON.stringify({ importe }) })
 }
 
 export function crearInvitacion(token: string) {

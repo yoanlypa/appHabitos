@@ -7,7 +7,7 @@ deben hardcodear una zona horaria fuera de aquí.
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
-from app.nucleo.config import HORA_AVISO, TZ_LOCAL
+from app.nucleo.config import HORA_AVISO, HORA_CARTERA, TZ_LOCAL
 
 
 def zona() -> ZoneInfo:
@@ -20,6 +20,12 @@ def ahora_local() -> datetime:
 
 def hoy_local() -> date:
     return ahora_local().date()
+
+
+def hora_de_la_cartera() -> time:
+    """`HORA_CARTERA` ("HH:MM"): cuándo se pregunta el domingo cuánto queda en la cartera."""
+    horas, minutos = HORA_CARTERA.split(":")
+    return time(int(horas), int(minutos), tzinfo=zona())
 
 
 def hora_del_aviso() -> time:

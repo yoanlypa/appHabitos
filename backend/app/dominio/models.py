@@ -340,6 +340,9 @@ class MiembroHogar(Base):
     user_id = Column(BigInteger, nullable=False, unique=True)
     nombre = Column(String, nullable=False)
     titular = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    # Cómo paga casi siempre: así un "45 súper" sin decir nada sale de su
+    # cartera o no. En esta casa se paga mucho en efectivo: empieza en sí.
+    efectivo = Column(Boolean, nullable=False, default=True, server_default=text("1"))
     creado = Column(DateTime(timezone=True), server_default=func.now())
 
     hogar = relationship("Hogar", back_populates="miembros")
@@ -370,6 +373,32 @@ class GastoCasa(Base):
     importe = Column(Centimos, nullable=False)
     categoria = Column(String, nullable=False, default="Otros")
     origen = Column(String, nullable=False, default="web")
+    # Pagado en efectivo: sale de la cartera de quien lo pagó.
+    efectivo = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    creado = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class MovimientoCartera(Base):
+    """Lo que entra en la cartera de alguien, o lo que contó que le quedaba.
+
+    El efectivo no deja rastro: en vez de apuntar cada billete, se apunta lo
+    que entra ("saco 200") y de vez en cuando se cuenta lo que queda. Lo que
+    falta y nadie apuntó se anota como "Efectivo sin detallar" (`gasto_id`),
+    así el total del mes es verdadero aunque no se sepa en qué se fue.
+    """
+
+    __tablename__ = "cartera_movimientos"
+
+    id = Column(Integer, primary_key=True)
+    hogar_id = Column(Integer, ForeignKey("hogares.id"), nullable=False, index=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    fecha = Column(Date, nullable=False)
+    tipo = Column(String, nullable=False)  # "entrada" | "recuento"
+    importe = Column(Centimos, nullable=False)
+    gasto_id = Column(Integer, ForeignKey("gastos_casa.id"), nullable=True)
+    # El último gasto que ya existía al contar: lo del mismo día apuntado
+    # después del recuento cuenta para el siguiente, no para este.
+    hasta_gasto_id = Column(Integer, nullable=True)
     creado = Column(DateTime(timezone=True), server_default=func.now())
 
 
