@@ -133,7 +133,7 @@ parte-del-dia/
   tiene reglas propias (llaman a los servicios de siempre):
   - **Botones bajo cada apunte** (`bot/acciones.py`, datos `ap:<acción>:<id>`):
     cobrar, otro día (hoy/ayer/anteayer o escribirlo), pasar de cobro a
-    gasto y al revés, borrar. Borrar pide un segundo toque. Lo que salió de
+    gasto y al revés, meterlo en un trabajo, borrar. Borrar pide un segundo toque. Lo que salió de
     un ticket no ofrece cambiar el tipo: para eso está `/emitida`, que mueve
     también el papel. `/deben` y `/notas` son listas que se resuelven
     tocando. Los comandos con número siguen valiendo.
@@ -606,10 +606,20 @@ parte-del-dia/
     Desde el bot solo se puede marcar un ticket suelto, escribiendo "para la
     gestoría" con la foto (`marca_gestoria`; la palabra suelta dentro del
     concepto no cuenta, o "Factura gestoría octubre" se quedaría en "Factura
-    octubre"). Meter un gasto en un trabajo desde el bot no está hecho. El
-    bot dice al anotar si el ticket va o no va.
+    octubre"). El bot dice al anotar si el ticket va o no va.
   - La copia del domingo lleva los trabajos y estas marcas (ver "Copia de
-    seguridad"). **Pendiente**: crear trabajos desde el bot.
+    seguridad").
+  - **Desde el bot** (`bot/trabajos.py`): `/trabajo Reforma baño Ana Ruiz`
+    crea uno que empieza hoy (`servicios/trabajos.crear_por_texto`; el
+    cliente se reconoce como al anotar, y con dos Anas se pregunta);
+    `/trabajos` lista los **en curso** (`en_curso`: sin fecha de fin o que
+    aún no ha pasado) y cada uno abre su ficha con las mismas cuentas que
+    la web, más "Terminado hoy" y "Facturado". Bajo cada cobro o gasto hay
+    un botón **📁 Trabajo** (`ap:trab`) con los trabajos en curso, "Sacar
+    del trabajo" y "➕ Trabajo nuevo", que espera el nombre escrito con la
+    regla de "Escribir el día": si lo que llega lleva importe es un apunte y
+    se anota como siempre (un trabajo cuyo nombre acaba en número se crea
+    con `/trabajo`). La respuesta a un apunte dice su trabajo (📁).
   - **En la Agenda** la cita también dice de qué trabajo es (desplegable
     "Trabajo" en `FormCita`; elegir uno pone su cliente si no había) y la
     lista del día lo enseña. `FormCita` solo manda `trabajo_id` cuando se le

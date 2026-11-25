@@ -1,4 +1,5 @@
-"""Los botones de debajo de cada apunte: cobrar, cambiar el día, corregir, borrar.
+"""Los botones de debajo de cada apunte: cobrar, cambiar el día, corregir,
+meterlo en un trabajo, borrar.
 
 Antes todo eso se hacía con el número del apunte (`/fecha 34 15/10`), y el
 número hay que haberlo leído y acordarse de él. Con el apunte recién
@@ -19,6 +20,8 @@ from telegram.error import BadRequest
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes
 
 from app.bot import formato
+from app.bot.trabajos import preguntar_cliente
+from app.dominio.parsing import TextoNoInterpretable, interpretar_texto
 from app.dominio.tickets import fecha_escrita
 from app.nucleo.db import sesion
 from app.nucleo.tiempo import hoy_local
@@ -26,6 +29,7 @@ from app.servicios.apuntes import (
     ApunteNoEncontrado,
     MovimientoNoValido,
     actualizar_apunte,
+    asignar_trabajo,
     borrar_apunte,
     marcar_cobrado,
     obtener_apunte,
@@ -33,9 +37,17 @@ from app.servicios.apuntes import (
 from app.servicios.clientes import pendientes_de_cobro
 from app.servicios.notas import listar_notas
 from app.servicios.notas import marcar_hecha as marcar_nota_hecha
+from app.servicios.trabajos import (
+    TrabajoNoEncontrado,
+    TrabajoNoValido,
+    crear_por_texto,
+    en_curso,
+)
 
 # El apunte al que hay que ponerle el día que se escriba a continuación.
 ESPERA_FECHA = "fecha_para_apunte"
+# El apunte que hay que meter en el trabajo nuevo cuyo nombre se escriba.
+ESPERA_TRABAJO = "trabajo_para_apunte"
 # Cuántos botones caben en una lista sin que el mensaje sea un mando a distancia.
 _BOTONES_EN_LISTA = 8
 
@@ -62,6 +74,7 @@ def botones_de(apunte) -> InlineKeyboardMarkup:
         elif not apunte.pendiente:
             primera.append(InlineKeyboardButton("↔️ Es un gasto", callback_data=f"ap:tipo:{n}"))
     segunda = [
+        InlineKeyboardButton("📁 Trabajo", callback_data=f"ap:trab:{n}"),
         InlineKeyboardButton("📅 Otro día", callback_data=f"ap:fec:{n}"),
         InlineKeyboardButton("🗑 Borrar", callback_data=f"ap:del:{n}"),
     ]
@@ -84,6 +97,23 @@ def _botones_de_fecha(apunte_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def _botones_de_obra(apunte, trabajos) -> InlineKeyboardMarkup:
+    """Los trabajos en curso para elegir, más crear uno o sacarlo del suyo."""
+    n = apunte.id
+    filas = [
+        [InlineKeyboardButton(formato.boton_de_obra(t), callback_data=f"ap:tj:{n}:{t.id}")]
+        for t in trabajos[: _BOTONES_EN_LISTA - 1]
+        if t.id != apunte.trabajo_id
+    ]
+    filas.append([InlineKeyboardButton("➕ Trabajo nuevo", callback_data=f"ap:tn:{n}")])
+    ultima = []
+    if apunte.trabajo_id is not None:
+        ultima.append(InlineKeyboardButton("Sacar del trabajo", callback_data=f"ap:tj:{n}:0"))
+    ultima.append(InlineKeyboardButton("« Volver", callback_data=f"ap:ver:{n}"))
+    filas.append(ultima)
+    return InlineKeyboardMarkup(filas)
+
+
 def _botones_de_borrado(apunte_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
@@ -96,10 +126,14 @@ def _botones_de_borrado(apunte_id: int) -> InlineKeyboardMarkup:
 
 
 def texto_de(apunte) -> str:
-    """Cómo se ve un apunte ya anotado, con su cliente si lo tiene."""
+    """Cómo se ve un apunte ya anotado, con su cliente y su trabajo si los tiene."""
     if apunte.cliente is not None:
-        return formato.apunte_creado_con_cliente(apunte, apunte.cliente)
-    return formato.apunte_creado(apunte)
+        texto = formato.apunte_creado_con_cliente(apunte, apunte.cliente)
+    else:
+        texto = formato.apunte_creado(apunte)
+    if apunte.trabajo is not None:
+        texto += f"\n   📁 {apunte.trabajo.titulo}"
+    return texto
 
 
 async def _repintar(consulta, texto: str, botones: InlineKeyboardMarkup | None = None) -> None:
@@ -166,11 +200,29 @@ async def tocar(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
             elif accion == "ver":
                 apunte = obtener_apunte(db, user_id, apunte_id)
                 await _repintar(consulta, texto_de(apunte), botones_de(apunte))
+            elif accion == "trab":
+                apunte = obtener_apunte(db, user_id, apunte_id)
+                trabajos = en_curso(db, user_id)
+                await _repintar(
+                    consulta,
+                    f"{texto_de(apunte)}\n\n{formato.elegir_obra(apunte, bool(trabajos))}",
+                    _botones_de_obra(apunte, trabajos),
+                )
+            elif accion == "tj":
+                trabajo_id = int(partes[3]) or None
+                (apunte,) = asignar_trabajo(db, user_id, [apunte_id], trabajo_id)
+                await _repintar(consulta, texto_de(apunte), botones_de(apunte))
+            elif accion == "tn":
+                apunte = obtener_apunte(db, user_id, apunte_id)
+                contexto.user_data[ESPERA_TRABAJO] = apunte.id
+                await consulta.message.reply_text(formato.pedir_nombre_trabajo(apunte))
             elif accion == "nh":
                 nota = marcar_nota_hecha(db, user_id, apunte_id)
                 await _repintar(consulta, formato.nota_hecha(nota))
         except ApunteNoEncontrado:
             await _repintar(consulta, "Ese apunte ya no está.")
+        except TrabajoNoEncontrado:
+            await consulta.message.reply_text("Ese trabajo ya no está. Toca otra vez «📁 Trabajo».")
         except MovimientoNoValido as exc:
             await consulta.message.reply_text(f"No he podido: {exc}")
 
@@ -198,6 +250,52 @@ async def fecha_escrita_para(update: Update, contexto: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(
             formato.fecha_cambiada(apunte), reply_markup=botones_de(apunte)
         )
+    return True
+
+
+def _es_un_apunte(texto: str) -> bool:
+    """Si el texto, tal cual, se anotaría como cobro o gasto (lleva importe)."""
+    if "\n" in texto.strip():
+        return True  # varias líneas: una lista, o una nota larga; no un nombre
+    try:
+        interpretar_texto(texto)
+    except TextoNoInterpretable:
+        return False
+    return True
+
+
+async def trabajo_escrito_para(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Si se tocó "➕ Trabajo nuevo", este texto es su nombre... salvo que sea un apunte.
+
+    Misma regla que "Escribir el día": un apunte no puede comerse por haber
+    tocado antes un botón. Si lo escrito lleva importe ("-45 gasolina"), se
+    deja de esperar y se anota como siempre; el nombre de un trabajo que
+    acabe en número se crea con /trabajo.
+    """
+    apunte_id = contexto.user_data.pop(ESPERA_TRABAJO, None)
+    if apunte_id is None:
+        return False
+    texto = update.message.text or ""
+    if not texto.strip() or _es_un_apunte(texto):
+        return False
+    user_id = update.effective_user.id
+    with sesion() as db:
+        try:
+            apunte = obtener_apunte(db, user_id, apunte_id)
+            nuevo = crear_por_texto(db, user_id, texto)
+            (apunte,) = asignar_trabajo(db, user_id, [apunte.id], nuevo.trabajo.id)
+        except ApunteNoEncontrado:
+            await update.message.reply_text("Ese apunte ya no está.")
+            return True
+        except TrabajoNoValido as exc:
+            await update.message.reply_text(f"No he podido crear el trabajo: {exc}")
+            return True
+        await update.message.reply_text(
+            f"{formato.trabajo_creado(nuevo.trabajo, con_ayuda=False)}\n\n{texto_de(apunte)}",
+            reply_markup=botones_de(apunte),
+        )
+        if nuevo.candidatos:
+            await preguntar_cliente(update.message, nuevo)
     return True
 
 

@@ -27,6 +27,8 @@ COMANDOS = [
     ("hoy", "Resumen y apuntes de hoy"),
     ("mes", "Resumen del mes"),
     ("deben", "Quién te debe dinero"),
+    ("trabajos", "Trabajos en curso y sus cuentas"),
+    ("trabajo", "Crear un trabajo (/trabajo Reforma baño Ana)"),
     ("agenda", "Citas de hoy"),
     ("manana", "Citas de mañana"),
     ("notas", "Notas pendientes"),

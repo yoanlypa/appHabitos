@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.dominio.models import Apunte, Cita, Cliente, Trabajo
 from app.nucleo.tiempo import hoy_local
+from app.servicios.clientes import clientes_mencionados
 
 
 class TrabajoNoEncontrado(LookupError):
@@ -221,3 +222,60 @@ def ficha_trabajo(db: Session, user_id: int, trabajo_id: int) -> FichaTrabajo:
         notas=sorted((a for a in apuntes if a.tipo == "nota"), key=lambda a: (a.hecha, -a.id)),
         citas=sorted(trabajo.citas, key=lambda c: (c.fecha, c.hora is None, c.hora)),
     )
+
+
+# --- Desde el bot -------------------------------------------------------------
+
+
+def terminado(trabajo: Trabajo, hoy: date | None = None) -> bool:
+    """Terminado es tener fecha de fin y que ya haya pasado (como en la web)."""
+    hoy = hoy or hoy_local()
+    return trabajo.fecha_fin is not None and trabajo.fecha_fin < hoy
+
+
+def en_curso(db: Session, user_id: int) -> list[Trabajo]:
+    """Los trabajos sin terminar, el más reciente primero.
+
+    Es la lista que se ofrece al tocar "📁 Trabajo" bajo un apunte: lo
+    terminado no se ofrece, porque un gasto nuevo casi nunca es de una obra
+    acabada, y una lista larga obliga a leer.
+    """
+    hoy = hoy_local()
+    return [
+        t
+        for t in db.query(Trabajo)
+        .filter(Trabajo.user_id == user_id)
+        .order_by(Trabajo.fecha_inicio.desc().nullslast(), Trabajo.id.desc())
+        .all()
+        if not terminado(t, hoy)
+    ]
+
+
+@dataclass
+class TrabajoNuevo:
+    trabajo: Trabajo
+    # Si el nombre nombra a varios clientes posibles (dos Anas), hay que preguntar.
+    candidatos: list[Cliente] = field(default_factory=list)
+
+
+def crear_por_texto(db: Session, user_id: int, texto: str) -> TrabajoNuevo:
+    """Un trabajo a partir de lo escrito: "Reforma baño Ana Ruiz".
+
+    Empieza hoy. El cliente se reconoce como al anotar: si el nombre de un
+    cliente de alta sale en el texto y es uno solo, queda puesto; si son
+    varios, se devuelven para preguntar, y no se adivina. El nombre del
+    trabajo se queda tal cual se escribió: "Reforma baño Ana Ruiz" dice más
+    en una lista que "Reforma baño".
+    """
+    titulo = (texto or "").strip()
+    if not titulo:
+        raise TrabajoNoValido("el trabajo necesita un nombre")
+    candidatos = clientes_mencionados(db, user_id, titulo)
+    trabajo = crear_trabajo(
+        db,
+        user_id,
+        titulo,
+        cliente_id=candidatos[0].id if len(candidatos) == 1 else None,
+        fecha_inicio=hoy_local(),
+    )
+    return TrabajoNuevo(trabajo=trabajo, candidatos=candidatos if len(candidatos) > 1 else [])

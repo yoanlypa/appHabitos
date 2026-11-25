@@ -187,6 +187,7 @@ class TestBotonesDelApunte:
         apunte = db.query(Apunte).one()
         assert _datos_de(botones) == [
             f"ap:tipo:{apunte.id}",
+            f"ap:trab:{apunte.id}",
             f"ap:fec:{apunte.id}",
             f"ap:del:{apunte.id}",
         ]
@@ -767,7 +768,7 @@ class TestFotoDeVariosPagos:
         assert (apunte.tipo, apunte.importe) == ("gasto", Decimal("23.40"))
         assert "Gasto anotado" in texto
         # Sin "es un cobro": lo que sale de un ticket tiene /emitida.
-        assert _datos_de(botones) == [f"ap:fec:{apunte.id}", f"ap:del:{apunte.id}"]
+        assert _datos_de(botones) == [f"ap:trab:{apunte.id}", f"ap:fec:{apunte.id}", f"ap:del:{apunte.id}"]
 
     async def test_si_no_es_ni_ticket_ni_lista_se_dice_y_no_se_anota(self, db, monkeypatch):
         from app.servicios import facturas

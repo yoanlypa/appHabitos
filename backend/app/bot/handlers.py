@@ -87,6 +87,8 @@ async def anotar(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
     """
     if await acciones.fecha_escrita_para(update, contexto):
         return
+    if await acciones.trabajo_escrito_para(update, contexto):
+        return
     varios = leer_lineas(update.message.text, hoy_local())
     if varios is not None:
         await importar.proponer(update.message, contexto, update.effective_user.id, varios)
