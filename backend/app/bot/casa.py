@@ -19,13 +19,12 @@ from telegram.error import BadRequest, TelegramError
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from app.bot import formato
-from app.dominio.casa import interpretar_cartera, quitar_prefijo_casa
+from app.dominio.casa import quitar_prefijo_casa
 from app.nucleo import recetas as cocina
 from app.nucleo.config import URL_WEB
 from app.nucleo.db import sesion
 from app.nucleo.lectura_tickets import ErrorDeLectura, LecturaNoDisponible
 from app.nucleo.tiempo import hora_de_la_cartera, hoy_local
-from app.nucleo.transcripcion import ErrorDeTranscripcion, TranscripcionNoDisponible, transcribir
 from app.servicios import casa as servicio
 from app.servicios.facturas import FacturaNoValida
 
@@ -38,19 +37,13 @@ def _es_miembro(user_id: int) -> bool:
 
 
 class _DeCasa(filters.MessageFilter):
-    """El mensaje es de Casa: lo manda alguien que solo es de Casa, o empieza por "casa"."""
+    """El mensaje es de Casa (`servicios/casa.es_de_casa`, la misma regla que la voz)."""
 
     def filter(self, message: Message) -> bool:
         if not message.from_user:
             return False
-        if quitar_prefijo_casa(message.text or message.caption)[0]:
-            return True
-        # "me quedan 35" o "saco 200" es la cartera de quien sea de una casa:
-        # en el negocio sería un cobro de 35 € con concepto "me quedan".
-        if message.text and interpretar_cartera(message.text):
-            with sesion() as db:
-                return servicio.miembro_de(db, message.from_user.id) is not None
-        return _es_miembro(message.from_user.id)
+        with sesion() as db:
+            return servicio.es_de_casa(db, message.from_user.id, message.text or message.caption)
 
 
 class _Miembro(filters.MessageFilter):
@@ -91,18 +84,23 @@ async def _responder(mensaje: Message, user_id: int, texto: str, origen: str, en
         except servicio.DatoNoValido as exc:
             await mensaje.reply_text(f"{encabezado}No te he entendido: {exc}")
             return
-        if hecho.gasto:
-            quien = None
-            if len(servicio.miembros(db, hecho.gasto.hogar_id)) > 1:
-                quien = servicio.miembro_de(db, hecho.gasto.user_id).nombre
-            await mensaje.reply_text(encabezado + formato.gasto_casa(hecho.gasto, quien), reply_markup=_botones_gasto(hecho.gasto))
-        elif hecho.entrada:
-            await mensaje.reply_text(encabezado + formato.entrada_cartera(hecho.entrada, servicio.cartera_de(db, user_id)),
-                                     reply_markup=_deshacer(hecho.entrada.id))
-        elif hecho.recuento:
-            await mensaje.reply_text(encabezado + formato.recuento(hecho.recuento), reply_markup=_deshacer(hecho.recuento.movimiento.id))
-        else:
-            await mensaje.reply_text(encabezado + formato.articulos_anadidos(hecho.articulos))
+        await pintar(mensaje, db, user_id, hecho, encabezado)
+
+
+async def pintar(mensaje: Message, db, user_id: int, hecho, encabezado: str = "") -> None:
+    """La respuesta a lo anotado en Casa, escrito o dictado."""
+    if hecho.gasto:
+        quien = None
+        if len(servicio.miembros(db, hecho.gasto.hogar_id)) > 1:
+            quien = servicio.miembro_de(db, hecho.gasto.user_id).nombre
+        await mensaje.reply_text(encabezado + formato.gasto_casa(hecho.gasto, quien), reply_markup=_botones_gasto(hecho.gasto))
+    elif hecho.entrada:
+        await mensaje.reply_text(encabezado + formato.entrada_cartera(hecho.entrada, servicio.cartera_de(db, user_id)),
+                                 reply_markup=_deshacer(hecho.entrada.id))
+    elif hecho.recuento:
+        await mensaje.reply_text(encabezado + formato.recuento(hecho.recuento), reply_markup=_deshacer(hecho.recuento.movimiento.id))
+    else:
+        await mensaje.reply_text(encabezado + formato.articulos_anadidos(hecho.articulos))
 
 
 async def texto(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
@@ -113,26 +111,6 @@ async def texto(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
             await update.message.reply_text(formato.ayuda_casa(yo.titular))
         return
     await _responder(update.message, update.effective_user.id, resto, "bot")
-
-
-async def voz(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
-    """Un audio de quien solo es de Casa: se escucha y se anota en Casa."""
-    audio = update.message.voice or update.message.audio
-    if audio is None:
-        return
-    await update.message.chat.send_action(ChatAction.TYPING)
-    try:
-        fichero = await contexto.bot.get_file(audio.file_id)
-        datos = bytes(await fichero.download_as_bytearray())
-        oido = await transcribir(datos, "nota.ogg")
-    except TranscripcionNoDisponible:
-        await update.message.reply_text("Todavía no sé escuchar audios. Escríbemelo y lo apunto.")
-        return
-    except (TelegramError, ErrorDeTranscripcion) as exc:
-        await update.message.reply_text(f"No he podido escuchar el audio: {exc}")
-        return
-    _, oido = quitar_prefijo_casa(oido)
-    await _responder(update.message, update.effective_user.id, oido, "voz", formato.escuchado(oido) + "\n\n")
 
 
 async def foto(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
@@ -355,7 +333,8 @@ def registrar(app: Application) -> None:
     app.add_handler(CommandHandler("saco", saco))
     app.add_handler(CallbackQueryHandler(tocar, pattern=r"^ca:"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & _DE_CASA, texto))
-    app.add_handler(MessageHandler((filters.VOICE | filters.AUDIO) & _MIEMBRO, voz))
+    # La voz no tiene handler aquí: la escucha `handlers.nota_de_voz` para
+    # todos, y `servicios/voz` la manda a Casa con la misma regla que el texto.
     app.add_handler(
         MessageHandler((filters.PHOTO | filters.Document.IMAGE | filters.Document.PDF) & _DE_CASA, foto)
     )

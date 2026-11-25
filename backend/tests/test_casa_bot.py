@@ -125,6 +125,7 @@ def test_casa_va_antes_que_el_handler_que_anota(monkeypatch):
     registrados = app.handlers[0]
     de_casa = next(i for i, h in enumerate(registrados) if getattr(h, "callback", None) is bot_casa.texto)
     anota = next(i for i, h in enumerate(registrados) if getattr(h, "callback", None) is handlers.anotar)
-    voz_negocio = next(i for i, h in enumerate(registrados) if getattr(h, "callback", None) is handlers.nota_de_voz)
-    voz_casa = next(i for i, h in enumerate(registrados) if getattr(h, "callback", None) is bot_casa.voz)
-    assert de_casa < anota and voz_casa < voz_negocio
+    assert de_casa < anota
+    # La voz tiene un solo handler para todos: decide `servicios/casa.es_de_casa`
+    # (tests/test_voz.py), no el orden de registro.
+    assert not hasattr(bot_casa, "voz")

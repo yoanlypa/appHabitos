@@ -98,6 +98,23 @@ def solo_casa(db: Session, user_id: int) -> bool:
     return bool(miembro and not miembro.titular)
 
 
+def es_de_casa(db: Session, user_id: int, texto: str | None) -> bool:
+    """Si lo que se ha escrito o dicho va a Casa y no al negocio.
+
+    La regla en un sitio, para que el texto y la voz no puedan decidir
+    distinto (antes la voz de Yoa con "casa" delante acababa en el negocio):
+    - Empieza por "casa": a Casa, sea quien sea.
+    - "me quedan 35" o "saco 200", de quien es de una casa: su cartera. En el
+      negocio sería un cobro de 35 € con concepto "me quedan".
+    - Quien solo es de Casa (no es titular): todo lo suyo es de Casa.
+    """
+    if reglas.quitar_prefijo_casa(texto)[0]:
+        return True
+    if texto and reglas.interpretar_cartera(texto):
+        return miembro_de(db, user_id) is not None
+    return solo_casa(db, user_id)
+
+
 def miembros(db: Session, hogar_id: int) -> list[MiembroHogar]:
     return db.query(MiembroHogar).filter(MiembroHogar.hogar_id == hogar_id).order_by(MiembroHogar.id).all()
 

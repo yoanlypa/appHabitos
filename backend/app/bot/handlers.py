@@ -23,6 +23,7 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 from app.bot import acciones, copias, formato, importar
+from app.bot import casa as casa_bot
 from app.nucleo.config import URL_WEB
 from app.dominio.importacion import leer_lineas, marca_lista
 from app.dominio.parsing import TextoNoInterpretable, suena_a_gasto
@@ -52,7 +53,8 @@ from app.servicios.notas import listar_notas
 from app.servicios.notas import marcar_hecha as marcar_nota_hecha
 from app.servicios.resumen import resumen_dia, resumen_mes
 from app.servicios.trimestres import resumen_trimestre, trimestre_de
-from app.servicios.voz import NadaQueAnotar, anotar_audio
+from app.servicios.casa import DatoNoValido
+from app.servicios.voz import NadaQueAnotar, VozDeCasa, anotar_audio
 from app.nucleo.lectura_tickets import ErrorDeLectura, LecturaNoDisponible
 from app.nucleo.pdf import ImagenNoLegible
 from app.servicios.facturas import (
@@ -217,10 +219,18 @@ async def nota_de_voz(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> No
                 "El audio sigue en el chat, no se ha perdido nada."
             )
             return
+        except DatoNoValido as exc:
+            await update.message.reply_text(f"No te he entendido: {exc}")
+            return
 
-        await _responder_anotado(
-            update.message, escuchada.anotado, encabezado=formato.escuchado(escuchada.texto)
-        )
+        encabezado = formato.escuchado(escuchada.texto)
+        if isinstance(escuchada, VozDeCasa):
+            # "Casa, 45 de súper": va a Casa como si se hubiera escrito.
+            await casa_bot.pintar(
+                update.message, db, update.effective_user.id, escuchada.anotado, encabezado + "\n\n"
+            )
+            return
+        await _responder_anotado(update.message, escuchada.anotado, encabezado=encabezado)
 
 
 async def elegir_cliente(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:

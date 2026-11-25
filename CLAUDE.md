@@ -671,7 +671,11 @@ parte-del-dia/
     "casa" ("casa -45 súper", foto con "casa" de texto). Los handlers de
     `bot/casa.py` van antes que los del negocio y con un filtro que solo se
     queda lo de Casa: si no, su "45 súper" sería un cobro de 45 € de Yoa.
-    Hay test del orden. La voz de Yoa con "casa" delante aún no va a Casa.
+    Hay test del orden. La regla vive en `servicios/casa.es_de_casa` y la
+    usan el filtro del texto y la voz: un audio que empieza por "casa" (con
+    la coma o el punto que pone el transcriptor) va a Casa igual que lo
+    escrito. Hay un solo handler de voz (`handlers.nota_de_voz`);
+    `servicios/voz.anotar_audio` devuelve `VozDeCasa` cuando toca.
   - **Qué es gasto y qué es lista** (`servicios/casa.anotar_libre`, la regla
     en un sitio): "comprar …"/"… a la lista" va a la lista aunque lleve
     números; con importe es un gasto, **también sin guion** (en casa no se
