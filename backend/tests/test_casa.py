@@ -234,3 +234,56 @@ def test_el_importe_delante(texto, importe):
 
 def test_seis_huevos_es_para_la_lista():
     assert reglas.interpretar_gasto("6 huevos", HOY) is None
+
+
+class TestVolverPorLaWeb:
+    """Quien entró solo por la web y cierra sesión vuelve siendo la misma persona.
+
+    Antes, con otra invitación entraba alguien nuevo: salía dos veces en
+    Personas y lo que había anotado se quedaba con la ficha vieja.
+    """
+
+    def _entra(self, c, cab, **cuerpo):
+        codigo = c.post("/casa/invitacion", headers=cab).json()["codigo"]
+        return codigo, c.post("/casa/unirse", json={"codigo": codigo, **cuerpo})
+
+    def test_eligiendo_su_nombre_en_la_lista(self, c, cab, db):
+        _, r = self._entra(c, cab, nombre="María")
+        antes = c.get("/casa", headers={"Authorization": f"Bearer {r.json()['token']}"}).json()["yo"]
+
+        codigo = c.post("/casa/invitacion", headers=cab).json()["codigo"]
+        vista = c.get(f"/casa/invitacion/{codigo}").json()
+        assert [p["nombre"] for p in vista["volver"]] == ["María"], "el titular no sale: no entra así"
+        r = c.post("/casa/unirse", json={"codigo": codigo, "miembro_id": vista["volver"][0]["id"]})
+
+        despues = c.get("/casa", headers={"Authorization": f"Bearer {r.json()['token']}"}).json()
+        assert despues["yo"]["user_id"] == antes["user_id"]
+        assert len(despues["miembros"]) == 2, "no sale dos veces en Personas"
+
+    def test_escribiendo_el_mismo_nombre(self, c, cab, db):
+        _, r = self._entra(c, cab, nombre="María")
+        suyo = c.get("/casa", headers={"Authorization": f"Bearer {r.json()['token']}"}).json()["yo"]["user_id"]
+
+        _, r = self._entra(c, cab, nombre="  maria ")
+
+        yo = c.get("/casa", headers={"Authorization": f"Bearer {r.json()['token']}"}).json()
+        assert yo["yo"]["user_id"] == suyo and len(yo["miembros"]) == 2
+
+    def test_la_invitacion_se_gasta_igual(self, c, cab, db):
+        codigo, _ = self._entra(c, cab, nombre="María")
+        r = c.post("/casa/unirse", json={"codigo": codigo, "nombre": "María"})
+        assert r.status_code == 422
+
+    def test_nadie_se_hace_pasar_por_el_titular(self, c, cab, db):
+        yo = c.get("/casa", headers=cab).json()["yo"]
+        codigo = c.post("/casa/invitacion", headers=cab).json()["codigo"]
+        r = c.post("/casa/unirse", json={"codigo": codigo, "miembro_id": yo["id"]})
+        assert r.status_code == 422
+
+    def test_quien_usa_telegram_no_vuelve_asi(self, c, cab, db):
+        codigo = casa.crear_invitacion(db, USUARIO)
+        tg = casa.unirse(db, codigo, 777888999, "Marta")
+        codigo = c.post("/casa/invitacion", headers=cab).json()["codigo"]
+        assert c.get(f"/casa/invitacion/{codigo}").json()["volver"] == []
+        r = c.post("/casa/unirse", json={"codigo": codigo, "miembro_id": tg.id})
+        assert r.status_code == 422

@@ -711,8 +711,13 @@ parte-del-dia/
   - En la web, `componentes/Casa.tsx` (Gastos, Compra, Cocinar, Personas) y
     `Unirse.tsx`. Casa va en el menú lateral y en el de arriba del móvil: la
     barra de abajo ya tiene seis.
-  - Pendiente: si quien entró solo por la web cierra sesión, necesita otra
-    invitación (y saldría dos veces en Personas hasta que Yoa quite una).
+  - **Quien entró solo por la web y cierra sesión** (o cambia de móvil) no
+    tiene `/web` que le dé otro token: vuelve con otra invitación, y al
+    entrar **toca su nombre** ("Soy María", `casa.solo_por_web`) o escribe
+    el mismo (sin tildes ni mayúsculas): recibe un token nuevo para su
+    misma ficha (`unirse_por_web(miembro_id=…)`), en vez de salir dos veces
+    en Personas. La invitación es la llave y se gasta igual; el titular y
+    quien usa Telegram no pueden entrar así.
   - **El efectivo se cuenta, no se apunta billete a billete** (migración
     `b2c3d4e5f6a7`). Pagan mucho en efectivo y eso no dejaba rastro. Cada uno
     tiene su cartera (`MovimientoCartera`): se apunta lo que entra ("saco

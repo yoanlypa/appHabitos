@@ -440,14 +440,24 @@ class InvitacionSalida(BaseModel):
     dias: int
 
 
+class PersonaQueVuelve(BaseModel):
+    """Alguien de la casa que entró solo por la web y puede volver a ser él."""
+
+    id: int
+    nombre: str
+
+
 class InvitacionVista(BaseModel):
     casa: str
     miembros: list[str]
+    volver: list[PersonaQueVuelve] = []
 
 
 class UnirseEntrada(BaseModel):
     codigo: str
-    nombre: str
+    nombre: str = ""
+    # Si se elige "Soy …" en la lista de quienes ya estaban.
+    miembro_id: int | None = None
 
 
 class UnirseSalida(BaseModel):

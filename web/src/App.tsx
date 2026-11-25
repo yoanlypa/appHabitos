@@ -233,7 +233,7 @@ export default function App() {
     const si = await confirmar({
       titulo: '¿Cerrar la sesión?',
       texto: soloCasa
-        ? 'Para volver a entrar necesitarás otra invitación, o pedírselo al bot con /web si usas Telegram.'
+        ? 'Para volver a entrar necesitarás otra invitación (al entrar, toca tu nombre y seguirás siendo tú), o pedírselo al bot con /web si usas Telegram.'
         : 'Para volver a entrar tendrás que pedirle otro enlace al bot con /web.',
       aceptar: 'Salir',
     })

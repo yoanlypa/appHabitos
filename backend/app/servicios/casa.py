@@ -15,6 +15,7 @@ también pudiera ir anotando lo que gasta. Por eso:
   es lo que se le da al modelo para pensar qué hacer de comer.
 """
 import secrets
+import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -189,15 +190,56 @@ def unirse(db: Session, codigo: str, user_id: int, nombre: str) -> MiembroHogar:
     return miembro
 
 
-def unirse_por_web(db: Session, codigo: str, nombre: str) -> tuple[MiembroHogar, str]:
+def _mismo_nombre(a: str, b: str) -> bool:
+    """"María" y "maria " son la misma persona en una casa; sin tildes ni mayúsculas."""
+    def normal(texto: str) -> str:
+        sin_tildes = unicodedata.normalize("NFKD", texto or "")
+        return "".join(c for c in sin_tildes if not unicodedata.combining(c)).strip().casefold()
+
+    return normal(a) == normal(b)
+
+
+def solo_por_web(db: Session, hogar_id: int) -> list[MiembroHogar]:
+    """Quien entró en esa casa solo por la web: puede volver con una invitación.
+
+    Sin Telegram no hay `/web` que le dé otro token, así que si cierra
+    sesión (o cambia de móvil) la única puerta es otra invitación. Al
+    entrar con ella elige quién es y sigue siendo la misma persona, con lo
+    que había anotado, en vez de salir dos veces en Personas.
+    """
+    return [m for m in miembros(db, hogar_id) if m.user_id < 0 and not m.titular]
+
+
+def unirse_por_web(
+    db: Session, codigo: str, nombre: str, miembro_id: int | None = None
+) -> tuple[MiembroHogar, str]:
     """Para quien no usa Telegram: se le da un id propio y un token de la web.
 
     El id es negativo: los de Telegram son positivos, así que no pueden
     chocar nunca.
+
+    Si vuelve alguien que ya estaba (eligió su nombre en la lista, o escribe
+    el mismo nombre que una persona de esa casa que entró solo por la web),
+    se le da un token nuevo para su misma ficha. La invitación es la llave:
+    solo la crea el titular, y se gasta igual.
     """
-    if not (nombre or "").strip():
-        raise DatoNoValido("dinos tu nombre")
-    _invitacion(db, codigo)  # que falle antes de inventar nada
+    inv = _invitacion(db, codigo)  # que falle antes de inventar nada
+    vuelve = None
+    if miembro_id is not None:
+        vuelve = next((m for m in solo_por_web(db, inv.hogar_id) if m.id == miembro_id), None)
+        if vuelve is None:
+            raise DatoNoValido("esa persona no puede entrar así; si usa Telegram, que pida /web al bot")
+    else:
+        if not (nombre or "").strip():
+            raise DatoNoValido("dinos tu nombre")
+        vuelve = next(
+            (m for m in solo_por_web(db, inv.hogar_id) if _mismo_nombre(m.nombre, nombre)), None
+        )
+    if vuelve is not None:
+        inv.usada_por = vuelve.user_id
+        db.commit()
+        return vuelve, generar_token(db, vuelve.user_id)
+
     while True:
         user_id = -(secrets.randbelow(2**52) + 1)
         if not miembro_de(db, user_id):

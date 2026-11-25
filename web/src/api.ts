@@ -929,18 +929,26 @@ export function quitarMiembro(token: string, id: number) {
 }
 
 /** Sin token: quien llega con el enlace todavía no tiene. */
-export async function verInvitacion(codigo: string): Promise<{ casa: string; miembros: string[] }> {
+/** Lo que enseña el enlace de invitación antes de entrar. `volver`: quienes
+ *  entraron solo por la web y pueden volver a ser ellos (sin duplicarse). */
+export type InvitacionVista = {
+  casa: string
+  miembros: string[]
+  volver: { id: number; nombre: string }[]
+}
+
+export async function verInvitacion(codigo: string): Promise<InvitacionVista> {
   const r = await fetch(`${BASE}/casa/invitacion/${encodeURIComponent(codigo)}`)
   const cuerpo = await r.json().catch(() => null)
   if (!r.ok) throw new ErrorDeApi(cuerpo?.detail ?? `Error ${r.status}`)
   return cuerpo
 }
 
-export async function unirseACasa(codigo: string, nombre: string): Promise<string> {
+export async function unirseACasa(codigo: string, nombre: string, miembroId?: number): Promise<string> {
   const r = await fetch(`${BASE}/casa/unirse`, {
     method: 'POST',
     headers: JSON_CAB,
-    body: JSON.stringify({ codigo, nombre }),
+    body: JSON.stringify({ codigo, nombre, miembro_id: miembroId ?? null }),
   })
   const cuerpo = await r.json().catch(() => null)
   if (!r.ok) throw new ErrorDeApi(cuerpo?.detail ?? `Error ${r.status}`)

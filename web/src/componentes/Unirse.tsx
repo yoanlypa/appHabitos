@@ -4,9 +4,13 @@
  * Quien llega no tiene token ni Telegram por fuerza: con su nombre basta. El
  * backend le da un token, que se guarda como el de siempre, y a partir de ahí
  * la web solo le enseña Casa.
+ *
+ * Quien ya estaba (entró solo por la web y cerró sesión o cambió de móvil)
+ * elige su nombre y sigue siendo la misma persona, con lo que anotó, en vez
+ * de salir dos veces en Personas.
  */
 import { useEffect, useState } from 'react'
-import { unirseACasa, verInvitacion } from '../api'
+import { unirseACasa, verInvitacion, type InvitacionVista } from '../api'
 import { ErrorEnLinea } from '../ui/piezas'
 import { Logo } from './Logo'
 
@@ -17,7 +21,7 @@ type Props = {
 }
 
 export function Unirse({ codigo, onDentro, onCancelar }: Props) {
-  const [casa, setCasa] = useState<{ casa: string; miembros: string[] } | null>(null)
+  const [casa, setCasa] = useState<InvitacionVista | null>(null)
   const [nombre, setNombre] = useState('')
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
@@ -26,17 +30,21 @@ export function Unirse({ codigo, onDentro, onCancelar }: Props) {
     verInvitacion(codigo).then(setCasa, (e: Error) => setError(e.message))
   }, [codigo])
 
-  async function entrar(e: React.FormEvent) {
-    e.preventDefault()
-    if (!nombre.trim()) return
+  async function entrarComo(miembroId?: number) {
     setOcupado(true)
     setError('')
     try {
-      onDentro(await unirseACasa(codigo, nombre.trim()))
+      onDentro(await unirseACasa(codigo, nombre.trim(), miembroId))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se ha podido entrar')
       setOcupado(false)
     }
+  }
+
+  async function entrar(e: React.FormEvent) {
+    e.preventDefault()
+    if (!nombre.trim()) return
+    await entrarComo()
   }
 
   return (
@@ -51,6 +59,24 @@ export function Unirse({ codigo, onDentro, onCancelar }: Props) {
               : 'Para apuntar juntos los gastos de casa y la lista de la compra.'}
           </p>
         </div>
+
+        {casa && casa.volver.length > 0 && (
+          <div className="volver-a-casa">
+            <p className="ayuda">¿Ya estabas en esta casa? Toca tu nombre:</p>
+            {casa.volver.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                className="boton secundario ancho"
+                onClick={() => void entrarComo(p.id)}
+                disabled={ocupado}
+              >
+                Soy {p.nombre}
+              </button>
+            ))}
+            <p className="ayuda">Si eres alguien nuevo, escribe tu nombre:</p>
+          </div>
+        )}
 
         {casa && (
           <form onSubmit={entrar}>

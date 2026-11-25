@@ -2195,3 +2195,11 @@ i.gastos,
 .importar-importe.trabajo {
   color: var(--cobrado);
 }
+
+/* ---------- Volver a Casa con una invitación ---------- */
+
+.volver-a-casa {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
