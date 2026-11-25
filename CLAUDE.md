@@ -126,7 +126,7 @@ parte-del-dia/
     deuda. Se cuenta en vez de comparar uno a uno, porque dos gasolinas de
     45 el mismo día son dos. Siempre enseña antes lo que va a meter y pide
     un sí: una copia vieja devolvería lo que se borró adrede después. La
-    copia no lleva clientes ni citas, así que eso no vuelve.
+    copia en CSV no lleva clientes ni citas; la copia en ZIP sí (abajo).
 
 - **El bot se usa tocando, no recordando números.** Antes, corregir un
   apunte era `/fecha 34 15/10` con el 34 de memoria. Tres piezas, y ninguna
@@ -208,11 +208,30 @@ parte-del-dia/
   `Decimal("120")` como `"120"` y `Decimal("45.5")` como `"45.5"`; en el CSV
   que va al gestor, una columna con esa mezcla parece mal apuntada. El tipo
   `Importe` de `api/schemas.py` lo normaliza.
-- **Copia de seguridad por Telegram** (`bot/copias.py`): el histórico
-  entero en CSV, cada domingo y con `/copia` cuando se quiera. El sitio más
-  seguro para estos datos no es el servidor — ya se perdieron una vez por
-  tenerlos sólo ahí. El CSV va en utf-8 **con BOM** para que Excel no
-  convierta "Reforma baño" en "Reforma baÃ±o".
+- **Copia de seguridad por Telegram** (`bot/copias.py`): **todo** en un ZIP,
+  cada domingo y con `/copia` cuando se quiera (y desde la web, menú → Copia
+  de seguridad, `GET /export/copia`). El sitio más seguro para estos datos
+  no es el servidor — ya se perdieron una vez por tenerlos sólo ahí.
+  - Dentro van `copia.json` (`dominio/copia_completa.py`: apuntes con sus
+    marcas, clientes, trabajos, citas, hábitos y sus días, ajustes, emisores
+    aprendidos y Casa, con los enlaces entre ellos) y `apuntes.csv`, el CSV
+    de siempre, en utf-8 **con BOM** para que Excel no convierta "Reforma
+    baño" en "Reforma baÃ±o".
+  - **No van** las fotos de los tickets (pesan demasiado para cada domingo)
+    ni los tokens de la web (son llaves). Un cobro suelto con factura
+    emitida vuelve marcado a mano para la gestoría, o se caería del parte.
+  - **Restaurar** (`servicios/copia_completa.py`): reenviar el ZIP al bot.
+    Las mismas reglas que con el CSV, para todo: la base manda, se cuenta en
+    vez de buscar, y restaurar dos veces no duplica. Un apunte que ya está
+    pero **suelto** se vuelve a colgar de su trabajo y su cliente (rellenar
+    huecos sí, mover lo colocado no). La vista previa **hace la restauración
+    y la deshace**: lo que enseña es lo que pasará. Si la copia es de otra
+    cuenta (la de Casa también le llega a ella), se avisa antes.
+  - **Se manda a todo el que tenga algo guardado**, no solo a quien recibe
+    el aviso de esa noche: antes, un domingo sin anotar nada era una semana
+    sin copia. `/avisos off` no la calla, porque no es un recordatorio.
+    Quien entró solo por la web no tiene chat: la descarga desde la web.
+  - El CSV suelto de las copias antiguas se sigue aceptando.
 - **El trimestre cuenta lo cobrado, no lo facturado**, y la estimación del
   modelo 130 (20% del neto) se presenta siempre como orientativa: aquí no
   se sabe qué gastos son deducibles ni qué retenciones han practicado los
@@ -589,9 +608,8 @@ parte-del-dia/
     concepto no cuenta, o "Factura gestoría octubre" se quedaría en "Factura
     octubre"). Meter un gasto en un trabajo desde el bot no está hecho. El
     bot dice al anotar si el ticket va o no va.
-  - **Pendiente**: la copia CSV del domingo no lleva los trabajos ni estas
-    marcas. Restaurar una copia devuelve los apuntes, pero sueltos. Tampoco
-    se pueden crear trabajos desde el bot.
+  - La copia del domingo lleva los trabajos y estas marcas (ver "Copia de
+    seguridad"). **Pendiente**: crear trabajos desde el bot.
   - **En la Agenda** la cita también dice de qué trabajo es (desplegable
     "Trabajo" en `FormCita`; elegir uno pone su cliente si no había) y la
     lista del día lo enseña. `FormCita` solo manda `trabajo_id` cuando se le

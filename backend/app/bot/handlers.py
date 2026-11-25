@@ -442,7 +442,7 @@ async def borrar(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def copia(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
-    """Manda ahora mismo el histórico entero en CSV."""
+    """Manda ahora mismo la copia de seguridad entera."""
     enviada = await copias.enviar_copia(contexto, update.effective_user.id)
     if not enviada:
         await update.message.reply_text("Todavía no hay nada que guardar.")

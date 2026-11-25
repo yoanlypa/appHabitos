@@ -11,6 +11,7 @@ from app.dominio.tickets import texto_de_vale
 
 from app.dominio.models import Apunte
 from app.nucleo.tiempo import hoy_local
+from app.servicios.copia_completa import SECCIONES
 from app.servicios.resumen import ResumenPeriodo
 
 
@@ -226,6 +227,72 @@ def copia_restaurada(cuantos: int) -> str:
         return "No faltaba nada: ya estaba todo."
     plural = "s" if cuantos != 1 else ""
     return f"Restaurado{plural} {cuantos} apunte{plural}. Míralo en la web o con /mes."
+
+
+def _secciones(cuentas: dict[str, int]) -> list[str]:
+    return [
+        f"  {cuentas[clave]} {uno if cuentas[clave] == 1 else varios}"
+        for clave, uno, varios in SECCIONES
+        if cuentas.get(clave)
+    ]
+
+
+def plan_de_restauracion_completa(plan, creada=None, de_otro: bool = False, muestra: int = 6) -> str:
+    """Lo que entraría al restaurar la copia completa, antes de pedir el sí."""
+    cuando = f" del {creada.strftime('%d/%m/%Y')}" if creada else ""
+    lineas = []
+    if de_otro:
+        lineas += [
+            "⚠️ Esta copia es de OTRA cuenta. Si la restauras, sus cosas pasan a ser tuyas.",
+            "",
+        ]
+    lineas.append(f"Copia{cuando}. Faltan:")
+    lineas += _secciones(plan.nuevos) or ["  nada nuevo"]
+    if plan.apuntes_nuevos:
+        lineas.append("")
+        lineas.append("Algunos de los apuntes:")
+        for a in plan.apuntes_nuevos[:muestra]:
+            dinero = "nota" if a["tipo"] == "nota" else euros(a["importe"])
+            lineas.append(f"  {a['fecha'].strftime('%d/%m/%Y')} · {a['concepto']} · {dinero}")
+        if len(plan.apuntes_nuevos) > muestra:
+            lineas.append(f"  … y {len(plan.apuntes_nuevos) - muestra} más")
+    if plan.reenlazados:
+        lineas.append("")
+        lineas.append(
+            f"Además, {plan.reenlazados} apunte(s) que ya tienes sueltos vuelven a su trabajo o cliente."
+        )
+    if plan.total_ya_estaban:
+        lineas.append("")
+        lineas.append(f"Lo demás ({plan.total_ya_estaban}) ya lo tienes: eso no lo toco.")
+    lineas.append("")
+    lineas.append(
+        "Ojo: si borraste algo a propósito después de hacer esta copia, volverá a entrar. "
+        "Las fotos de los tickets no van en la copia."
+    )
+    return "\n".join(lineas)
+
+
+def copia_completa_ya_estaba(plan) -> str:
+    return "Ya tienes todo lo que hay en esta copia. No hay nada que restaurar."
+
+
+def copia_completa_no_valida(motivo) -> str:
+    return (
+        f"No puedo restaurar ese ZIP: {motivo}.\n\n"
+        "Vale el ZIP que te mando yo cada domingo (o con /copia)."
+    )
+
+
+def copia_completa_restaurada(plan) -> str:
+    if not plan.hay_algo:
+        return "No faltaba nada: ya estaba todo."
+    lineas = ["Restaurado:"]
+    lineas += _secciones(plan.nuevos)
+    if plan.reenlazados:
+        lineas.append(f"  {plan.reenlazados} apunte(s) vueltos a su trabajo o cliente")
+    lineas.append("")
+    lineas.append("Míralo en la web o con /mes.")
+    return "\n".join(lineas)
 
 
 def racha_texto(racha: int) -> str:

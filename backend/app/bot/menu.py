@@ -35,7 +35,7 @@ COMANDOS = [
     ("facturas", "Tickets del mes en PDF"),
     ("web", "Abrir la web"),
     ("correo", "Avisos de citas también por correo"),
-    ("copia", "Copia de todo en CSV"),
+    ("copia", "Copia de seguridad de todo"),
     ("menu", "Sacar los botones de abajo"),
     ("lista", "Casa: la lista de la compra"),
     ("casa", "Casa: lo gastado este mes"),

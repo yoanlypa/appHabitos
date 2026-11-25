@@ -71,7 +71,7 @@ def construir_app() -> Application:
             handlers.foto_de_ticket,
         )
     )
-    # Un CSV reenviado es una copia que restaurar, o una lista de movimientos.
+    # Un ZIP reenviado es una copia completa; un CSV, una copia antigua o una lista.
     restaurar.registrar(app)
     # Un Excel, y los botones de "añadir estos N".
     importar.registrar(app)

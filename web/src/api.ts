@@ -147,12 +147,14 @@ export function resumenMes(token: string, anio: number, mes: number) {
  * Un CSV no se puede enlazar con un <a href> porque la ruta exige el header
  * Authorization, así que se descarga a mano y se guarda como fichero.
  */
-async function descargar(token: string, ruta: string, nombre: string) {
+async function descargar(token: string, ruta: string, nombre: string): Promise<boolean> {
   const respuesta = await fetch(`${BASE}${ruta}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (respuesta.status === 401) throw new TokenInvalido('El token no vale')
   if (!respuesta.ok) throw new ErrorDeApi(`Error ${respuesta.status}`)
+  // 204: no había nada que descargar.
+  if (respuesta.status === 204) return false
 
   const blob = await respuesta.blob()
   const url = URL.createObjectURL(blob)
@@ -161,6 +163,17 @@ async function descargar(token: string, ruta: string, nombre: string) {
   enlace.download = nombre
   enlace.click()
   URL.revokeObjectURL(url)
+  return true
+}
+
+/**
+ * La copia de seguridad completa, la misma que manda el bot cada domingo:
+ * un ZIP que se le reenvía al bot para restaurar. Devuelve false si aún no
+ * hay nada que guardar.
+ */
+export function descargarCopia(token: string) {
+  const hoy = new Date().toISOString().slice(0, 10)
+  return descargar(token, '/export/copia', `parte-del-dia-${hoy}.zip`)
 }
 
 /** Todos los movimientos del periodo. */
