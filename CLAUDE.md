@@ -49,21 +49,25 @@ parte-del-dia/
 ├── CLAUDE.md              este archivo
 ├── backend/
 │   ├── app/
-│   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py,
-│   │   │                     transcripcion.py, correo.py
-│   │   ├── dominio/       ✅ models.py (Apunte, Trabajo, Cliente, Cita, Ajuste, TokenAcceso, Centimos),
-│   │   │                     parsing.py, parsing_citas.py, habitos.py, copia_csv.py,
-│   │   │                     gestoria.py, recordatorios.py
+│   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py, almacenamiento.py,
+│   │   │                     transcripcion.py, correo.py, lectura_tickets.py, recetas.py,
+│   │   │                     archivos.py, pdf.py, paginas_pdf.py, perspectiva.py, hojas.py
+│   │   ├── dominio/       ✅ models.py (Apunte, Trabajo, Cliente, Cita, Habito, Factura,
+│   │   │                     Hogar…, Centimos), parsing.py, parsing_citas.py, habitos.py,
+│   │   │                     copia_csv.py, copia_completa.py, importacion.py, tickets.py,
+│   │   │                     gestoria.py, recordatorios.py, casa.py, deteccion_clientes.py
 │   │   ├── servicios/     ✅ apuntes, resumen, export, auth, avisos, clientes,
-│   │   │                     agenda, trimestres, voz, notas, restauracion, habitos,
-│   │   │                     gestoria, trabajos, casa
-│   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export,
-│   │   │                     clientes, agenda, notas, habitos, gestoria, ajustes, trabajos, casa
+│   │   │                     agenda, trimestres, voz, notas, restauracion, copia_completa,
+│   │   │                     importacion, habitos, facturas, gestoria, trabajos, casa
+│   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export, importacion,
+│   │   │                     clientes, agenda, notas, habitos, facturas, gestoria, ajustes,
+│   │   │                     trabajos, casa
 │   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py,
 │   │                         copias.py, alarma.py, restaurar.py, habitos.py, citas.py,
-│   │                         menu.py, acciones.py, importar.py
-│   ├── requirements.txt
-│   ├── Procfile           ✅ dos procesos: web (uvicorn) y bot (polling)
+│   │                         menu.py, acciones.py, importar.py, trabajos.py, casa.py
+│   ├── alembic/           migraciones (se aplican solas al arrancar)
+│   ├── requirements.txt   (+ requirements-dev.txt para los tests)
+│   ├── railway.json       arranque en Railway (y railpack.json, el mismo comando)
 │   └── .env.example
 └── web/                   ✅ hecho — src/api.ts (lo único que sabe de HTTP),
                               estilos/ (base, marco, secciones), ui/ (piezas
@@ -747,9 +751,10 @@ parte-del-dia/
 
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
-  usuario/contraseña. Falta que el bot lo genere con `/web`
-  (`servicios.auth.generar_token()` ya está listo para que ese handler lo
-  llame); hasta entonces se genera a mano.
+  usuario/contraseña. `/web` en el bot lo genera y manda un botón que abre
+  la web ya dentro (el token va tras el `#`, que no viaja a ningún
+  servidor) y otro para copiarlo. Quien solo usa Casa por la web entra con
+  una invitación (ver Casa).
 
 ## Cómo se prueba
 
@@ -759,7 +764,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-483 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+545 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
@@ -775,8 +780,11 @@ alarma calla cuando todo va bien. `test_habitos_reglas.py` fija las reglas
 que deciden si una racha anima o desanima, y `test_habitos_bot.py` que el
 botón del recordatorio nunca desmarca. `test_facturas.py` que una lectura
 absurda no llegue a las cuentas, que borrar un gasto se lleve su foto y que
-nadie vea la factura de otro. Al añadir algo, el test que hace falta es el del caso
-que se te ocurra que podría romperse en silencio.
+nadie vea la factura de otro. `test_copia_completa.py` que la copia lleva
+todo y vuelve con sus enlaces, que restaurar dos veces no duplica y que la
+vista previa no escribe; `test_importar_web.py` que importar desde la web
+sigue las reglas del bot. Al añadir algo, el test que hace falta es el del
+caso que se te ocurra que podría romperse en silencio.
 
 ## Convenciones de código
 
@@ -795,8 +803,15 @@ que se te ocurra que podría romperse en silencio.
 
 ## Estado actual
 
-`nucleo/`, `dominio/`, `servicios/` y `api/` están escritos y probados (no
-se vuelven a tocar salvo que aparezca una necesidad concreta):
+Todo lo de arriba está hecho, probado y desplegado. Lo que queda abierto
+está marcado como **Pendiente** en su apartado (hoy: probar el lector de
+capturas con fotos reales; y la copia de seguridad no lleva las fotos de
+los tickets, a propósito, ver "Copia de seguridad").
+
+Lo que sigue es el registro de cómo se montó y se comprobó cada capa al
+principio. Se deja porque explica decisiones que siguen vigentes; los
+detalles de entonces (qué rutas había, qué comandos) ya se han quedado
+cortos y lo de arriba manda:
 
 - `nucleo/config.py`, `nucleo/db.py`, `nucleo/tiempo.py` — leen variables
   de entorno, normalizan la URL de Postgres, crean tablas, abren y cierran
@@ -817,9 +832,9 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   `servicios/resumen.py` — `resumen_dia()` / `resumen_mes()` devuelven
   `ResumenPeriodo` (cobrado, pendiente, gastos, `neto`). `servicios/export.py`
   — `exportar_csv()`. `servicios/auth.py` — `generar_token()` /
-  `usuario_por_token()`, listo para que el futuro handler `/web` del bot
-  llame a `generar_token()`.
-- `api/main.py` monta tres routers sobre FastAPI: `POST /apuntes`,
+  `usuario_por_token()`, que usa `/web` en el bot.
+- `api/main.py` montaba al principio tres routers sobre FastAPI (hoy son
+  muchos más, ver la estructura): `POST /apuntes`,
   `POST /apuntes/{id}/cobrado`, `GET /resumen/dia`, `GET /resumen/mes`,
   `GET /export/csv`, `GET /salud`. Todas menos `/salud` exigen
   `Authorization: Bearer <token>` (`api/dependencias.py`, 401 si falta o
@@ -828,7 +843,8 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   en blanco, marcar cobrado (+404 si no existe), resumen antes/después
   de cobrar, y export a CSV — todo correcto de punta a punta por HTTP.
 - `bot/main.py` arranca por **polling** (no webhook: no necesita URL
-  pública, y en Railway es otro proceso del mismo repo — ver `Procfile`).
+  pública). En producción corre en el mismo proceso que la API
+  (`app/api_y_bot.py`, ver "Decisiones ya tomadas").
   `bot/handlers.py` tiene `/start`, `/hoy`, `/mes`, `/cobrado <id>`,
   `/web`, un handler de texto libre que anota cualquier mensaje que no
   sea comando, y otro de notas de voz (`filters.VOICE | filters.AUDIO`) que
@@ -837,7 +853,7 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   los tres tipos de apunte, texto no entendido, `/cobrado` con y sin
   almohadilla, sin argumento y con id inexistente, resumen antes/después
   de cobrar, y `/web` generando un token que `usuario_por_token()` acepta.
-  **Sin probar contra Telegram real: hace falta un `TELEGRAM_BOT_TOKEN`.**
+  (Luego se probó contra Telegram de verdad: ver más abajo.)
 - Se eliminaron `app/config.py`, `db.py`, `models.py`, `schemas.py`,
   `crud.py`, `auth.py` y `app/routers/`: eran los stubs vacíos del scaffold
   original, ya sustituidos 1:1 por los de arriba. También `bot/parsing.py`,
@@ -924,10 +940,6 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   `Integer` de 32 bits de Postgres (`2147483647`). Es la confirmación en
   real de por qué `user_id` tiene que ser `BigInteger`: no era una
   precaución teórica.
-
-Pendiente menor: el `.gitignore` de la raíz tiene pegado dentro el
-heredoc con el que se creó (`cat > .gitignore <<'EOF'` … `EOF`). Las
-líneas de patrón funcionan, las dos sobrantes son inertes.
 
 ## Cómo levantarlo en local
 
