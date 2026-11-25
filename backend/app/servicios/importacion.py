@@ -26,8 +26,18 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.dominio.importacion import Movimiento, de_lectura
+from app.dominio import copia_completa
+from app.dominio.copia_csv import CopiaNoValida, decodificar, es_copia
+from app.dominio.importacion import (
+    ImportacionNoValida,
+    Movimiento,
+    de_lectura,
+    filas_de_csv,
+    leer_lineas,
+    leer_tabla,
+)
 from app.dominio.models import Apunte
+from app.nucleo.hojas import HojaNoLegible, filas_de_xlsx
 from app.nucleo.lectura_tickets import leer_movimientos
 from app.nucleo.tiempo import hoy_local
 from app.servicios.clientes import clientes_mencionados
@@ -59,10 +69,14 @@ def _clave(fecha, tipo, importe) -> tuple:
     return (fecha, tipo, Decimal(importe).quantize(_CENTIMO))
 
 
-def planificar(db: Session, user_id: int, movimientos: list[Movimiento]) -> PlanDeImportacion:
-    """Qué entraría si se importa ahora. No escribe nada."""
+def repetidos(db: Session, user_id: int, movimientos: list[Movimiento]) -> list[bool]:
+    """Para cada movimiento, si parece estar ya. En el mismo orden en que llegan.
+
+    Los que no tienen tipo todavía no se pueden comparar: cuentan como nuevos
+    hasta que se diga si son gastos o cobros.
+    """
     if not movimientos:
-        return PlanDeImportacion()
+        return []
     desde = min(m.fecha for m in movimientos)
     hasta = max(m.fecha for m in movimientos)
     en_la_base = Counter(
@@ -74,14 +88,22 @@ def planificar(db: Session, user_id: int, movimientos: list[Movimiento]) -> Plan
             Apunte.tipo != "nota",
         )
     )
-    plan = PlanDeImportacion()
+    marcas = []
     for movimiento in movimientos:
         clave = _clave(movimiento.fecha, movimiento.tipo, movimiento.importe)
-        if en_la_base[clave] > 0:
+        if movimiento.tipo is not None and en_la_base[clave] > 0:
             en_la_base[clave] -= 1
-            plan.repetidos.append(movimiento)
+            marcas.append(True)
         else:
-            plan.nuevos.append(movimiento)
+            marcas.append(False)
+    return marcas
+
+
+def planificar(db: Session, user_id: int, movimientos: list[Movimiento]) -> PlanDeImportacion:
+    """Qué entraría si se importa ahora. No escribe nada."""
+    plan = PlanDeImportacion()
+    for movimiento, repetido in zip(movimientos, repetidos(db, user_id, movimientos)):
+        (plan.repetidos if repetido else plan.nuevos).append(movimiento)
     return plan
 
 
@@ -155,3 +177,63 @@ def borrar_importados(db: Session, user_id: int, ids: list[int]) -> int:
 async def leer_captura(imagen: bytes, mime: str) -> list[Movimiento]:
     """Los movimientos de una captura con varios pagos, ya filtrados."""
     return de_lectura(await leer_movimientos(imagen, mime), hoy_local())
+
+
+# --- Desde la web ---------------------------------------------------------------
+
+_EXCEL = (".xlsx",)
+_TEXTO = (".csv", ".txt", ".tsv")
+
+
+async def leer_entrada(
+    nombre: str | None, mime: str | None, datos: bytes | None, texto: str | None
+) -> list[Movimiento]:
+    """Los movimientos de lo que se sube a la web: un fichero o un texto pegado.
+
+    Las mismas cuatro entradas que en el bot, con las mismas reglas
+    (`dominio/importacion.py`): un apunte por línea, un CSV, un Excel o una
+    captura con varios pagos. Una copia de seguridad no se importa: se
+    restaura (por el bot), que tiene otras reglas para no duplicar.
+    """
+    nombre = (nombre or "").lower()
+    mime = (mime or "").lower()
+    hoy = hoy_local()
+
+    if datos:
+        # Un Excel también es un ZIP por dentro: por eso se mira la extensión.
+        if nombre.endswith(".zip") or (copia_completa.es_zip(datos) and not nombre.endswith(_EXCEL)):
+            raise ImportacionNoValida(
+                "eso es una copia de seguridad: para restaurarla, reenvíasela al bot"
+            )
+        if nombre.endswith(_EXCEL):
+            try:
+                return leer_tabla(filas_de_xlsx(datos), hoy)
+            except HojaNoLegible as exc:
+                raise ImportacionNoValida(str(exc)) from exc
+        if nombre.endswith(_TEXTO) or mime.startswith("text/"):
+            try:
+                contenido = decodificar(datos)
+            except CopiaNoValida as exc:
+                raise ImportacionNoValida(str(exc)) from exc
+            if es_copia(contenido):
+                raise ImportacionNoValida(
+                    "eso es una copia de seguridad: para restaurarla, reenvíasela al bot"
+                )
+            return leer_tabla(filas_de_csv(contenido), hoy)
+        if mime.startswith("image/"):
+            movimientos = await leer_captura(datos, mime)
+            if len(movimientos) < 2:
+                raise ImportacionNoValida(
+                    "en esa imagen no he visto una lista de pagos. Si es un ticket, "
+                    "usa «Escanear ticket»"
+                )
+            return movimientos
+        raise ImportacionNoValida("no sé leer ese tipo de fichero: vale CSV, Excel o una captura")
+
+    movimientos = leer_lineas(texto or "", hoy)
+    if movimientos is None:
+        raise ImportacionNoValida(
+            "escribe al menos dos movimientos, uno por línea y cada uno con su importe "
+            "(por ejemplo: «ayer -45 gasolina»)"
+        )
+    return movimientos

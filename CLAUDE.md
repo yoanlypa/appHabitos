@@ -187,8 +187,20 @@ parte-del-dia/
   - Lo leído espera en `user_data`, cada lista con su número (dos capturas
     seguidas son dos listas); un reinicio las pierde y se pide reenviar.
     Tras añadir hay un "Deshacer" que quita solo lo recién importado.
-  - Pendiente: importar desde la web, y probar el lector de capturas con
-    fotos reales (los tests sustituyen al modelo).
+  - **Desde la web** (Finanzas → Importar, `ImportarMovimientos.tsx`,
+    `api/importacion.py`): el mismo servicio y las mismas reglas. Tres
+    llamadas porque leer una captura se paga y no se repite: `POST
+    /importar/leer` (fichero o texto; no guarda), `/importar/revisar` (con
+    el tipo elegido; se guarda la lectura sin tipo para poder cambiar de
+    "gastos" a "cobros") y `POST /importar`. Lo repetido sale desmarcado;
+    si se marca a mano alguno, va `todo=true` y entra exactamente lo
+    elegido, y si no el backend vuelve a mirar qué está ya (dos pestañas o
+    un doble clic no duplican). "Deshacer" llama a `/importar/deshacer`.
+    Una copia de seguridad (ZIP o CSV con su cabecera) no se importa: se
+    restaura por el bot. Un Excel es un ZIP por dentro: se distingue por
+    la extensión.
+  - Pendiente: probar el lector de capturas con fotos reales (los tests
+    sustituyen al modelo).
 
 - **`func.sum()` sobre un importe ya devuelve euros.** El tipo `Centimos`
   se aplica también a los agregados, así que dividir otra vez entre 100 es

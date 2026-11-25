@@ -2136,3 +2136,62 @@ i.gastos,
   margin-top: 0.75rem;
   flex-wrap: wrap;
 }
+
+/* ---------- Importar varios movimientos ---------- */
+
+.lista-importar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: min(50vh, 26rem);
+  overflow-y: auto;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-s);
+}
+
+.lista-importar li + li {
+  border-top: 1px solid var(--borde);
+}
+
+.lista-importar .casilla {
+  padding: 0.6rem 0.75rem;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.lista-importar li.repetido {
+  background: var(--relleno);
+}
+
+.importar-fecha {
+  color: var(--texto-2);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.importar-concepto {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.importar-concepto small {
+  display: block;
+  color: var(--pendiente);
+  font-size: 0.75rem;
+}
+
+.importar-importe {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.importar-importe.gasto {
+  color: var(--gasto);
+}
+
+.importar-importe.trabajo {
+  color: var(--cobrado);
+}

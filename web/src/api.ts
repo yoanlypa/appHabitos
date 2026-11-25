@@ -194,6 +194,57 @@ export function descargarCsvGestoria(token: string, desde: string, hasta: string
   )
 }
 
+// ---------- Importar varios movimientos ----------
+
+/** Un movimiento leído de una lista, un CSV, un Excel o una captura. */
+export type MovimientoImportado = {
+  fecha: string
+  // null: la tabla no decía si entra o sale. Se pregunta, nunca se supone.
+  tipo: 'trabajo' | 'gasto' | null
+  concepto: string
+  importe: string
+  pendiente: boolean
+  // Mismo día, tipo e importe que algo que ya está. Se enseña y se puede meter igual.
+  repetido: boolean
+}
+
+export type LecturaImportacion = { movimientos: MovimientoImportado[]; falta_tipo: boolean }
+
+/** Lee un fichero (CSV, Excel, captura) o un texto pegado. No guarda nada. */
+export function leerImportacion(token: string, entrada: { fichero?: File; texto?: string }) {
+  const datos = new FormData()
+  if (entrada.fichero) datos.append('fichero', entrada.fichero)
+  if (entrada.texto) datos.append('texto', entrada.texto)
+  return pedir<LecturaImportacion>(token, '/importar/leer', { method: 'POST', body: datos })
+}
+
+/** Los mismos movimientos con el tipo elegido para los que no lo traían. */
+export function revisarImportacion(token: string, movimientos: MovimientoImportado[], tipo: 'trabajo' | 'gasto') {
+  return pedir<LecturaImportacion>(token, '/importar/revisar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ movimientos, tipo }),
+  })
+}
+
+/** Mete los elegidos. Con `todo`, entran tal cual aunque parezcan repetidos. */
+export function confirmarImportacion(token: string, movimientos: MovimientoImportado[], todo: boolean) {
+  return pedir<{ apuntes: Apunte[]; ya_estaban: number }>(token, '/importar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ movimientos, todo }),
+  })
+}
+
+/** Quita lo recién importado (lo que no se haya tocado desde entonces). */
+export function deshacerImportacion(token: string, ids: number[]) {
+  return pedir<{ borrados: number }>(token, '/importar/deshacer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  })
+}
+
 // ---------- Clientes y agenda ----------
 
 export type Cliente = {

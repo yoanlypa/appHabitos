@@ -18,6 +18,7 @@ from app.api import (
     export,
     facturas,
     gestoria,
+    importacion,
     habitos,
     notas,
     resumen,
@@ -64,6 +65,7 @@ def crear_api(con_bot: bool = False) -> FastAPI:
     api.include_router(ajustes.router)
     api.include_router(trabajos.router)
     api.include_router(casa.router)
+    api.include_router(importacion.router)
 
     @api.get("/salud")
     def salud():
