@@ -772,6 +772,14 @@ parte-del-dia/
     trae también el certificado firma la clave. Si aun así no vale,
     `que_le_pasa` dice por qué (certificado en vez de clave, con contraseña,
     cortada) sin enseñar nada de ella.
+  - **La fecha de un movimiento se busca en varios sitios** (`dominio/banco.fecha_de`):
+    con Santander de verdad, los 64 primeros llegaron sin fecha donde se
+    buscaba y la lista salió vacía. Se mira `booking_date`, luego
+    `transaction_date`, `value_date` y cualquier campo "…date…", en ISO, con
+    hora o a la española. Lo que no tenga fecha se enseña igual ("¿sin
+    fecha?") y se cuenta: un hueco se ve. `GET /banco/estructura` (con
+    token) dice qué campos trae cada movimiento sin conceptos ni importes,
+    para ajustar la lectura a cada banco.
   - La clave privada (`ENABLE_BANKING_CLAVE`, el .pem entero) y el
     `ENABLE_BANKING_APP_ID` van en Railway. La redirect URL registrada en
     Enable Banking tiene que ser `URL_API` + `/banco/vuelta` (`URL_API` sale
@@ -792,7 +800,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-579 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+590 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

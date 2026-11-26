@@ -987,7 +987,9 @@ def resumen_banco(r) -> str:
         lineas += ["", "Últimos movimientos:"]
         for m in r.ultimos:
             signo = "−" if m.es_gasto else "+"
-            cuando = m.fecha.strftime("%d/%m") if m.fecha else "  ?  "
+            cuando = m.fecha.strftime("%d/%m") if m.fecha else "¿sin fecha?"
             aun = " (pendiente)" if m.pendiente else ""
             lineas.append(f"  {cuando} {m.concepto} {signo}{euros(m.importe)}{aun}")
+    if r.sin_fecha:
+        lineas += ["", f"⚠️ {r.sin_fecha} movimientos sin fecha: el banco la manda donde no la busco todavía."]
     return "\n".join(lineas)

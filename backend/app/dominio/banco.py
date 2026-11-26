@@ -45,11 +45,53 @@ class MovimientoBanco:
     pendiente: bool  # aún sin cargar del todo (status PDNG)
 
 
+_FORMATOS_DE_FECHA = ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y%m%d", "%d.%m.%Y")
+# Dónde puede venir el día de un movimiento, por orden de preferencia: el
+# del apunte en la cuenta, el de la operación, el valor. Santander (vía
+# Redsys) no siempre rellena el primero.
+_CAMPOS_DE_FECHA = ("booking_date", "transaction_date", "value_date", "booking_date_time", "value_date_time")
+
+
 def _fecha(valor) -> date | None:
-    try:
-        return date.fromisoformat(str(valor)[:10]) if valor else None
-    except ValueError:
+    """Un día, venga en ISO, con hora pegada o a la española."""
+    if not valor:
         return None
+    texto = str(valor).strip()
+    for formato in _FORMATOS_DE_FECHA:
+        for trozo in (texto[:10], texto[:8], texto):
+            try:
+                return datetime.strptime(trozo, formato).date()
+            except ValueError:
+                continue
+    return None
+
+
+def fecha_de(m: dict) -> date | None:
+    for campo in _CAMPOS_DE_FECHA:
+        dia = _fecha(m.get(campo))
+        if dia:
+            return dia
+    # Último recurso: cualquier campo que se llame "...date..." y sea una fecha.
+    for campo, valor in m.items():
+        if "date" in campo.lower():
+            dia = _fecha(valor)
+            if dia:
+                return dia
+    return None
+
+
+def estructura(m: dict) -> dict:
+    """Qué campos trae un movimiento, sin sus valores (salvo las fechas).
+
+    Para ver dónde pone cada banco cada cosa sin enseñar conceptos ni
+    importes: solo los nombres de los campos con algo dentro, y lo que traen
+    los que parecen fechas, que no dicen nada de nadie.
+    """
+    return {
+        campo: (valor if "date" in campo.lower() else type(valor).__name__)
+        for campo, valor in m.items()
+        if valor not in (None, "", [], {})
+    }
 
 
 def _limpio(texto: str) -> str:
@@ -71,7 +113,7 @@ def leer_movimiento(m: dict) -> MovimientoBanco | None:
         remesa = [remesa]
     concepto = _limpio(otro.get("name") or "") or _limpio(" ".join(remesa)) or "(sin concepto)"
     return MovimientoBanco(
-        fecha=_fecha(m.get("booking_date") or m.get("transaction_date") or m.get("value_date")),
+        fecha=fecha_de(m),
         importe=abs(importe),
         es_gasto=es_gasto,
         concepto=concepto[:120],

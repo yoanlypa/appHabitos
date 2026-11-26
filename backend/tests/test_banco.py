@@ -306,3 +306,57 @@ class TestClavePegadaEnRailway:
         with pytest.raises(enable.BancoNoDisponible, match=dice) as error:
             enable._cabeceras()
         assert "MIIEvQIBADANBgkqhkiG9w0BAQ" not in str(error.value), "la clave no sale en el mensaje"
+
+
+class TestFechaDeSantander:
+    """Con Santander de verdad, los 64 movimientos llegaron sin fecha donde
+    se buscaba y la lista de la página salió vacía."""
+
+    @pytest.mark.parametrize(
+        "campos",
+        [
+            {"booking_date": "2026-11-24"},
+            {"booking_date": None, "transaction_date": "2026-11-24"},
+            {"value_date": "2026-11-24T00:00:00"},
+            {"booking_date": "24/11/2026"},
+            {"booking_date": "20261124"},
+            {"booking_date_time": "2026-11-24T10:31:00Z"},
+            {"fecha_rara_date": "24-11-2026"},
+        ],
+    )
+    def test_la_fecha_se_encuentra_donde_venga(self, campos):
+        m = {**PAGO, "booking_date": None, **campos}
+        assert leer_movimiento(m).fecha.isoformat() == "2026-11-24"
+
+    def test_sin_fecha_se_enseña_igual(self, db):
+        from app.bot import formato
+
+        sin = leer_movimiento({**PAGO, "booking_date": None})
+        r = servicio.ResumenBanco(banco="Banco Santander", valido_hasta=None, ultimos=[sin], sin_fecha=1)
+        texto = formato.resumen_banco(r)
+        assert "¿sin fecha? REPSOL ESTACION 123" in texto
+        assert "1 movimientos sin fecha" in texto
+
+    def test_la_estructura_no_enseña_conceptos_ni_importes(self):
+        from app.dominio.banco import estructura
+
+        forma = estructura(PAGO)
+        assert forma["booking_date"] == "2026-11-24", "las fechas sí, para ver dónde vienen"
+        assert forma["creditor"] == "dict" and forma["transaction_amount"] == "dict"
+        assert "REPSOL" not in str(forma) and "45.30" not in str(forma)
+
+    def test_la_estructura_pide_token(self, cliente):
+        assert cliente.get("/banco/estructura").status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_la_estructura_de_la_cuenta_conectada(self, db, banco_falso, cliente):
+        from app.servicios.auth import generar_token
+
+        await servicio.iniciar(db, USUARIO)
+        await servicio.completar(db, banco_falso["estado"], "cod-1")
+        cab = {"Authorization": f"Bearer {generar_token(db, USUARIO)}"}
+
+        r = cliente.get("/banco/estructura", headers=cab)
+
+        assert r.status_code == 200
+        assert r.json()["movimientos"][0]["credit_debit_indicator"] == "str"
