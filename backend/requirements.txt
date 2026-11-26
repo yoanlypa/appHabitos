@@ -19,3 +19,6 @@ python-telegram-bot[job-queue]>=21.7,<23.0
 httpx>=0.27,<1.0
 # Para importar movimientos desde un Excel (.xlsx) que se le manda al bot.
 openpyxl>=3.1,<4.0
+# Para firmar las peticiones a Enable Banking (conexión con el banco, PSD2):
+# un JWT RS256 con la clave privada de la aplicación.
+PyJWT[crypto]>=2.8,<3.0

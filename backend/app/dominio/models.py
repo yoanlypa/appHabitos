@@ -420,3 +420,27 @@ class ArticuloCompra(Base):
     anadido_por = Column(BigInteger, nullable=True)
     creado = Column(DateTime(timezone=True), server_default=func.now())
     cambiado = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ConexionBanco(Base):
+    """El permiso para leer una cuenta del banco (PSD2, vía Enable Banking).
+
+    Se crea "pendiente" al pedir el enlace, con un `estado` aleatorio que
+    vuelve del banco y dice de quién es la vuelta (la página de vuelta no
+    lleva token). Al volver pasa a "activa" con su sesión; la anterior de esa
+    persona queda "sustituida". El permiso caduca (`valido_hasta`): lo pone
+    el banco, no la app, y entonces hay que volver a darlo.
+    """
+
+    __tablename__ = "conexiones_banco"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    banco = Column(String, nullable=False)
+    estado = Column(String, nullable=False, default="pendiente")  # pendiente | activa | sustituida
+    clave_vuelta = Column(String, nullable=True, unique=True)
+    sesion = Column(String, nullable=True)
+    valido_hasta = Column(DateTime(timezone=True), nullable=True)
+    # Las cuentas que dejó ver el banco, en JSON: uid, nombre, tipo, final del IBAN.
+    cuentas = Column(Text, nullable=True)
+    creado = Column(DateTime(timezone=True), server_default=func.now())

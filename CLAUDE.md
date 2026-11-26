@@ -49,7 +49,7 @@ parte-del-dia/
 ├── CLAUDE.md              este archivo
 ├── backend/
 │   ├── app/
-│   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py, almacenamiento.py,
+│   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py, almacenamiento.py, banco.py,
 │   │   │                     transcripcion.py, correo.py, lectura_tickets.py, recetas.py,
 │   │   │                     archivos.py, pdf.py, paginas_pdf.py, perspectiva.py, hojas.py
 │   │   ├── dominio/       ✅ models.py (Apunte, Trabajo, Cliente, Cita, Habito, Factura,
@@ -749,6 +749,27 @@ parte-del-dia/
       me quedan X" para cuando cuadra. Solo a quien ya la usa, y `/avisos
       off` lo calla. Recuentos y entradas tienen "Deshacer".
 
+- **El banco se lee por PSD2, a través de Enable Banking** (`nucleo/banco.py`,
+  `dominio/banco.py`, `servicios/banco.py`, `api/banco.py`, `bot/banco.py`,
+  tabla `conexiones_banco`, migración `c4d5e6f7a8b9`). Para no apuntar a
+  mano los pagos con tarjeta. GoCardless (Nordigen) ya no admite cuentas
+  nuevas desde julio de 2025; Enable Banking es gratis para leer las cuentas
+  propias ("modo restringido": solo las enlazadas en su panel). Santander
+  España va por Redsys. Decisiones:
+  - **Primer paso, la prueba**: `/banco` da el enlace, se confirma en la app
+    del banco y la vuelta enseña cuentas, cuánto dura el permiso y los
+    últimos movimientos. Preguntar por cada pago (Casa · Negocio · Ignorar,
+    nunca decidir por él) va después, cuando se vea qué trae Santander.
+  - **La vuelta (`/banco/vuelta`) no lleva token**: dice de quién es la
+    clave aleatoria del `state`, que vale una vez y caduca en una hora.
+    El IBAN solo se enseña con sus cuatro últimas cifras.
+  - **Se pide el permiso más largo que deja el banco**
+    (`maximum_consent_validity`) menos un día, y nunca más de 180 (PSD2).
+  - La clave privada (`ENABLE_BANKING_CLAVE`, el .pem entero) y el
+    `ENABLE_BANKING_APP_ID` van en Railway. La redirect URL registrada en
+    Enable Banking tiene que ser `URL_API` + `/banco/vuelta` (`URL_API` sale
+    sola de `RAILWAY_PUBLIC_DOMAIN`).
+
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
   usuario/contraseña. `/web` en el bot lo genera y manda un botón que abre
@@ -764,7 +785,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-545 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+565 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 

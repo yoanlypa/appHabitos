@@ -38,6 +38,7 @@ COMANDOS = [
     ("web", "Abrir la web"),
     ("correo", "Avisos de citas también por correo"),
     ("copia", "Copia de seguridad de todo"),
+    ("banco", "Conectar tu cuenta del banco"),
     ("menu", "Sacar los botones de abajo"),
     ("lista", "Casa: la lista de la compra"),
     ("casa", "Casa: lo gastado este mes"),

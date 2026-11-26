@@ -968,3 +968,26 @@ def elegir_obra(apunte, hay_en_curso: bool) -> str:
     if not hay_en_curso:
         return f"No tienes trabajos en curso. ¿Creo uno nuevo para «{apunte.concepto}»?"
     return f"¿De qué trabajo es «{apunte.concepto}»?"
+
+
+# --- El banco -------------------------------------------------------------------
+
+
+def resumen_banco(r) -> str:
+    """Lo que se ve de la cuenta conectada: para comprobar que llega bien."""
+    lineas = [f"🏦 Conectado con {r.banco}"]
+    if r.dias_de_permiso is not None:
+        lineas.append(f"El permiso dura {r.dias_de_permiso} días más.")
+    lineas.append("")
+    if not r.cuentas:
+        lineas.append("El banco no deja ver ninguna cuenta.")
+    for c in r.cuentas:
+        lineas.append(f"• {c.nombre} {c.tipo} {c.final_iban} — {c.movimientos} movimientos en 30 días".replace("  ", " "))
+    if r.ultimos:
+        lineas += ["", "Últimos movimientos:"]
+        for m in r.ultimos:
+            signo = "−" if m.es_gasto else "+"
+            cuando = m.fecha.strftime("%d/%m") if m.fecha else "  ?  "
+            aun = " (pendiente)" if m.pendiente else ""
+            lineas.append(f"  {cuando} {m.concepto} {signo}{euros(m.importe)}{aun}")
+    return "\n".join(lineas)
