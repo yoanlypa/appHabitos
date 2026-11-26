@@ -27,6 +27,7 @@ from app.dominio.models import (  # noqa: E402
     Cita,
     Cliente,
     ConexionBanco,
+    MovimientoLeido,
     Factura,
     Habito,
     HabitoHecho,
@@ -49,6 +50,6 @@ def db():
     """Una sesión limpia por test: lo que escriba uno no lo ve el siguiente."""
     with sesion() as s:
         yield s
-        for modelo in (ConexionBanco, MovimientoCartera, GastoCasa, ArticuloCompra, InvitacionHogar, MiembroHogar, Hogar, EmisorPropio, Factura, HabitoHecho, Habito, Apunte, Cita, Trabajo, Cliente, Ajuste, TokenAcceso):
+        for modelo in (MovimientoLeido, ConexionBanco, MovimientoCartera, GastoCasa, ArticuloCompra, InvitacionHogar, MiembroHogar, Hogar, EmisorPropio, Factura, HabitoHecho, Habito, Apunte, Cita, Trabajo, Cliente, Ajuste, TokenAcceso):
             s.query(modelo).delete()
         s.commit()

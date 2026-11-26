@@ -993,3 +993,38 @@ def resumen_banco(r) -> str:
     if r.sin_fecha:
         lineas += ["", f"⚠️ {r.sin_fecha} movimientos sin fecha: el banco la manda donde no la busco todavía."]
     return "\n".join(lineas)
+
+
+def pregunta_banco(pregunta) -> str:
+    """Un pago nuevo de la cuenta: qué es, cuánto, qué día, y si ya parece apuntado."""
+    m = pregunta.movimiento
+    if m.es_gasto:
+        cabeza = f"💳 −{euros(m.importe)} · {m.concepto}"
+        cola = "¿De qué es?"
+    else:
+        cabeza = f"💰 +{euros(m.importe)} · {m.concepto}"
+        cola = "¿Qué es este ingreso?"
+    lineas = [cabeza]
+    if m.fecha:
+        lineas.append(f"📅 {dia_con_nombre(m.fecha).capitalize()}")
+    if pregunta.parecido:
+        lineas.append(f"👀 Parece que ya lo tienes: {pregunta.parecido}")
+    if pregunta.cobros:
+        lineas.append("Hay trabajos pendientes de cobro por ese importe.")
+    lineas += ["", cola]
+    return "\n".join(lineas)
+
+
+def movimiento_apartado(m, ya_estaba: bool) -> str:
+    signo = "−" if m.es_gasto else "+"
+    que = "Ya estaba apuntado" if ya_estaba else "Ignorado"
+    return f"✓ {que}: {m.concepto} {signo}{euros(m.importe)}"
+
+
+def caducidad_banco(conexion) -> str:
+    hasta = conexion.valido_hasta
+    cuando = f" el {hasta:%d/%m}" if hasta else " pronto"
+    return (
+        f"🏦 El permiso para leer tu cuenta de {conexion.banco} caduca{cuando}. "
+        "Lo pone el banco, no la app: renuévalo con /banco renovar y confirma en su app."
+    )

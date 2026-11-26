@@ -6,6 +6,8 @@ en texto, `DBIT` (sale) o `CRDT` (entra), y el concepto repartido entre el
 nombre del otro y la "información de remesa". Aquí se deja en lo que la app
 entiende: fecha, importe en positivo, si es gasto, y un concepto legible.
 """
+import hashlib
+import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -111,7 +113,7 @@ def leer_movimiento(m: dict) -> MovimientoBanco | None:
     remesa = m.get("remittance_information") or []
     if isinstance(remesa, str):
         remesa = [remesa]
-    concepto = _limpio(otro.get("name") or "") or _limpio(" ".join(remesa)) or "(sin concepto)"
+    concepto = _limpio(otro.get("name") or "") or concepto_de_banco(" ".join(remesa))
     return MovimientoBanco(
         fecha=fecha_de(m),
         importe=abs(importe),
@@ -125,3 +127,76 @@ def final_del_iban(iban: str | None) -> str:
     """Solo las cuatro últimas cifras: para reconocer la cuenta sin enseñarla."""
     limpio = (iban or "").replace(" ", "")
     return f"…{limpio[-4:]}" if limpio else ""
+
+
+# --- Movimientos nuevos: de quién son y cómo se llaman -----------------------
+
+
+def referencia_de(m: dict) -> str:
+    """Lo que identifica un movimiento para no preguntar dos veces por él.
+
+    Santander manda `entry_reference`, único por movimiento. Si un banco no
+    lo manda, se usa una huella con lo que no cambia (día, importe, sentido
+    y texto).
+    """
+    for campo in ("entry_reference", "transaction_id", "reference_number"):
+        valor = m.get(campo)
+        if valor:
+            return str(valor)[:120]
+    leido = leer_movimiento(m)
+    texto = " ".join(m.get("remittance_information") or [])
+    huella = f"{fecha_de(m)}|{leido.importe if leido else ''}|{m.get('credit_debit_indicator')}|{texto}"
+    return "h:" + hashlib.sha1(huella.encode("utf-8")).hexdigest()
+
+
+def cargado(m: dict) -> bool:
+    """Ya cargado en la cuenta. Los pendientes (PDNG) pueden cambiar de importe
+    o desaparecer, y suelen volver con otra referencia: no se pregunta por ellos."""
+    return (m.get("status") or "BOOK") == "BOOK"
+
+
+# El texto de Santander lleva la tienda entre el verbo y la tarjeta:
+# "COMPRA EN MERCADONA, CON LA TARJETA : 5489XXXXXXXX1234 EL 2026-11-24".
+_DELANTE = re.compile(
+    r"^\s*(?:compra\s+internet\s+en|compra\s+en|compra|pago\s+movil\s+en|pago\s+m[oó]vil\s+en|"
+    r"pago\s+en|pago|transferencia\s+inmediata\s+de|transferencia\s+a\s+favor\s+de|"
+    r"transferencia\s+de|transferencia|bizum\s+de|bizum\s+a\s+favor\s+de|bizum|recibo|"
+    r"devoluci[oó]n\s+compra\s+en|devoluci[oó]n)\b[\s:,.-]*",
+    re.IGNORECASE,
+)
+_DETRAS = re.compile(
+    r"(?:,?\s*con\s+la\s+tarjeta.*|,?\s*tarj(?:eta)?\.?\s*:?.*|,?\s*el\s+\d{4}-\d{2}-\d{2}.*|"
+    r",?\s*n[ºo°]\s*recibo.*|,?\s*comisi[oó]n\s+[\d,.]+.*)$",
+    re.IGNORECASE,
+)
+_TARJETA = re.compile(r"[\dXx\*]{6,}")
+# La tarjeta delante de la tienda: "COMPRA TARJ. 5402XXXXXXXX1234 REPSOL".
+_TARJETA_DELANTE = re.compile(r"^tarj(?:eta)?\.?\s*:?\s*[\dXx\*]{6,}\s*", re.IGNORECASE)
+
+
+def sin_tarjeta(texto: str) -> str:
+    """El texto del banco sin números de tarjeta, para guardarlo."""
+    return _limpio(_TARJETA.sub("…", texto or ""))
+
+
+def concepto_de_banco(texto: str) -> str:
+    """La tienda o la persona, sin el ruido del banco.
+
+    "COMPRA EN MERCADONA, CON LA TARJETA : 5489XXXXXXXX1234" → "Mercadona".
+    "Transferencia De Ana Ruiz, Concepto Reforma Baño" → "Ana Ruiz · Reforma Baño".
+    Si después de limpiar no queda nada, se devuelve el texto tal cual: es
+    mejor un concepto feo que uno inventado.
+    """
+    original = _limpio(texto)
+    resto = _TARJETA_DELANTE.sub("", _DELANTE.sub("", original, count=1))
+    resto = _DETRAS.sub("", resto)
+    persona, _, concepto = resto.partition(", concepto")
+    if not concepto:
+        persona, _, concepto = resto.partition(", Concepto")
+    resto = f"{persona.strip(' ,.')} · {concepto.strip(' ,.')}" if concepto.strip(" ,.") else persona
+    resto = _limpio(_TARJETA.sub("", resto)).strip(" ,.:-·")
+    if not resto:
+        return original[:120] or "(sin concepto)"
+    if resto.isupper():
+        resto = resto.title()
+    return resto[:120]

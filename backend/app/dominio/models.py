@@ -444,3 +444,40 @@ class ConexionBanco(Base):
     # Las cuentas que dejó ver el banco, en JSON: uid, nombre, tipo, final del IBAN.
     cuentas = Column(Text, nullable=True)
     creado = Column(DateTime(timezone=True), server_default=func.now())
+    # Cuándo se leyó por última vez. Vacío = nunca: la primera lectura solo
+    # marca lo que ya había, para no preguntar por un mes entero de golpe.
+    leida = Column(DateTime(timezone=True), nullable=True)
+    # El día en que se avisó de que el permiso caduca: una vez, no cada vez.
+    aviso_caducidad = Column(Date, nullable=True)
+
+
+class MovimientoLeido(Base):
+    """Un movimiento de la cuenta que la app ya ha visto, y qué se hizo con él.
+
+    Único por cuenta y referencia del banco: así nunca se pregunta dos veces
+    por el mismo pago. `estado`:
+    - "antiguo": ya estaba al conectar; no se pregunta.
+    - "nuevo": por preguntar. "preguntado": la pregunta ya salió.
+    - "casa", "negocio", "cobro", "ya_estaba", "ignorado": ya decidido.
+    Lo que se creó al decidir queda enlazado (`gasto_casa_id`, `apunte_id`).
+    """
+
+    __tablename__ = "movimientos_banco"
+    __table_args__ = (UniqueConstraint("cuenta", "referencia"),)
+
+    id = Column(Integer, primary_key=True)
+    conexion_id = Column(Integer, ForeignKey("conexiones_banco.id"), nullable=False, index=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    cuenta = Column(String, nullable=False)
+    referencia = Column(String, nullable=False)
+    fecha = Column(Date, nullable=True)
+    importe = Column(Centimos, nullable=False)
+    es_gasto = Column(Boolean, nullable=False)
+    concepto = Column(String, nullable=False)
+    # El texto del banco tal cual (sin números de tarjeta): por si el
+    # concepto limpio se queda corto.
+    texto = Column(String, nullable=True)
+    estado = Column(String, nullable=False, default="nuevo", index=True)
+    gasto_casa_id = Column(Integer, nullable=True)
+    apunte_id = Column(Integer, nullable=True)
+    creado = Column(DateTime(timezone=True), server_default=func.now())
