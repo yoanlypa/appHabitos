@@ -90,6 +90,8 @@ def construir_app() -> Application:
 
     avisos.programar(app)
     copias.programar(app)
+    # Cada 2 horas: lo nuevo de la cuenta del banco, y una pregunta por pago.
+    banco.programar(app)
     return app
 
 

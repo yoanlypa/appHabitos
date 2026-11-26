@@ -66,7 +66,7 @@ class TestReglas:
 
     def test_sin_nombre_se_usa_el_texto_del_banco(self):
         sin_nombre = {**PAGO, "creditor": None}
-        assert leer_movimiento(sin_nombre).concepto == "COMPRA TARJ. 5402XXXXXXXX1234 REPSOL"
+        assert leer_movimiento(sin_nombre).concepto == "Repsol", "sin la tarjeta ni el verbo"
 
     def test_un_importe_raro_no_se_cuela(self):
         assert leer_movimiento({"transaction_amount": {"amount": "abc"}}) is None

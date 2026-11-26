@@ -60,7 +60,7 @@ def _nombre(update: Update) -> str:
     return (u.first_name or u.username or "Yo").strip()
 
 
-def _botones_gasto(gasto) -> InlineKeyboardMarkup:
+def botones_gasto(gasto) -> InlineKeyboardMarkup:
     otro = "💳 Fue con tarjeta" if gasto.efectivo else "💶 Fue en efectivo"
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(otro, callback_data=f"ca:ef:{gasto.id}")],
@@ -93,7 +93,7 @@ async def pintar(mensaje: Message, db, user_id: int, hecho, encabezado: str = ""
         quien = None
         if len(servicio.miembros(db, hecho.gasto.hogar_id)) > 1:
             quien = servicio.miembro_de(db, hecho.gasto.user_id).nombre
-        await mensaje.reply_text(encabezado + formato.gasto_casa(hecho.gasto, quien), reply_markup=_botones_gasto(hecho.gasto))
+        await mensaje.reply_text(encabezado + formato.gasto_casa(hecho.gasto, quien), reply_markup=botones_gasto(hecho.gasto))
     elif hecho.entrada:
         await mensaje.reply_text(encabezado + formato.entrada_cartera(hecho.entrada, servicio.cartera_de(db, user_id)),
                                  reply_markup=_deshacer(hecho.entrada.id))
@@ -149,7 +149,7 @@ async def foto(update: Update, contexto: ContextTypes.DEFAULT_TYPE) -> None:
             partes.append("No he sabido leer el total. Escríbemelo: «45 súper».")
         if leido.tachados:
             partes.append("✅ Tachado de la lista: " + ", ".join(a.texto for a in leido.tachados))
-        botones = _botones_gasto(leido.gasto) if leido.gasto else None
+        botones = botones_gasto(leido.gasto) if leido.gasto else None
         await mensaje.reply_text("\n\n".join(partes), reply_markup=botones)
 
 
@@ -301,7 +301,7 @@ async def tocar(update: Update, _contexto: ContextTypes.DEFAULT_TYPE) -> None:
             elif partes[1] == "ef":
                 gasto = servicio.cambiar_pago(db, user_id, int(partes[2]))
                 await consulta.answer("💶 En efectivo" if gasto.efectivo else "💳 Con tarjeta")
-                await consulta.edit_message_text(formato.gasto_casa(gasto), reply_markup=_botones_gasto(gasto))
+                await consulta.edit_message_text(formato.gasto_casa(gasto), reply_markup=botones_gasto(gasto))
             elif partes[1] == "rc":
                 r = servicio.contar_cartera(db, user_id, Decimal(int(partes[2])) / 100)
                 await consulta.answer("Contado")

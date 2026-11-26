@@ -756,10 +756,41 @@ parte-del-dia/
   nuevas desde julio de 2025; Enable Banking es gratis para leer las cuentas
   propias ("modo restringido": solo las enlazadas en su panel). Santander
   España va por Redsys. Decisiones:
-  - **Primer paso, la prueba**: `/banco` da el enlace, se confirma en la app
-    del banco y la vuelta enseña cuentas, cuánto dura el permiso y los
-    últimos movimientos. Preguntar por cada pago (Casa · Negocio · Ignorar,
-    nunca decidir por él) va después, cuando se vea qué trae Santander.
+  - `/banco` da el enlace, se confirma en la app del banco y la vuelta
+    enseña cuentas, cuánto dura el permiso y los últimos movimientos.
+    Probado con Santander de verdad: permiso de 178 días, cuenta corriente.
+  - **Se pregunta por cada pago, siempre** (Yoa lo eligió así): cada 2
+    horas (`bot/banco.revisar`) y con `/banco` se lee lo nuevo
+    (`servicios/banco.leer_nuevos`) y sale un mensaje por movimiento con
+    🏠 Casa (primero: es la cuenta de casa), 💼 Negocio, ✓ Ya estaba
+    apuntado (si se parece a algo apuntado ±3 días: un ticket escaneado, un
+    gasto de Casa) e Ignorar. Si entra dinero, en vez de Casa salen los
+    trabajos pendientes de cobro por ese importe. Nunca se decide por él.
+    Decisiones:
+    - **Cada movimiento se guarda una vez** (`MovimientoLeido`, único por
+      cuenta y `entry_reference`, que Santander manda; si un banco no, una
+      huella): nunca se pregunta ni se apunta dos veces, y dos toques no
+      duplican (`decidir` devuelve lo ya hecho).
+    - **Al conectar no se pregunta por lo que ya había**: la primera lectura
+      (un mes) lo marca "antiguo". Después se lee una semana hacia atrás,
+      porque la tarjeta tarda días en cargar. Los pendientes (`PDNG`) no se
+      guardan hasta que están cargados.
+    - **Si Telegram falla, el movimiento sigue "nuevo"** y se pregunta en la
+      siguiente vuelta: no se pierde ninguno.
+    - **Lo apuntado queda con sus botones de siempre**: Casa con 💶/💳 y
+      borrar; Negocio con 📁 Trabajo, otro día y borrar. Casa va con
+      tarjeta y la categoría adivinada; todo con `origen="banco"`.
+    - **El texto de Santander lleva la tienda dentro** ("COMPRA EN
+      MERCADONA, CON LA TARJETA : 5489XXXX…"): `concepto_de_banco` quita
+      verbo, tarjeta, fechas y comisiones, y si no queda nada deja el texto
+      tal cual (un concepto feo antes que uno inventado). Los números de
+      tarjeta no se guardan.
+    - **El permiso caduca** (lo pone el banco): una semana antes se avisa
+      una vez (`aviso_caducidad`) para renovarlo con `/banco renovar`.
+      Caducado, no se llama al banco. `/avisos off` no calla las preguntas:
+      son el sentido de haber conectado la cuenta.
+    - Pendiente: aprender de lo decidido ("Mercadona: siempre Casa") para
+      proponerlo primero.
   - **La vuelta (`/banco/vuelta`) no lleva token**: dice de quién es la
     clave aleatoria del `state`, que vale una vez y caduca en una hora.
     El IBAN solo se enseña con sus cuatro últimas cifras.
@@ -800,7 +831,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-590 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+618 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
