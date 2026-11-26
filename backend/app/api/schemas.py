@@ -440,14 +440,24 @@ class InvitacionSalida(BaseModel):
     dias: int
 
 
+class PersonaQueVuelve(BaseModel):
+    """Alguien de la casa que entró solo por la web y puede volver a ser él."""
+
+    id: int
+    nombre: str
+
+
 class InvitacionVista(BaseModel):
     casa: str
     miembros: list[str]
+    volver: list[PersonaQueVuelve] = []
 
 
 class UnirseEntrada(BaseModel):
     codigo: str
-    nombre: str
+    nombre: str = ""
+    # Si se elige "Soy …" en la lista de quienes ya estaban.
+    miembro_id: int | None = None
 
 
 class UnirseSalida(BaseModel):
@@ -574,3 +584,54 @@ class RecetaSalida(BaseModel):
     usa: list[str]
     falta: list[str]
     pasos: list[str]
+
+
+# --- Importar varios movimientos desde la web -------------------------------
+
+
+class MovimientoImportado(BaseModel):
+    """Un movimiento leído de una lista, un CSV, un Excel o una captura.
+
+    `tipo` puede venir vacío: una tabla sin columna de tipo y sin signos no
+    dice si son gastos o cobros, y eso se pregunta, no se supone.
+    `repetido`: mismo día, tipo e importe que algo que ya está. Se enseña y
+    se puede meter igual.
+    """
+
+    fecha: date
+    tipo: str | None = None
+    concepto: str
+    importe: Importe
+    pendiente: bool = False
+    repetido: bool = False
+
+
+class LecturaImportacion(BaseModel):
+    movimientos: list[MovimientoImportado]
+    falta_tipo: bool
+
+
+class RevisarImportacion(BaseModel):
+    movimientos: list[MovimientoImportado]
+    # El que se ha elegido para los que no lo traían.
+    tipo: str | None = None
+
+
+class ConfirmarImportacion(BaseModel):
+    movimientos: list[MovimientoImportado]
+    # True cuando se han elegido a mano también algunos de los repetidos: entonces
+    # entra exactamente lo elegido. Con False se vuelve a mirar qué está ya.
+    todo: bool = False
+
+
+class ImportacionHecha(BaseModel):
+    apuntes: list[ApunteSalida]
+    ya_estaban: int
+
+
+class DeshacerImportacion(BaseModel):
+    ids: list[int]
+
+
+class Deshecha(BaseModel):
+    borrados: int

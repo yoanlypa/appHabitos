@@ -26,6 +26,7 @@ from app.api.schemas import (
     GastoCasaTexto,
     InvitacionSalida,
     InvitacionVista,
+    PersonaQueVuelve,
     MiembroSalida,
     NombreEntrada,
     RecetaSalida,
@@ -94,13 +95,17 @@ def ver_invitacion(codigo: str, db: Session = Depends(get_db)):
         hogar, gente = casa.ver_invitacion(db, codigo)
     except _ERRORES as exc:
         raise _error(exc) from exc
-    return InvitacionVista(casa=hogar.nombre, miembros=[m.nombre for m in gente])
+    return InvitacionVista(
+        casa=hogar.nombre,
+        miembros=[m.nombre for m in gente],
+        volver=[PersonaQueVuelve(id=m.id, nombre=m.nombre) for m in casa.solo_por_web(db, hogar.id)],
+    )
 
 
 @router.post("/unirse", response_model=UnirseSalida)
 def unirse(entrada: UnirseEntrada, db: Session = Depends(get_db)):
     try:
-        _, token = casa.unirse_por_web(db, entrada.codigo, entrada.nombre)
+        _, token = casa.unirse_por_web(db, entrada.codigo, entrada.nombre, entrada.miembro_id)
     except _ERRORES as exc:
         raise _error(exc) from exc
     return UnirseSalida(token=token)

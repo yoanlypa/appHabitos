@@ -17,7 +17,7 @@
  * "Gestoría" es lo mismo mirado para mandarlo: solo lo que factura Yoa y
  * sus gastos, por mes o por trimestre (`Gestoria.tsx`).
  */
-import { CheckSquare, Download, FileText, Hammer, Plus, X } from 'lucide-react'
+import { CheckSquare, Download, FileText, Hammer, ListPlus, Plus, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   abrirFactura,
@@ -40,6 +40,7 @@ import { EscanerFactura } from './EscanerFactura'
 import { FilaMovimiento } from './FilaMovimiento'
 import { Gestoria } from './Gestoria'
 import { GraficoMeses } from './GraficoMeses'
+import { ImportarMovimientos } from './ImportarMovimientos'
 
 const VISTAS = [
   { id: 'movimientos', nombre: 'Movimientos' },
@@ -141,6 +142,7 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
   const [error, setError] = useState('')
   // undefined: cerrado · null: añadir uno nuevo · Apunte: editar ese
   const [editando, setEditando] = useState<Apunte | null | undefined>(undefined)
+  const [importando, setImportando] = useState(false)
   // Elegir el trabajo de uno o varios sin abrirlos.
   const [paraTrabajo, setParaTrabajo] = useState<Apunte[] | null>(null)
   // Modo selección: null es que no está activo.
@@ -219,6 +221,10 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
   return (
     <>
       <Cabecera titulo="Finanzas">
+        <button className="boton secundario" onClick={() => setImportando(true)} title="Varios de golpe">
+          <ListPlus size={18} />
+          Importar
+        </button>
         <button className="boton" onClick={() => setEditando(null)}>
           <Plus size={18} />
           Añadir
@@ -436,6 +442,15 @@ export function Finanzas({ token, onTokenInvalido }: Props) {
             setRecargas((n) => n + 1)
           }}
           onCerrar={() => setParaTrabajo(null)}
+        />
+      )}
+
+      {importando && (
+        <ImportarMovimientos
+          token={token}
+          onGuardado={() => setRecargas((n) => n + 1)}
+          onError={fallo}
+          onCerrar={() => setImportando(false)}
         />
       )}
 

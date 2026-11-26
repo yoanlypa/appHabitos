@@ -241,3 +241,83 @@ class TestHandlerDeVoz:
 
         assert "larga" in update.message.respuestas[0]
         assert db.query(Apunte).count() == 0
+
+
+class TestVozDeCasa:
+    """Lo dictado va a Casa con la misma regla que lo escrito.
+
+    Antes, "casa, 45 de súper" dictado por Yoa acababa como un cobro de 45 €
+    en el negocio: dinero que entra donde había dinero que salía.
+    """
+
+    @pytest.mark.asyncio
+    async def test_casa_delante_va_a_casa_y_no_al_negocio(self, db, monkeypatch):
+        from app.dominio.models import GastoCasa
+
+        oir(monkeypatch, "Casa, 45 euros de súper.")
+
+        escuchada = await voz.anotar_audio(db, USUARIO, b"audio", "nota.ogg", origen="bot")
+
+        assert isinstance(escuchada, voz.VozDeCasa)
+        gasto = db.query(GastoCasa).one()
+        assert (gasto.concepto, gasto.importe) == ("Súper", Decimal("45")), "sin el punto del dictado"
+        assert db.query(Apunte).count() == 0
+
+    @pytest.mark.asyncio
+    async def test_casa_con_punto_y_la_lista(self, db, monkeypatch):
+        from app.servicios import casa
+
+        oir(monkeypatch, "Casa. Comprar leche, huevos y pan.")
+        await voz.anotar_audio(db, USUARIO, b"audio", "nota.ogg", origen="bot")
+
+        assert {a.texto for a in casa.listar_articulos(db, USUARIO)} == {"Leche", "Huevos", "Pan"}
+
+    @pytest.mark.asyncio
+    async def test_me_quedan_es_la_cartera_de_quien_tiene_casa(self, db, monkeypatch):
+        from app.servicios import casa
+
+        casa.asegurar_casa(db, USUARIO, "Yoa")
+        oir(monkeypatch, "Me quedan 35 euros.")
+
+        escuchada = await voz.anotar_audio(db, USUARIO, b"audio", "nota.ogg", origen="bot")
+
+        assert escuchada.anotado.recuento is not None
+        assert db.query(Apunte).count() == 0, "no es un cobro de 35 €"
+
+    @pytest.mark.asyncio
+    async def test_lo_del_negocio_sigue_en_el_negocio(self, db, monkeypatch):
+        from app.servicios import casa
+
+        casa.asegurar_casa(db, USUARIO, "Yoa")
+        oir(monkeypatch, "Reforma de la casa de Ana 300 euros")
+
+        escuchada = await voz.anotar_audio(db, USUARIO, b"audio", "nota.ogg", origen="bot")
+
+        assert not isinstance(escuchada, voz.VozDeCasa)
+        assert escuchada.apunte.importe == Decimal("300")
+
+    @pytest.mark.asyncio
+    async def test_quien_solo_es_de_casa_lo_anota_todo_en_casa(self, db, monkeypatch):
+        from app.dominio.models import GastoCasa
+        from app.servicios import casa
+
+        ella = 777888999
+        casa.asegurar_casa(db, USUARIO, "Yoa")
+        casa.unirse(db, casa.crear_invitacion(db, USUARIO), ella, "Marta")
+        oir(monkeypatch, "45 farmacia")
+
+        await voz.anotar_audio(db, ella, b"audio", "nota.ogg", origen="bot")
+
+        assert db.query(GastoCasa).one().user_id == ella
+        assert db.query(Apunte).count() == 0
+
+    @pytest.mark.asyncio
+    async def test_el_bot_contesta_como_casa(self, db, monkeypatch):
+        oir(monkeypatch, "Casa, 45 euros de súper.")
+        update = update_falso()
+
+        await handlers.nota_de_voz(update, contexto_falso())
+
+        respuesta = update.message.respuestas[0]
+        assert "He oído" in respuesta and "45,00 €" in respuesta
+        assert "Trabajo anotado" not in respuesta

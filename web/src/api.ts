@@ -147,12 +147,14 @@ export function resumenMes(token: string, anio: number, mes: number) {
  * Un CSV no se puede enlazar con un <a href> porque la ruta exige el header
  * Authorization, así que se descarga a mano y se guarda como fichero.
  */
-async function descargar(token: string, ruta: string, nombre: string) {
+async function descargar(token: string, ruta: string, nombre: string): Promise<boolean> {
   const respuesta = await fetch(`${BASE}${ruta}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (respuesta.status === 401) throw new TokenInvalido('El token no vale')
   if (!respuesta.ok) throw new ErrorDeApi(`Error ${respuesta.status}`)
+  // 204: no había nada que descargar.
+  if (respuesta.status === 204) return false
 
   const blob = await respuesta.blob()
   const url = URL.createObjectURL(blob)
@@ -161,6 +163,17 @@ async function descargar(token: string, ruta: string, nombre: string) {
   enlace.download = nombre
   enlace.click()
   URL.revokeObjectURL(url)
+  return true
+}
+
+/**
+ * La copia de seguridad completa, la misma que manda el bot cada domingo:
+ * un ZIP que se le reenvía al bot para restaurar. Devuelve false si aún no
+ * hay nada que guardar.
+ */
+export function descargarCopia(token: string) {
+  const hoy = new Date().toISOString().slice(0, 10)
+  return descargar(token, '/export/copia', `parte-del-dia-${hoy}.zip`)
 }
 
 /** Todos los movimientos del periodo. */
@@ -179,6 +192,57 @@ export function descargarCsvGestoria(token: string, desde: string, hasta: string
     `/gestoria/csv?desde=${desde}&hasta=${hasta}`,
     `gestoria-${desde}_${hasta}.csv`,
   )
+}
+
+// ---------- Importar varios movimientos ----------
+
+/** Un movimiento leído de una lista, un CSV, un Excel o una captura. */
+export type MovimientoImportado = {
+  fecha: string
+  // null: la tabla no decía si entra o sale. Se pregunta, nunca se supone.
+  tipo: 'trabajo' | 'gasto' | null
+  concepto: string
+  importe: string
+  pendiente: boolean
+  // Mismo día, tipo e importe que algo que ya está. Se enseña y se puede meter igual.
+  repetido: boolean
+}
+
+export type LecturaImportacion = { movimientos: MovimientoImportado[]; falta_tipo: boolean }
+
+/** Lee un fichero (CSV, Excel, captura) o un texto pegado. No guarda nada. */
+export function leerImportacion(token: string, entrada: { fichero?: File; texto?: string }) {
+  const datos = new FormData()
+  if (entrada.fichero) datos.append('fichero', entrada.fichero)
+  if (entrada.texto) datos.append('texto', entrada.texto)
+  return pedir<LecturaImportacion>(token, '/importar/leer', { method: 'POST', body: datos })
+}
+
+/** Los mismos movimientos con el tipo elegido para los que no lo traían. */
+export function revisarImportacion(token: string, movimientos: MovimientoImportado[], tipo: 'trabajo' | 'gasto') {
+  return pedir<LecturaImportacion>(token, '/importar/revisar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ movimientos, tipo }),
+  })
+}
+
+/** Mete los elegidos. Con `todo`, entran tal cual aunque parezcan repetidos. */
+export function confirmarImportacion(token: string, movimientos: MovimientoImportado[], todo: boolean) {
+  return pedir<{ apuntes: Apunte[]; ya_estaban: number }>(token, '/importar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ movimientos, todo }),
+  })
+}
+
+/** Quita lo recién importado (lo que no se haya tocado desde entonces). */
+export function deshacerImportacion(token: string, ids: number[]) {
+  return pedir<{ borrados: number }>(token, '/importar/deshacer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  })
 }
 
 // ---------- Clientes y agenda ----------
@@ -865,18 +929,26 @@ export function quitarMiembro(token: string, id: number) {
 }
 
 /** Sin token: quien llega con el enlace todavía no tiene. */
-export async function verInvitacion(codigo: string): Promise<{ casa: string; miembros: string[] }> {
+/** Lo que enseña el enlace de invitación antes de entrar. `volver`: quienes
+ *  entraron solo por la web y pueden volver a ser ellos (sin duplicarse). */
+export type InvitacionVista = {
+  casa: string
+  miembros: string[]
+  volver: { id: number; nombre: string }[]
+}
+
+export async function verInvitacion(codigo: string): Promise<InvitacionVista> {
   const r = await fetch(`${BASE}/casa/invitacion/${encodeURIComponent(codigo)}`)
   const cuerpo = await r.json().catch(() => null)
   if (!r.ok) throw new ErrorDeApi(cuerpo?.detail ?? `Error ${r.status}`)
   return cuerpo
 }
 
-export async function unirseACasa(codigo: string, nombre: string): Promise<string> {
+export async function unirseACasa(codigo: string, nombre: string, miembroId?: number): Promise<string> {
   const r = await fetch(`${BASE}/casa/unirse`, {
     method: 'POST',
     headers: JSON_CAB,
-    body: JSON.stringify({ codigo, nombre }),
+    body: JSON.stringify({ codigo, nombre, miembro_id: miembroId ?? null }),
   })
   const cuerpo = await r.json().catch(() => null)
   if (!r.ok) throw new ErrorDeApi(cuerpo?.detail ?? `Error ${r.status}`)

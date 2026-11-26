@@ -18,7 +18,7 @@ from telegram.ext import (
     filters,
 )
 
-from app.bot import acciones, alarma, avisos, casa, citas, copias, habitos, handlers, importar, menu, restaurar
+from app.bot import acciones, alarma, avisos, banco, casa, citas, copias, habitos, handlers, importar, menu, restaurar, trabajos
 from app.nucleo.config import TELEGRAM_BOT_TOKEN
 from app.nucleo.migraciones import migrar
 
@@ -58,6 +58,10 @@ def construir_app() -> Application:
     app.add_handler(CommandHandler("emitida", handlers.emitida))
     app.add_handler(CommandHandler("reparar", handlers.reparar))
     app.add_handler(CommandHandler("copia", handlers.copia))
+    # /trabajo y /trabajos: crear obras y ver sus cuentas desde el móvil.
+    trabajos.registrar(app)
+    # /banco: conectar la cuenta del banco (Enable Banking) y ver qué llega.
+    banco.registrar(app)
     app.add_handler(CommandHandler("trimestre", handlers.trimestre))
     app.add_handler(CommandHandler("facturas", handlers.facturas))
     app.add_handler(CallbackQueryHandler(handlers.elegir_cliente, pattern=r"^cli:"))
@@ -71,7 +75,7 @@ def construir_app() -> Application:
             handlers.foto_de_ticket,
         )
     )
-    # Un CSV reenviado es una copia que restaurar, o una lista de movimientos.
+    # Un ZIP reenviado es una copia completa; un CSV, una copia antigua o una lista.
     restaurar.registrar(app)
     # Un Excel, y los botones de "añadir estos N".
     importar.registrar(app)

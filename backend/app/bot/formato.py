@@ -11,6 +11,7 @@ from app.dominio.tickets import texto_de_vale
 
 from app.dominio.models import Apunte
 from app.nucleo.tiempo import hoy_local
+from app.servicios.copia_completa import SECCIONES
 from app.servicios.resumen import ResumenPeriodo
 
 
@@ -79,7 +80,8 @@ def ayuda() -> str:
         "  3/11 parking 2,75           → con su día delante\n"
         "  Llamar al fontanero martes  → nota, sin dinero\n\n"
         "Debajo de cada apunte tienes botones para cobrarlo, cambiarle el día, "
-        "pasarlo de cobro a gasto o borrarlo: no hace falta recordar su número.\n\n"
+        "pasarlo de cobro a gasto, meterlo en un trabajo o borrarlo: no hace "
+        "falta recordar su número.\n\n"
         "También puedes mandarme:\n"
         "  🎤 una nota de voz: la escucho y la anoto igual\n"
         "  🧾 la foto o el PDF de un ticket o una factura: lo anoto y te devuelvo el PDF\n"
@@ -91,6 +93,8 @@ def ayuda() -> str:
         "  /mes — resumen del mes\n"
         "  /trimestre — lo que llevas este trimestre\n"
         "  /deben — quién te debe dinero (y cobrarlo con un toque)\n"
+        "  /trabajos — los trabajos en curso, con sus cuentas\n"
+        "  /trabajo Reforma baño Ana — crea un trabajo\n"
         "  /agenda — lo que toca hoy\n"
         "  /manana — lo que toca mañana\n"
         "  /cita mañana 10:00 Cambiar grifo — apunta una cita\n"
@@ -100,7 +104,7 @@ def ayuda() -> str:
         "  /facturas — los tickets del mes en un PDF ('/facturas pasado': el anterior)\n"
         "  /cliente Ana Ruiz 600111222 — da de alta un cliente\n"
         "  /web — entrar en la web\n"
-        "  /copia — te mando todo en un CSV, por si acaso\n"
+        "  /copia — te mando una copia de todo, por si acaso\n"
         "  /avisos on|off — resumen automático cada noche\n"
         "  /menu — vuelve a sacar los botones de abajo\n\n"
         "Con el número del apunte, por si lo prefieres a los botones:\n"
@@ -226,6 +230,72 @@ def copia_restaurada(cuantos: int) -> str:
         return "No faltaba nada: ya estaba todo."
     plural = "s" if cuantos != 1 else ""
     return f"Restaurado{plural} {cuantos} apunte{plural}. Míralo en la web o con /mes."
+
+
+def _secciones(cuentas: dict[str, int]) -> list[str]:
+    return [
+        f"  {cuentas[clave]} {uno if cuentas[clave] == 1 else varios}"
+        for clave, uno, varios in SECCIONES
+        if cuentas.get(clave)
+    ]
+
+
+def plan_de_restauracion_completa(plan, creada=None, de_otro: bool = False, muestra: int = 6) -> str:
+    """Lo que entraría al restaurar la copia completa, antes de pedir el sí."""
+    cuando = f" del {creada.strftime('%d/%m/%Y')}" if creada else ""
+    lineas = []
+    if de_otro:
+        lineas += [
+            "⚠️ Esta copia es de OTRA cuenta. Si la restauras, sus cosas pasan a ser tuyas.",
+            "",
+        ]
+    lineas.append(f"Copia{cuando}. Faltan:")
+    lineas += _secciones(plan.nuevos) or ["  nada nuevo"]
+    if plan.apuntes_nuevos:
+        lineas.append("")
+        lineas.append("Algunos de los apuntes:")
+        for a in plan.apuntes_nuevos[:muestra]:
+            dinero = "nota" if a["tipo"] == "nota" else euros(a["importe"])
+            lineas.append(f"  {a['fecha'].strftime('%d/%m/%Y')} · {a['concepto']} · {dinero}")
+        if len(plan.apuntes_nuevos) > muestra:
+            lineas.append(f"  … y {len(plan.apuntes_nuevos) - muestra} más")
+    if plan.reenlazados:
+        lineas.append("")
+        lineas.append(
+            f"Además, {plan.reenlazados} apunte(s) que ya tienes sueltos vuelven a su trabajo o cliente."
+        )
+    if plan.total_ya_estaban:
+        lineas.append("")
+        lineas.append(f"Lo demás ({plan.total_ya_estaban}) ya lo tienes: eso no lo toco.")
+    lineas.append("")
+    lineas.append(
+        "Ojo: si borraste algo a propósito después de hacer esta copia, volverá a entrar. "
+        "Las fotos de los tickets no van en la copia."
+    )
+    return "\n".join(lineas)
+
+
+def copia_completa_ya_estaba(plan) -> str:
+    return "Ya tienes todo lo que hay en esta copia. No hay nada que restaurar."
+
+
+def copia_completa_no_valida(motivo) -> str:
+    return (
+        f"No puedo restaurar ese ZIP: {motivo}.\n\n"
+        "Vale el ZIP que te mando yo cada domingo (o con /copia)."
+    )
+
+
+def copia_completa_restaurada(plan) -> str:
+    if not plan.hay_algo:
+        return "No faltaba nada: ya estaba todo."
+    lineas = ["Restaurado:"]
+    lineas += _secciones(plan.nuevos)
+    if plan.reenlazados:
+        lineas.append(f"  {plan.reenlazados} apunte(s) vueltos a su trabajo o cliente")
+    lineas.append("")
+    lineas.append("Míralo en la web o con /mes.")
+    return "\n".join(lineas)
 
 
 def racha_texto(racha: int) -> str:
@@ -799,3 +869,125 @@ def pregunta_cartera(c) -> str:
         f"💶 ¿Cuánto te queda en la cartera? Debería haber {euros(c.esperado)}.\n"
         "Si cuadra, toca el botón. Si no, escríbeme lo que te queda: «me quedan 35»."
     )
+
+
+# --- Trabajos (las obras) -----------------------------------------------------
+
+
+def _fecha_corta(fecha) -> str:
+    return fecha.strftime("%d/%m")
+
+
+def trabajo_en_lista(listado) -> str:
+    """Una línea por trabajo: nombre, cliente y lo que queda."""
+    t, c = listado.trabajo, listado.cuentas
+    partes = [f"📁 {t.titulo}"]
+    if t.cliente is not None and t.cliente.nombre.lower() not in t.titulo.lower():
+        partes.append(t.cliente.nombre)
+    if c.ingresos or c.gastos:
+        partes.append(f"queda {euros(c.beneficio)}")
+    if c.pendiente:
+        partes.append(f"te deben {euros(c.pendiente)}")
+    return " · ".join(partes)
+
+
+def lista_trabajos(listados) -> str:
+    if not listados:
+        return (
+            "No tienes trabajos en curso.\n\n"
+            "Crea uno con /trabajo y su nombre, por ejemplo:\n"
+            "  /trabajo Reforma baño Ana Ruiz"
+        )
+    lineas = ["Trabajos en curso:"]
+    lineas += [trabajo_en_lista(l) for l in listados]
+    lineas += ["", "Toca uno para ver su ficha. Uno nuevo: /trabajo Nombre"]
+    return "\n".join(lineas)
+
+
+def boton_de_obra(trabajo) -> str:
+    return f"📁 {trabajo.titulo}"[:60]
+
+
+def ficha_trabajo(ficha, muestra: int = 6) -> str:
+    """La ficha de un trabajo, como en la web pero en un mensaje."""
+    t, c = ficha.trabajo, ficha.cuentas
+    lineas = [f"📁 {t.titulo}"]
+    detalle = []
+    if t.cliente is not None:
+        detalle.append(t.cliente.nombre)
+    if t.fecha_inicio:
+        detalle.append(f"desde {dia_con_nombre(t.fecha_inicio)}")
+    if t.fecha_fin:
+        detalle.append(f"hasta {dia_con_nombre(t.fecha_fin)}")
+    if detalle:
+        lineas.append(" · ".join(detalle))
+    lineas.append(f"Facturado: {'sí' if t.facturado else 'no'} · Reseña: {'sí' if t.resena else 'no'}")
+    lineas.append("")
+    lineas.append(f"Cobrado {euros(c.cobrado)} · Por cobrar {euros(c.pendiente)}")
+    lineas.append(f"Gastos {euros(c.gastos)} · Queda {euros(c.beneficio)}")
+    if ficha.movimientos:
+        lineas.append("")
+        for a in ficha.movimientos[:muestra]:
+            signo = "−" if a.tipo == "gasto" else "+"
+            pendiente = " (sin cobrar)" if a.tipo == "trabajo" and a.pendiente else ""
+            lineas.append(f"  {_fecha_corta(a.fecha)} {signo} {a.concepto} {euros(a.importe)}{pendiente}")
+        if len(ficha.movimientos) > muestra:
+            lineas.append(f"  … y {len(ficha.movimientos) - muestra} más (en la web)")
+    notas = [n for n in ficha.notas if not n.hecha]
+    if notas:
+        lineas.append("")
+        lineas.append(f"Notas por hacer: {len(notas)}")
+        lineas += [f"  · {n.concepto}" for n in notas[:3]]
+    proximas = [ci for ci in ficha.citas if not ci.hecha and (ci.fecha_fin or ci.fecha) >= hoy_local()]
+    if proximas:
+        cita = proximas[0]
+        hora = f" a las {cita.hora.strftime('%H:%M')}" if cita.hora else ""
+        lineas.append("")
+        lineas.append(f"Próxima cita: {dia_con_nombre(cita.fecha)}{hora} · {cita.titulo}")
+    return "\n".join(lineas)
+
+
+def trabajo_creado(trabajo, con_ayuda: bool = True) -> str:
+    linea = f"📁 Trabajo creado: {trabajo.titulo}"
+    if trabajo.cliente is not None:
+        linea += f"\n   → {trabajo.cliente.nombre}"
+    if con_ayuda:
+        linea += "\n\nPara meter un cobro o un gasto, toca «📁 Trabajo» debajo de él."
+    return linea
+
+
+def pedir_nombre_trabajo(apunte) -> str:
+    return (
+        f"¿Cómo se llama el trabajo de «{apunte.concepto}»? Escríbelo, por ejemplo: "
+        "Reforma baño Ana Ruiz\n\n"
+        "(Si en vez de eso escribes otro apunte, lo anoto como siempre.)"
+    )
+
+
+def elegir_obra(apunte, hay_en_curso: bool) -> str:
+    if not hay_en_curso:
+        return f"No tienes trabajos en curso. ¿Creo uno nuevo para «{apunte.concepto}»?"
+    return f"¿De qué trabajo es «{apunte.concepto}»?"
+
+
+# --- El banco -------------------------------------------------------------------
+
+
+def resumen_banco(r) -> str:
+    """Lo que se ve de la cuenta conectada: para comprobar que llega bien."""
+    lineas = [f"🏦 Conectado con {r.banco}"]
+    if r.dias_de_permiso is not None:
+        lineas.append(f"El permiso dura {r.dias_de_permiso} días más.")
+    lineas.append("")
+    if not r.cuentas:
+        lineas.append("El banco no deja ver ninguna cuenta.")
+    for c in r.cuentas:
+        lineas.append(f"• {c.nombre} {c.tipo} {c.final_iban} — {c.movimientos} movimientos en 30 días".replace("  ", " "))
+    if r.ultimos:
+        lineas += ["", "Últimos movimientos:"]
+        for m in r.ultimos:
+            signo = "−" if m.es_gasto else "+"
+            cuando = m.fecha.strftime("%d/%m") if m.fecha else "  ?  "
+            aun = " (pendiente)" if m.pendiente else ""
+            lineas.append(f"  {cuando} {m.concepto} {signo}{euros(m.importe)}{aun}")
+    return "\n".join(lineas)

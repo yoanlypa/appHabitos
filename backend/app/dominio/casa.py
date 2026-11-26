@@ -106,7 +106,7 @@ _RE_UNIDAD = re.compile(r"\s*(?:kg|kilos?|g|gr|gramos|l|litros?|ud|uds|unidades|
 
 # "casa -45 súper": el prefijo con el que Yoa manda algo a casa desde donde
 # normalmente anota el negocio.
-_RE_CASA = re.compile(r"^\s*casa\b[\s:,]*", re.IGNORECASE)
+_RE_CASA = re.compile(r"^\s*casa\b[\s:,.;]*", re.IGNORECASE)
 
 
 def quitar_prefijo_casa(texto: str | None) -> tuple[bool, str]:

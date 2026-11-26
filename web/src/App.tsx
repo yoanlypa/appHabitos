@@ -26,6 +26,7 @@ import {
   House,
   LogOut,
   BellRing,
+  DatabaseBackup,
   Menu,
   Monitor,
   Moon,
@@ -37,7 +38,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { miCasa, salud, TokenInvalido } from './api'
+import { descargarCopia, miCasa, salud, TokenInvalido } from './api'
 import { Agenda } from './componentes/Agenda'
 import { Casa } from './componentes/Casa'
 import { Unirse } from './componentes/Unirse'
@@ -51,7 +52,7 @@ import { Trabajos } from './componentes/Trabajos'
 import { Logo } from './componentes/Logo'
 import { Notas } from './componentes/Notas'
 import { Avisos } from './ui/Avisos'
-import { confirmar } from './ui/avisos'
+import { avisar, confirmar } from './ui/avisos'
 import { useTema, type Tema } from './ui/ganchos'
 import { Modal } from './ui/Modal'
 import { SECCIONES, type Seccion } from './secciones'
@@ -212,11 +213,27 @@ export default function App() {
     }
   }, [token, invalido])
 
+  /** La copia completa, para guardarla en el ordenador o si no se usa el bot. */
+  async function copia() {
+    setMenu(false)
+    try {
+      const hecha = await descargarCopia(token)
+      avisar(
+        hecha
+          ? 'Copia descargada. Para restaurarla, reenvíasela al bot.'
+          : 'Todavía no hay nada que guardar.',
+      )
+    } catch (e) {
+      if (e instanceof TokenInvalido) invalido()
+      else avisar('No se ha podido descargar la copia.', 'mal')
+    }
+  }
+
   async function pedirSalir() {
     const si = await confirmar({
       titulo: '¿Cerrar la sesión?',
       texto: soloCasa
-        ? 'Para volver a entrar necesitarás otra invitación, o pedírselo al bot con /web si usas Telegram.'
+        ? 'Para volver a entrar necesitarás otra invitación (al entrar, toca tu nombre y seguirás siendo tú), o pedírselo al bot con /web si usas Telegram.'
         : 'Para volver a entrar tendrás que pedirle otro enlace al bot con /web.',
       aceptar: 'Salir',
     })
@@ -273,6 +290,14 @@ export default function App() {
             </div>
             <span>
               <SelectorDeTema tema={tema} onCambio={setTema} />
+              <button
+                className="boton-icono"
+                onClick={() => void copia()}
+                aria-label="Copia de seguridad"
+                title="Copia de seguridad"
+              >
+                <DatabaseBackup size={18} />
+              </button>
               <button className="boton-icono" onClick={() => void pedirSalir()} aria-label="Salir" title="Salir">
                 <LogOut size={18} />
               </button>
@@ -318,6 +343,10 @@ export default function App() {
             <button className="nav-item" onClick={() => setAjustes(true)}>
               <BellRing size={18} />
               Avisos
+            </button>
+            <button className="nav-item" onClick={() => void copia()}>
+              <DatabaseBackup size={18} />
+              Copia de seguridad
             </button>
             <SelectorDeTema tema={tema} onCambio={setTema} />
             <button className="nav-item" onClick={() => void pedirSalir()}>
@@ -392,6 +421,10 @@ export default function App() {
             >
               <BellRing size={20} />
               Avisos
+            </button>
+            <button className="nav-item" onClick={() => void copia()}>
+              <DatabaseBackup size={20} />
+              Copia de seguridad
             </button>
             <button className="nav-item" onClick={() => void pedirSalir()}>
               <LogOut size={20} />

@@ -1,14 +1,24 @@
-"""La copia de seguridad por Telegram.
+"""La copia de seguridad por Telegram: el CSV de los apuntes, dentro del ZIP.
+
+Lo que lleva el resto del ZIP se prueba en `test_copia_completa.py`.
 
 Se prueba de verdad el contenido del fichero, no solo que se llame a la API
 de Telegram: una copia que llegue vacía o ilegible no sirve de nada, y de
 eso uno se entera el día que la necesita.
 """
+import io
+import zipfile
+
 import pytest
 
 from app.bot import copias
 from app.servicios.apuntes import crear_apunte
 from tests.conftest import USUARIO
+
+
+def _csv_de(datos: bytes) -> str:
+    with zipfile.ZipFile(io.BytesIO(datos)) as z:
+        return z.read("apuntes.csv").decode("utf-8-sig")
 
 
 class BotFalso:
@@ -25,7 +35,7 @@ class BotFalso:
             {
                 "chat_id": chat_id,
                 "nombre": document.name,
-                "contenido": document.getvalue().decode("utf-8-sig"),
+                "contenido": _csv_de(document.getvalue()),
                 "caption": caption,
             }
         )
@@ -45,7 +55,7 @@ async def test_la_copia_lleva_los_apuntes(db):
 
     enviado = bot.enviados[0]
     assert enviado["chat_id"] == USUARIO
-    assert enviado["nombre"].endswith(".csv")
+    assert enviado["nombre"].endswith(".zip")
 
     lineas = enviado["contenido"].strip().splitlines()
     assert lineas[0] == "fecha,tipo,concepto,importe,pendiente,origen"

@@ -49,21 +49,25 @@ parte-del-dia/
 ├── CLAUDE.md              este archivo
 ├── backend/
 │   ├── app/
-│   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py,
-│   │   │                     transcripcion.py, correo.py
-│   │   ├── dominio/       ✅ models.py (Apunte, Trabajo, Cliente, Cita, Ajuste, TokenAcceso, Centimos),
-│   │   │                     parsing.py, parsing_citas.py, habitos.py, copia_csv.py,
-│   │   │                     gestoria.py, recordatorios.py
+│   │   ├── nucleo/        ✅ config.py, db.py, tiempo.py, migraciones.py, almacenamiento.py, banco.py,
+│   │   │                     transcripcion.py, correo.py, lectura_tickets.py, recetas.py,
+│   │   │                     archivos.py, pdf.py, paginas_pdf.py, perspectiva.py, hojas.py
+│   │   ├── dominio/       ✅ models.py (Apunte, Trabajo, Cliente, Cita, Habito, Factura,
+│   │   │                     Hogar…, Centimos), parsing.py, parsing_citas.py, habitos.py,
+│   │   │                     copia_csv.py, copia_completa.py, importacion.py, tickets.py,
+│   │   │                     gestoria.py, recordatorios.py, casa.py, deteccion_clientes.py
 │   │   ├── servicios/     ✅ apuntes, resumen, export, auth, avisos, clientes,
-│   │   │                     agenda, trimestres, voz, notas, restauracion, habitos,
-│   │   │                     gestoria, trabajos, casa
-│   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export,
-│   │   │                     clientes, agenda, notas, habitos, gestoria, ajustes, trabajos, casa
+│   │   │                     agenda, trimestres, voz, notas, restauracion, copia_completa,
+│   │   │                     importacion, habitos, facturas, gestoria, trabajos, casa
+│   │   ├── api/           ✅ dependencias, schemas, apuntes, resumen, export, importacion,
+│   │   │                     clientes, agenda, notas, habitos, facturas, gestoria, ajustes,
+│   │   │                     trabajos, casa
 │   │   └── bot/           ✅ main.py, handlers.py, formato.py, avisos.py,
 │   │                         copias.py, alarma.py, restaurar.py, habitos.py, citas.py,
-│   │                         menu.py, acciones.py, importar.py
-│   ├── requirements.txt
-│   ├── Procfile           ✅ dos procesos: web (uvicorn) y bot (polling)
+│   │                         menu.py, acciones.py, importar.py, trabajos.py, casa.py
+│   ├── alembic/           migraciones (se aplican solas al arrancar)
+│   ├── requirements.txt   (+ requirements-dev.txt para los tests)
+│   ├── railway.json       arranque en Railway (y railpack.json, el mismo comando)
 │   └── .env.example
 └── web/                   ✅ hecho — src/api.ts (lo único que sabe de HTTP),
                               estilos/ (base, marco, secciones), ui/ (piezas
@@ -126,14 +130,14 @@ parte-del-dia/
     deuda. Se cuenta en vez de comparar uno a uno, porque dos gasolinas de
     45 el mismo día son dos. Siempre enseña antes lo que va a meter y pide
     un sí: una copia vieja devolvería lo que se borró adrede después. La
-    copia no lleva clientes ni citas, así que eso no vuelve.
+    copia en CSV no lleva clientes ni citas; la copia en ZIP sí (abajo).
 
 - **El bot se usa tocando, no recordando números.** Antes, corregir un
   apunte era `/fecha 34 15/10` con el 34 de memoria. Tres piezas, y ninguna
   tiene reglas propias (llaman a los servicios de siempre):
   - **Botones bajo cada apunte** (`bot/acciones.py`, datos `ap:<acción>:<id>`):
     cobrar, otro día (hoy/ayer/anteayer o escribirlo), pasar de cobro a
-    gasto y al revés, borrar. Borrar pide un segundo toque. Lo que salió de
+    gasto y al revés, meterlo en un trabajo, borrar. Borrar pide un segundo toque. Lo que salió de
     un ticket no ofrece cambiar el tipo: para eso está `/emitida`, que mueve
     también el papel. `/deben` y `/notas` son listas que se resuelven
     tocando. Los comandos con número siguen valiendo.
@@ -187,8 +191,20 @@ parte-del-dia/
   - Lo leído espera en `user_data`, cada lista con su número (dos capturas
     seguidas son dos listas); un reinicio las pierde y se pide reenviar.
     Tras añadir hay un "Deshacer" que quita solo lo recién importado.
-  - Pendiente: importar desde la web, y probar el lector de capturas con
-    fotos reales (los tests sustituyen al modelo).
+  - **Desde la web** (Finanzas → Importar, `ImportarMovimientos.tsx`,
+    `api/importacion.py`): el mismo servicio y las mismas reglas. Tres
+    llamadas porque leer una captura se paga y no se repite: `POST
+    /importar/leer` (fichero o texto; no guarda), `/importar/revisar` (con
+    el tipo elegido; se guarda la lectura sin tipo para poder cambiar de
+    "gastos" a "cobros") y `POST /importar`. Lo repetido sale desmarcado;
+    si se marca a mano alguno, va `todo=true` y entra exactamente lo
+    elegido, y si no el backend vuelve a mirar qué está ya (dos pestañas o
+    un doble clic no duplican). "Deshacer" llama a `/importar/deshacer`.
+    Una copia de seguridad (ZIP o CSV con su cabecera) no se importa: se
+    restaura por el bot. Un Excel es un ZIP por dentro: se distingue por
+    la extensión.
+  - Pendiente: probar el lector de capturas con fotos reales (los tests
+    sustituyen al modelo).
 
 - **`func.sum()` sobre un importe ya devuelve euros.** El tipo `Centimos`
   se aplica también a los agregados, así que dividir otra vez entre 100 es
@@ -208,11 +224,30 @@ parte-del-dia/
   `Decimal("120")` como `"120"` y `Decimal("45.5")` como `"45.5"`; en el CSV
   que va al gestor, una columna con esa mezcla parece mal apuntada. El tipo
   `Importe` de `api/schemas.py` lo normaliza.
-- **Copia de seguridad por Telegram** (`bot/copias.py`): el histórico
-  entero en CSV, cada domingo y con `/copia` cuando se quiera. El sitio más
-  seguro para estos datos no es el servidor — ya se perdieron una vez por
-  tenerlos sólo ahí. El CSV va en utf-8 **con BOM** para que Excel no
-  convierta "Reforma baño" en "Reforma baÃ±o".
+- **Copia de seguridad por Telegram** (`bot/copias.py`): **todo** en un ZIP,
+  cada domingo y con `/copia` cuando se quiera (y desde la web, menú → Copia
+  de seguridad, `GET /export/copia`). El sitio más seguro para estos datos
+  no es el servidor — ya se perdieron una vez por tenerlos sólo ahí.
+  - Dentro van `copia.json` (`dominio/copia_completa.py`: apuntes con sus
+    marcas, clientes, trabajos, citas, hábitos y sus días, ajustes, emisores
+    aprendidos y Casa, con los enlaces entre ellos) y `apuntes.csv`, el CSV
+    de siempre, en utf-8 **con BOM** para que Excel no convierta "Reforma
+    baño" en "Reforma baÃ±o".
+  - **No van** las fotos de los tickets (pesan demasiado para cada domingo)
+    ni los tokens de la web (son llaves). Un cobro suelto con factura
+    emitida vuelve marcado a mano para la gestoría, o se caería del parte.
+  - **Restaurar** (`servicios/copia_completa.py`): reenviar el ZIP al bot.
+    Las mismas reglas que con el CSV, para todo: la base manda, se cuenta en
+    vez de buscar, y restaurar dos veces no duplica. Un apunte que ya está
+    pero **suelto** se vuelve a colgar de su trabajo y su cliente (rellenar
+    huecos sí, mover lo colocado no). La vista previa **hace la restauración
+    y la deshace**: lo que enseña es lo que pasará. Si la copia es de otra
+    cuenta (la de Casa también le llega a ella), se avisa antes.
+  - **Se manda a todo el que tenga algo guardado**, no solo a quien recibe
+    el aviso de esa noche: antes, un domingo sin anotar nada era una semana
+    sin copia. `/avisos off` no la calla, porque no es un recordatorio.
+    Quien entró solo por la web no tiene chat: la descarga desde la web.
+  - El CSV suelto de las copias antiguas se sigue aceptando.
 - **El trimestre cuenta lo cobrado, no lo facturado**, y la estimación del
   modelo 130 (20% del neto) se presenta siempre como orientativa: aquí no
   se sabe qué gastos son deducibles ni qué retenciones han practicado los
@@ -587,11 +622,20 @@ parte-del-dia/
     Desde el bot solo se puede marcar un ticket suelto, escribiendo "para la
     gestoría" con la foto (`marca_gestoria`; la palabra suelta dentro del
     concepto no cuenta, o "Factura gestoría octubre" se quedaría en "Factura
-    octubre"). Meter un gasto en un trabajo desde el bot no está hecho. El
-    bot dice al anotar si el ticket va o no va.
-  - **Pendiente**: la copia CSV del domingo no lleva los trabajos ni estas
-    marcas. Restaurar una copia devuelve los apuntes, pero sueltos. Tampoco
-    se pueden crear trabajos desde el bot.
+    octubre"). El bot dice al anotar si el ticket va o no va.
+  - La copia del domingo lleva los trabajos y estas marcas (ver "Copia de
+    seguridad").
+  - **Desde el bot** (`bot/trabajos.py`): `/trabajo Reforma baño Ana Ruiz`
+    crea uno que empieza hoy (`servicios/trabajos.crear_por_texto`; el
+    cliente se reconoce como al anotar, y con dos Anas se pregunta);
+    `/trabajos` lista los **en curso** (`en_curso`: sin fecha de fin o que
+    aún no ha pasado) y cada uno abre su ficha con las mismas cuentas que
+    la web, más "Terminado hoy" y "Facturado". Bajo cada cobro o gasto hay
+    un botón **📁 Trabajo** (`ap:trab`) con los trabajos en curso, "Sacar
+    del trabajo" y "➕ Trabajo nuevo", que espera el nombre escrito con la
+    regla de "Escribir el día": si lo que llega lleva importe es un apunte y
+    se anota como siempre (un trabajo cuyo nombre acaba en número se crea
+    con `/trabajo`). La respuesta a un apunte dice su trabajo (📁).
   - **En la Agenda** la cita también dice de qué trabajo es (desplegable
     "Trabajo" en `FormCita`; elegir uno pone su cliente si no había) y la
     lista del día lo enseña. `FormCita` solo manda `trabajo_id` cuando se le
@@ -643,7 +687,11 @@ parte-del-dia/
     "casa" ("casa -45 súper", foto con "casa" de texto). Los handlers de
     `bot/casa.py` van antes que los del negocio y con un filtro que solo se
     queda lo de Casa: si no, su "45 súper" sería un cobro de 45 € de Yoa.
-    Hay test del orden. La voz de Yoa con "casa" delante aún no va a Casa.
+    Hay test del orden. La regla vive en `servicios/casa.es_de_casa` y la
+    usan el filtro del texto y la voz: un audio que empieza por "casa" (con
+    la coma o el punto que pone el transcriptor) va a Casa igual que lo
+    escrito. Hay un solo handler de voz (`handlers.nota_de_voz`);
+    `servicios/voz.anotar_audio` devuelve `VozDeCasa` cuando toca.
   - **Qué es gasto y qué es lista** (`servicios/casa.anotar_libre`, la regla
     en un sitio): "comprar …"/"… a la lista" va a la lista aunque lleve
     números; con importe es un gasto, **también sin guion** (en casa no se
@@ -667,8 +715,13 @@ parte-del-dia/
   - En la web, `componentes/Casa.tsx` (Gastos, Compra, Cocinar, Personas) y
     `Unirse.tsx`. Casa va en el menú lateral y en el de arriba del móvil: la
     barra de abajo ya tiene seis.
-  - Pendiente: si quien entró solo por la web cierra sesión, necesita otra
-    invitación (y saldría dos veces en Personas hasta que Yoa quite una).
+  - **Quien entró solo por la web y cierra sesión** (o cambia de móvil) no
+    tiene `/web` que le dé otro token: vuelve con otra invitación, y al
+    entrar **toca su nombre** ("Soy María", `casa.solo_por_web`) o escribe
+    el mismo (sin tildes ni mayúsculas): recibe un token nuevo para su
+    misma ficha (`unirse_por_web(miembro_id=…)`), en vez de salir dos veces
+    en Personas. La invitación es la llave y se gasta igual; el titular y
+    quien usa Telegram no pueden entrar así.
   - **El efectivo se cuenta, no se apunta billete a billete** (migración
     `b2c3d4e5f6a7`). Pagan mucho en efectivo y eso no dejaba rastro. Cada uno
     tiene su cartera (`MovimientoCartera`): se apunta lo que entra ("saco
@@ -696,11 +749,33 @@ parte-del-dia/
       me quedan X" para cuando cuadra. Solo a quien ya la usa, y `/avisos
       off` lo calla. Recuentos y entradas tienen "Deshacer".
 
+- **El banco se lee por PSD2, a través de Enable Banking** (`nucleo/banco.py`,
+  `dominio/banco.py`, `servicios/banco.py`, `api/banco.py`, `bot/banco.py`,
+  tabla `conexiones_banco`, migración `c4d5e6f7a8b9`). Para no apuntar a
+  mano los pagos con tarjeta. GoCardless (Nordigen) ya no admite cuentas
+  nuevas desde julio de 2025; Enable Banking es gratis para leer las cuentas
+  propias ("modo restringido": solo las enlazadas en su panel). Santander
+  España va por Redsys. Decisiones:
+  - **Primer paso, la prueba**: `/banco` da el enlace, se confirma en la app
+    del banco y la vuelta enseña cuentas, cuánto dura el permiso y los
+    últimos movimientos. Preguntar por cada pago (Casa · Negocio · Ignorar,
+    nunca decidir por él) va después, cuando se vea qué trae Santander.
+  - **La vuelta (`/banco/vuelta`) no lleva token**: dice de quién es la
+    clave aleatoria del `state`, que vale una vez y caduca en una hora.
+    El IBAN solo se enseña con sus cuatro últimas cifras.
+  - **Se pide el permiso más largo que deja el banco**
+    (`maximum_consent_validity`) menos un día, y nunca más de 180 (PSD2).
+  - La clave privada (`ENABLE_BANKING_CLAVE`, el .pem entero) y el
+    `ENABLE_BANKING_APP_ID` van en Railway. La redirect URL registrada en
+    Enable Banking tiene que ser `URL_API` + `/banco/vuelta` (`URL_API` sale
+    sola de `RAILWAY_PUBLIC_DOMAIN`).
+
 - **Sin contraseñas.** El acceso a la web usa un token (`TokenAcceso`,
   `servicios/auth.py`) contra el header `Authorization: Bearer`, no
-  usuario/contraseña. Falta que el bot lo genere con `/web`
-  (`servicios.auth.generar_token()` ya está listo para que ese handler lo
-  llame); hasta entonces se genera a mano.
+  usuario/contraseña. `/web` en el bot lo genera y manda un botón que abre
+  la web ya dentro (el token va tras el `#`, que no viaja a ningún
+  servidor) y otro para copiarlo. Quien solo usa Casa por la web entra con
+  una invitación (ver Casa).
 
 ## Cómo se prueba
 
@@ -710,7 +785,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-483 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+565 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
@@ -726,8 +801,11 @@ alarma calla cuando todo va bien. `test_habitos_reglas.py` fija las reglas
 que deciden si una racha anima o desanima, y `test_habitos_bot.py` que el
 botón del recordatorio nunca desmarca. `test_facturas.py` que una lectura
 absurda no llegue a las cuentas, que borrar un gasto se lleve su foto y que
-nadie vea la factura de otro. Al añadir algo, el test que hace falta es el del caso
-que se te ocurra que podría romperse en silencio.
+nadie vea la factura de otro. `test_copia_completa.py` que la copia lleva
+todo y vuelve con sus enlaces, que restaurar dos veces no duplica y que la
+vista previa no escribe; `test_importar_web.py` que importar desde la web
+sigue las reglas del bot. Al añadir algo, el test que hace falta es el del
+caso que se te ocurra que podría romperse en silencio.
 
 ## Convenciones de código
 
@@ -746,8 +824,15 @@ que se te ocurra que podría romperse en silencio.
 
 ## Estado actual
 
-`nucleo/`, `dominio/`, `servicios/` y `api/` están escritos y probados (no
-se vuelven a tocar salvo que aparezca una necesidad concreta):
+Todo lo de arriba está hecho, probado y desplegado. Lo que queda abierto
+está marcado como **Pendiente** en su apartado (hoy: probar el lector de
+capturas con fotos reales; y la copia de seguridad no lleva las fotos de
+los tickets, a propósito, ver "Copia de seguridad").
+
+Lo que sigue es el registro de cómo se montó y se comprobó cada capa al
+principio. Se deja porque explica decisiones que siguen vigentes; los
+detalles de entonces (qué rutas había, qué comandos) ya se han quedado
+cortos y lo de arriba manda:
 
 - `nucleo/config.py`, `nucleo/db.py`, `nucleo/tiempo.py` — leen variables
   de entorno, normalizan la URL de Postgres, crean tablas, abren y cierran
@@ -768,9 +853,9 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   `servicios/resumen.py` — `resumen_dia()` / `resumen_mes()` devuelven
   `ResumenPeriodo` (cobrado, pendiente, gastos, `neto`). `servicios/export.py`
   — `exportar_csv()`. `servicios/auth.py` — `generar_token()` /
-  `usuario_por_token()`, listo para que el futuro handler `/web` del bot
-  llame a `generar_token()`.
-- `api/main.py` monta tres routers sobre FastAPI: `POST /apuntes`,
+  `usuario_por_token()`, que usa `/web` en el bot.
+- `api/main.py` montaba al principio tres routers sobre FastAPI (hoy son
+  muchos más, ver la estructura): `POST /apuntes`,
   `POST /apuntes/{id}/cobrado`, `GET /resumen/dia`, `GET /resumen/mes`,
   `GET /export/csv`, `GET /salud`. Todas menos `/salud` exigen
   `Authorization: Bearer <token>` (`api/dependencias.py`, 401 si falta o
@@ -779,7 +864,8 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   en blanco, marcar cobrado (+404 si no existe), resumen antes/después
   de cobrar, y export a CSV — todo correcto de punta a punta por HTTP.
 - `bot/main.py` arranca por **polling** (no webhook: no necesita URL
-  pública, y en Railway es otro proceso del mismo repo — ver `Procfile`).
+  pública). En producción corre en el mismo proceso que la API
+  (`app/api_y_bot.py`, ver "Decisiones ya tomadas").
   `bot/handlers.py` tiene `/start`, `/hoy`, `/mes`, `/cobrado <id>`,
   `/web`, un handler de texto libre que anota cualquier mensaje que no
   sea comando, y otro de notas de voz (`filters.VOICE | filters.AUDIO`) que
@@ -788,7 +874,7 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   los tres tipos de apunte, texto no entendido, `/cobrado` con y sin
   almohadilla, sin argumento y con id inexistente, resumen antes/después
   de cobrar, y `/web` generando un token que `usuario_por_token()` acepta.
-  **Sin probar contra Telegram real: hace falta un `TELEGRAM_BOT_TOKEN`.**
+  (Luego se probó contra Telegram de verdad: ver más abajo.)
 - Se eliminaron `app/config.py`, `db.py`, `models.py`, `schemas.py`,
   `crud.py`, `auth.py` y `app/routers/`: eran los stubs vacíos del scaffold
   original, ya sustituidos 1:1 por los de arriba. También `bot/parsing.py`,
@@ -875,10 +961,6 @@ se vuelven a tocar salvo que aparezca una necesidad concreta):
   `Integer` de 32 bits de Postgres (`2147483647`). Es la confirmación en
   real de por qué `user_id` tiene que ser `BigInteger`: no era una
   precaución teórica.
-
-Pendiente menor: el `.gitignore` de la raíz tiene pegado dentro el
-heredoc con el que se creó (`cat > .gitignore <<'EOF'` … `EOF`). Las
-líneas de patrón funcionan, las dos sobrantes son inertes.
 
 ## Cómo levantarlo en local
 

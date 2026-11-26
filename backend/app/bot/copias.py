@@ -1,4 +1,4 @@
-"""La copia de seguridad: el histórico entero, en CSV, por Telegram.
+"""La copia de seguridad: todo, en un ZIP, por Telegram.
 
 Existe por algo que ya pasó: la base vivía dentro del contenedor y Railway
 lo destruye en cada despliegue, así que los apuntes desaparecieron sin que
@@ -7,6 +7,10 @@ nadie se enterara hasta abrir la app y verla vacía.
 El sitio más seguro para estos datos no es el servidor: es el Telegram de
 quien los apuntó, que se sincroniza solo entre sus dispositivos y no
 depende de que un volumen esté bien configurado.
+
+Va todo (apuntes, clientes, trabajos, citas, hábitos y Casa) en un ZIP que
+lleva dentro también el CSV de los apuntes para abrirlo con Excel. Qué lleva
+y cómo se restaura: `servicios/copia_completa.py`.
 """
 import logging
 from io import BytesIO
@@ -16,8 +20,7 @@ from telegram.ext import Application, ContextTypes
 
 from app.nucleo.db import sesion
 from app.nucleo.tiempo import hora_del_aviso, hoy_local
-from app.servicios.avisos import destinatarios_del_aviso
-from app.servicios.export import exportar_todo
+from app.servicios.copia_completa import generar, usuarios_con_datos
 
 log = logging.getLogger(__name__)
 
@@ -25,28 +28,48 @@ log = logging.getLogger(__name__)
 DOMINGO = (6,)
 
 
-def _fichero(csv: str, user_id: int) -> BytesIO:
-    # utf-8-sig para que Excel abra las tildes bien; sin BOM sale "Reforma baÃ±o".
-    datos = BytesIO(csv.encode("utf-8-sig"))
-    datos.name = f"parte-del-dia-{user_id}-{hoy_local().isoformat()}.csv"
-    return datos
+def _fichero(datos: bytes, user_id: int) -> BytesIO:
+    fichero = BytesIO(datos)
+    fichero.name = f"parte-del-dia-{user_id}-{hoy_local().isoformat()}.zip"
+    return fichero
+
+
+def _plural(n: int, uno: str, varios: str) -> str:
+    return f"{n} {uno if n == 1 else varios}"
+
+
+def descripcion(cuenta: dict[str, int]) -> str:
+    """'120 apuntes, 8 trabajos y 15 clientes': lo que lleva, sin los ceros."""
+    nombres = {
+        "apuntes": ("apunte", "apuntes"),
+        "trabajos": ("trabajo", "trabajos"),
+        "clientes": ("cliente", "clientes"),
+        "citas": ("cita", "citas"),
+        "habitos": ("hábito", "hábitos"),
+        "gastos_casa": ("gasto de Casa", "gastos de Casa"),
+        "compra": ("cosa de la compra", "cosas de la compra"),
+    }
+    partes = [_plural(cuenta[k], *nombres[k]) for k in nombres if cuenta.get(k)]
+    if len(partes) <= 1:
+        return "".join(partes)
+    return ", ".join(partes[:-1]) + " y " + partes[-1]
 
 
 async def enviar_copia(contexto: ContextTypes.DEFAULT_TYPE, user_id: int) -> bool:
     with sesion() as db:
-        csv = exportar_todo(db, user_id)
-
-    lineas = csv.strip().count("\n")  # la cabecera no cuenta como apunte
-    if lineas < 1:
+        copia = generar(db, user_id)
+    if copia is None:
         return False
+    datos, cuenta = copia
 
     try:
         await contexto.bot.send_document(
             chat_id=user_id,
-            document=_fichero(csv, user_id),
+            document=_fichero(datos, user_id),
             caption=(
-                f"Copia de seguridad: {lineas} apuntes. Guárdala: si algún día "
-                "pierdes datos, reenvíamela y vuelvo a meter lo que falte."
+                f"Copia de seguridad: {descripcion(cuenta)}. Guárdala: si algún día "
+                "pierdes datos, reenvíamela y vuelvo a meter lo que falte. "
+                "Dentro va también el CSV de los apuntes para abrirlo con Excel."
             ),
         )
         return True
@@ -56,9 +79,14 @@ async def enviar_copia(contexto: ContextTypes.DEFAULT_TYPE, user_id: int) -> boo
 
 
 async def copia_semanal(contexto: ContextTypes.DEFAULT_TYPE) -> None:
-    """A quien use la app se le manda su histórico una vez por semana."""
+    """A todo el que tenga algo guardado, una vez por semana.
+
+    No solo a quien recibe el aviso de esa noche, como antes: un domingo sin
+    apuntar era una semana sin copia. Tampoco se calla con `/avisos off`: no
+    es un recordatorio, es lo que salva los datos el día que se pierden.
+    """
     with sesion() as db:
-        usuarios = [aviso.user_id for aviso in destinatarios_del_aviso(db)]
+        usuarios = usuarios_con_datos(db)
 
     for user_id in usuarios:
         await enviar_copia(contexto, user_id)

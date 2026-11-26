@@ -91,3 +91,24 @@ CORREO_REMITENTE = os.getenv("CORREO_REMITENTE", "Parte del día <onboarding@res
 # a qué hora se avisa de las que no tienen hora.
 AVISO_CITA_MINUTOS = int(os.getenv("AVISO_CITA_MINUTOS", "120"))
 AVISO_CITA_SIN_HORA = os.getenv("AVISO_CITA_SIN_HORA", "08:00")
+
+# Conexión con el banco (Enable Banking, PSD2): leer los movimientos de la
+# cuenta para no apuntar a mano los pagos con tarjeta. El Application ID sale
+# en el panel de Enable Banking; la clave es el .pem que se descargó al crear
+# la aplicación, pegado entero (BEGIN… END). Las dos van en Railway, nunca en
+# el repo: la clave abre la lectura de la cuenta.
+ENABLE_BANKING_APP_ID = os.getenv("ENABLE_BANKING_APP_ID", "").strip()
+_clave_banco = os.getenv("ENABLE_BANKING_CLAVE", "").strip()
+# Pegada en una sola línea, la clave llega con "\n" escritos: se arreglan.
+if "\\n" in _clave_banco and "\n" not in _clave_banco:
+    _clave_banco = _clave_banco.replace("\\n", "\n")
+ENABLE_BANKING_CLAVE = _clave_banco
+# Qué banco buscar en la lista de Enable Banking (parte del nombre) y de qué país.
+BANCO_NOMBRE = os.getenv("BANCO_NOMBRE", "Santander")
+BANCO_PAIS = os.getenv("BANCO_PAIS", "ES")
+# Dirección pública de esta API, para volver del banco a /banco/vuelta. Tiene
+# que coincidir con la "redirect URL" registrada en Enable Banking. Railway
+# da RAILWAY_PUBLIC_DOMAIN solo: no hace falta ponerla salvo que cambie.
+URL_API = os.getenv("URL_API", "").strip().rstrip("/") or (
+    f"https://{os.environ['RAILWAY_PUBLIC_DOMAIN']}" if os.getenv("RAILWAY_PUBLIC_DOMAIN") else ""
+)
