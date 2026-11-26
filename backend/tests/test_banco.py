@@ -98,7 +98,7 @@ class TestFirma:
     def test_una_clave_mal_pegada_lo_dice(self, monkeypatch):
         monkeypatch.setattr(enable, "ENABLE_BANKING_APP_ID", "app-123")
         monkeypatch.setattr(enable, "ENABLE_BANKING_CLAVE", "esto no es una clave")
-        with pytest.raises(enable.BancoNoDisponible, match="BEGIN a END"):
+        with pytest.raises(enable.BancoNoDisponible, match="BEGIN"):
             enable._cabeceras()
 
 
@@ -241,3 +241,68 @@ class TestPorElBot:
         update, mensaje = _escribir("/banco")
         await bot_banco.banco(update, _contexto({}))
         assert "ENABLE_BANKING_APP_ID" in mensaje.respuestas[0][0]
+
+
+def _pem_de_prueba() -> tuple[str, object]:
+    privada = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = privada.private_bytes(
+        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
+    ).decode()
+    return pem, privada
+
+
+class TestClavePegadaEnRailway:
+    """La clave llega como Railway la guarda, no como estaba en el fichero.
+
+    Pasó con la primera clave de verdad: estaba bien, pero pegada en la
+    casilla de la variable no se podía leer.
+    """
+
+    @pytest.mark.parametrize(
+        "como",
+        [
+            pytest.param(lambda p: p, id="tal cual"),
+            pytest.param(lambda p: p.replace("\n", " "), id="una linea con espacios"),
+            pytest.param(lambda p: p.replace("\n", ""), id="una linea sin nada"),
+            pytest.param(lambda p: p.replace("\n", "\\n"), id="con barra n escrita"),
+            pytest.param(lambda p: p.replace("\n", "\r\n"), id="saltos de windows"),
+            pytest.param(lambda p: f'"{p.strip()}"', id="entre comillas"),
+            pytest.param(lambda p: f"  \n{p}\n\n  ", id="con espacios alrededor"),
+        ],
+    )
+    def test_se_lee_venga_como_venga(self, monkeypatch, como):
+        pem, privada = _pem_de_prueba()
+        monkeypatch.setattr(enable, "ENABLE_BANKING_APP_ID", "app-123")
+        monkeypatch.setattr(enable, "ENABLE_BANKING_CLAVE", como(pem))
+
+        token = enable._cabeceras()["Authorization"].split()[1]
+
+        jwt.decode(token, privada.public_key(), algorithms=["RS256"], audience="api.enablebanking.com")
+
+    def test_con_el_certificado_al_lado_firma_la_clave(self, monkeypatch):
+        pem, privada = _pem_de_prueba()
+        certificado = "-----BEGIN CERTIFICATE-----\nMIIBszCCARygAwIBAgIUQ0VSVElGSUNBRE8=\n-----END CERTIFICATE-----\n"
+        monkeypatch.setattr(enable, "ENABLE_BANKING_APP_ID", "app-123")
+        monkeypatch.setattr(enable, "ENABLE_BANKING_CLAVE", certificado + pem)
+
+        token = enable._cabeceras()["Authorization"].split()[1]
+
+        jwt.decode(token, privada.public_key(), algorithms=["RS256"], audience="api.enablebanking.com")
+
+    @pytest.mark.parametrize(
+        "clave, dice",
+        [
+            ("-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----", "PRIVADA"),
+            ("-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-----", "PRIVADA"),
+            ("-----BEGIN ENCRYPTED PRIVATE KEY-----\nMIIB\n-----END ENCRYPTED PRIVATE KEY-----", "contraseña"),
+            ("-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQ", "cortada"),
+            ("-----BEGIN PRIVATE KEY-----\nMIIEvQ\n-----END PRIVATE KEY-----", "le falta algún trozo"),
+            ("ab12cd34-5e6f-7a8b", "BEGIN"),
+        ],
+    )
+    def test_si_no_vale_dice_por_que_sin_enseñarla(self, monkeypatch, clave, dice):
+        monkeypatch.setattr(enable, "ENABLE_BANKING_APP_ID", "app-123")
+        monkeypatch.setattr(enable, "ENABLE_BANKING_CLAVE", clave)
+        with pytest.raises(enable.BancoNoDisponible, match=dice) as error:
+            enable._cabeceras()
+        assert "MIIEvQIBADANBgkqhkiG9w0BAQ" not in str(error.value), "la clave no sale en el mensaje"

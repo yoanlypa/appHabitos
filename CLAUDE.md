@@ -765,6 +765,13 @@ parte-del-dia/
     El IBAN solo se enseña con sus cuatro últimas cifras.
   - **Se pide el permiso más largo que deja el banco**
     (`maximum_consent_validity`) menos un día, y nunca más de 180 (PSD2).
+  - **La clave se lee venga como venga** (`nucleo/banco.normalizar_pem`):
+    la primera, buena, no se podía leer porque Railway la guardó en otro
+    formato al pegarla en la casilla. Se aceptan una sola línea, espacios en
+    vez de saltos, "\n" escritos, comillas y saltos de Windows, y si el .pem
+    trae también el certificado firma la clave. Si aun así no vale,
+    `que_le_pasa` dice por qué (certificado en vez de clave, con contraseña,
+    cortada) sin enseñar nada de ella.
   - La clave privada (`ENABLE_BANKING_CLAVE`, el .pem entero) y el
     `ENABLE_BANKING_APP_ID` van en Railway. La redirect URL registrada en
     Enable Banking tiene que ser `URL_API` + `/banco/vuelta` (`URL_API` sale
@@ -785,7 +792,7 @@ cd backend
 .venv/Scripts/python -m pytest
 ```
 
-565 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
+579 tests, unos segundos. `tests/conftest.py` apunta la base a un fichero
 temporal **antes** de importar la aplicación, porque `nucleo/db.py` crea el
 motor al importarse.
 
