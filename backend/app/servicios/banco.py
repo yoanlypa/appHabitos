@@ -22,7 +22,14 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
-from app.dominio.banco import MovimientoBanco, elegir_banco, final_del_iban, hasta_del_permiso, leer_movimiento
+from app.dominio.banco import (
+    MovimientoBanco,
+    elegir_banco,
+    estructura,
+    final_del_iban,
+    hasta_del_permiso,
+    leer_movimiento,
+)
 from app.dominio.models import ConexionBanco
 from app.nucleo import banco as enable
 from app.nucleo.config import BANCO_NOMBRE, BANCO_PAIS, URL_API
@@ -51,6 +58,7 @@ class ResumenBanco:
     valido_hasta: datetime | None
     cuentas: list[CuentaVista] = field(default_factory=list)
     ultimos: list[MovimientoBanco] = field(default_factory=list)
+    sin_fecha: int = 0
 
     @property
     def dias_de_permiso(self) -> int | None:
@@ -155,7 +163,9 @@ async def _resumen(conexion: ConexionBanco) -> ResumenBanco:
         resumen.cuentas.append(
             CuentaVista(cuenta["nombre"], cuenta["tipo"], cuenta["final_iban"], len(leidos))
         )
-    resumen.ultimos = sorted(todos, key=lambda m: m.fecha or hoy_local(), reverse=True)[:10]
+    # Los que no traen fecha van al final, pero se enseñan: un hueco se ve.
+    resumen.ultimos = sorted(todos, key=lambda m: (m.fecha is not None, m.fecha or hoy_local()), reverse=True)[:10]
+    resumen.sin_fecha = sum(1 for m in todos if m.fecha is None)
     return resumen
 
 
@@ -165,3 +175,19 @@ async def ver(db: Session, user_id: int) -> ResumenBanco | None:
     if conexion is None:
         return None
     return await _resumen(conexion)
+
+
+async def muestra(db: Session, user_id: int, cuantos: int = 5) -> list[dict]:
+    """La forma de los últimos movimientos que manda el banco (`estructura`).
+
+    Para ver dónde pone cada banco la fecha, el comercio o el importe sin
+    enseñar ni conceptos ni importes. Vacía si no hay conexión.
+    """
+    conexion = activa(db, user_id)
+    if conexion is None:
+        return []
+    desde = hoy_local() - timedelta(days=DIAS_DE_MUESTRA)
+    formas: list[dict] = []
+    for cuenta in json.loads(conexion.cuentas or "[]"):
+        formas += [estructura(m) for m in (await enable.movimientos(cuenta["uid"], desde))[:cuantos]]
+    return formas[:cuantos]

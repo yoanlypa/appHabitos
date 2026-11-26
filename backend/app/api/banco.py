@@ -8,10 +8,11 @@ completos: el IBAN va con sus cuatro últimas cifras.
 """
 from html import escape
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
+from app.api.dependencias import get_current_user_id
 from app.nucleo import banco as enable
 from app.nucleo.db import get_db
 from app.servicios import banco
@@ -64,10 +65,9 @@ async def vuelta(
         for c in r.cuentas
     ) or "<li>El banco no ha dejado ver ninguna cuenta.</li>"
     ultimos = "".join(
-        f"<li>{m.fecha:%d/%m} · {escape(m.concepto)} · "
+        f"<li>{m.fecha.strftime('%d/%m') if m.fecha else '¿sin fecha?'} · {escape(m.concepto)} · "
         f"{'−' if m.es_gasto else '+'}{_euros(m.importe)}{' <small>(pendiente)</small>' if m.pendiente else ''}</li>"
         for m in r.ultimos
-        if m.fecha
     )
     cuerpo = (
         f"<p>Conectado con <b>{escape(r.banco)}</b>"
@@ -77,3 +77,16 @@ async def vuelta(
         + "<p>Ya puedes cerrar esta página y volver a Telegram.</p>"
     )
     return _pagina("Cuenta conectada ✓", cuerpo)
+
+
+@router.get("/estructura")
+async def estructura(user_id: int = Depends(get_current_user_id), db: Session = Depends(get_db)):
+    """Qué campos traen los últimos movimientos (sin conceptos ni importes).
+
+    Para ajustar la lectura a lo que manda cada banco. Pide token: es de
+    quien tiene la cuenta conectada.
+    """
+    try:
+        return {"movimientos": await banco.muestra(db, user_id)}
+    except (enable.BancoNoDisponible, enable.ErrorDeBanco) as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
