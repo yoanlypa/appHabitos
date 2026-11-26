@@ -10,6 +10,7 @@ Cada petición lleva un JWT firmado con la clave privada de la aplicación
 Asíncrono por lo mismo que la voz y el correo: la API y el bot comparten
 proceso, y una llamada lenta en bloqueante dejaría la web colgada.
 """
+import re
 from datetime import date, datetime, timezone
 
 import httpx
@@ -30,8 +31,56 @@ class ErrorDeBanco(RuntimeError):
     """Enable Banking o el banco no aceptaron la petición."""
 
 
+_PEM = re.compile(r"-----BEGIN ([A-Z0-9 ]+)-----(.*?)-----END \1-----", re.S)
+
+
+def _bloque(texto: str) -> re.Match | None:
+    """El bloque BEGIN…END de la clave privada; si no hay, el primero que haya.
+
+    Algunos .pem traen la clave y el certificado juntos: el que firma es la clave.
+    """
+    bloques = list(_PEM.finditer(texto))
+    privados = [b for b in bloques if "PRIVATE KEY" in b.group(1)]
+    return (privados or bloques or [None])[0]
+
+
+def normalizar_pem(texto: str) -> str:
+    """La clave tal como la deja Railway, vuelta a dejar como un .pem.
+
+    Pegada en la casilla de una variable, la clave llega de muchas formas: en
+    una sola línea con las líneas unidas por espacios, con "\\n" escritos,
+    entre comillas o con los saltos de Windows. El contenido es el mismo;
+    solo cambia el formato. Se saca lo que hay entre BEGIN y END, se quitan
+    todos los espacios y se vuelve a partir en líneas de 64, como un .pem.
+    """
+    limpio = (texto or "").strip().strip('"').strip("'").replace("\\n", "\n").replace("\r", "")
+    trozo = _bloque(limpio)
+    if not trozo:
+        return limpio
+    tipo, cuerpo = trozo.group(1).strip(), re.sub(r"\s+", "", trozo.group(2))
+    lineas = [cuerpo[i : i + 64] for i in range(0, len(cuerpo), 64)]
+    return f"-----BEGIN {tipo}-----\n" + "\n".join(lineas) + f"\n-----END {tipo}-----\n"
+
+
+def que_le_pasa(texto: str) -> str:
+    """Por qué no vale la clave, sin enseñar nada de ella."""
+    limpio = (texto or "").strip()
+    trozo = _bloque(normalizar_pem(limpio))
+    if not trozo:
+        if "BEGIN" in limpio and "END" not in limpio:
+            return "está cortada: falta la línea -----END … -----"
+        return "no encuentro la línea -----BEGIN … -----: pega el .pem entero, de BEGIN a END"
+    tipo = trozo.group(1).strip()
+    if "CERTIFICATE" in tipo or "PUBLIC" in tipo:
+        return f"has pegado {tipo.lower()}, que es la parte pública; hace falta la clave PRIVADA (BEGIN PRIVATE KEY)"
+    if "ENCRYPTED" in tipo:
+        return "la clave está protegida con contraseña; hace falta la que se descargó sin contraseña"
+    largo = len(re.sub(r"\s+", "", trozo.group(2)))
+    return f"es una {tipo.lower()} pero no se puede leer (tiene {largo} caracteres): ¿le falta algún trozo?"
+
+
 def hay_banco() -> bool:
-    return bool(ENABLE_BANKING_APP_ID and ENABLE_BANKING_CLAVE)
+    return bool(ENABLE_BANKING_APP_ID and ENABLE_BANKING_CLAVE.strip())
 
 
 def _cabeceras() -> dict:
@@ -41,13 +90,13 @@ def _cabeceras() -> dict:
     try:
         token = jwt.encode(
             {"iss": "enablebanking.com", "aud": "api.enablebanking.com", "iat": ahora, "exp": ahora + 3600},
-            ENABLE_BANKING_CLAVE,
+            normalizar_pem(ENABLE_BANKING_CLAVE),
             algorithm="RS256",
             headers={"kid": ENABLE_BANKING_APP_ID},
         )
     except (ValueError, TypeError, jwt.PyJWTError) as exc:
         raise BancoNoDisponible(
-            "la clave ENABLE_BANKING_CLAVE no se puede leer: pega el .pem entero, de BEGIN a END"
+            f"la clave ENABLE_BANKING_CLAVE no se puede leer: {que_le_pasa(ENABLE_BANKING_CLAVE)}"
         ) from exc
     return {"Authorization": f"Bearer {token}"}
 
